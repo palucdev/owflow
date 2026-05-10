@@ -21,10 +21,17 @@ Started as a simple OpenCode fork of [Maister Claude Code plugin](https://github
 ### Prerequisites
 
 - [Opencode](https://opencode.ai/) CLI installed and configured
+- [Node.js](https://nodejs.org/) >= 25
 
 ### Installation
 
-Add owflow to the `plugin` array in your `opencode.json` ([global or project-level](https://opencode.ai/docs/plugins/#load-order)):
+#### Install the plugin
+
+```bash
+npm install owflow
+```
+
+#### Add owflow to the `plugin` array in your `opencode.json` ([global or project-level](https://opencode.ai/docs/plugins/#load-order)):
 
 ```json
 {
