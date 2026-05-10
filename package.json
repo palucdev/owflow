@@ -1,15 +1,27 @@
 {
-  "name": "owflow",
+  "name": "@palucdev/owflow",
   "version": "0.1.0",
-  "module": "index.ts",
+  "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
+  "module": "index.ts",
   "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "rm -rf dist && tsc"
   },
-  "engines": {
-    "node": "^25"
-  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "workflow",
+    "spec-driven",
+    "development"
+  ],
+  "author": "palucdev",
+  "license": "MIT",
   "devDependencies": {
     "@opencode-ai/plugin": "^1.14.44",
     "@types/bun": "^1.3.13",
@@ -17,5 +29,8 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "engines": {
+    "node": "^25"
   }
 }
