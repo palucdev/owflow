@@ -1,17 +1,19 @@
 {
-  "name": "@palucdev/owflow",
-  "version": "0.1.0",
+  "name": "owflow",
+  "version": "0.1.1",
   "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
   "module": "index.ts",
-  "main": "./dist/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc"
+    "build": "rm -rf dist && tsc",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "opencode",

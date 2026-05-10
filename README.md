@@ -24,7 +24,13 @@ Started as a simple OpenCode fork of [Maister Claude Code plugin](https://github
 
 ### Installation
 
-TBD
+Add owflow to the `plugin` array in your `opencode.json` ([global or project-level](https://opencode.ai/docs/plugins/#load-order)):
+
+```json
+{
+  "plugin": ["owflow"]
+}
+```
 
 ### Initial project setup
 
