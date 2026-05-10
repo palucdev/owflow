@@ -89,7 +89,7 @@ const prepareAgent = (
   };
 };
 
-export const OwflowPlugin: Plugin = async ({ $, directory }) => {
+const OwflowPlugin: Plugin = async ({ $, directory }) => {
   const agentBySession = new Map();
   return {
     /**
@@ -220,3 +220,5 @@ and determine the next phase. Use the question tool at Phase Gates.`);
     },
   };
 };
+
+export default OwflowPlugin;
