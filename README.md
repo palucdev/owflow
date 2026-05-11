@@ -61,7 +61,7 @@ If you have another project already using Owflow, you can reuse its standards as
 /development Add user profile page with avatar upload
 ```
 
-Or just discuss your task with LLM model and then run:
+Or just discuss your task with Agent and then run:
 
 ```bash
 /development

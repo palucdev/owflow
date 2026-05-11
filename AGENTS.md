@@ -313,7 +313,7 @@ Task types can add specialized subdirectories as needed (e.g., `analysis/bug-ana
 
 ## Plugin Documentation Principles
 
-These principles guide how we document skills, commands, orchestrators, and agents in this plugin to avoid verbosity and duplication while trusting LLM models to reason effectively.
+These principles guide how we document skills, commands, orchestrators, and agents in this plugin to avoid verbosity and duplication while trusting Agent to reason effectively.
 
 ### Philosophy
 
