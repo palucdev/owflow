@@ -162,7 +162,7 @@ Initialize the Owflow framework. Scans your codebase with a project-analyzer sub
 
 - `.owflow/docs/` with INDEX.md, project docs (vision, roadmap, tech-stack), and coding standards
 - `.owflow/tasks/` directory structure
-- CLAUDE.md integration
+- AGENTS.md integration
 
 | Flag                    | Description                                                                                                                                                                                  |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -206,7 +206,7 @@ Implement a task directly with standards awareness. Reads INDEX.md, loads applic
 
 ### `/quick-plan [task description]`
 
-Enter Claude Code's planning mode with standards awareness. Discovers and reads applicable standards _before_ entering plan mode, so your plan is informed by project conventions.
+Enter OpenCode's planning mode with standards awareness. Discovers and reads applicable standards _before_ entering plan mode, so your plan is informed by project conventions.
 
 Standards compliance checklist is required in the plan file before exiting plan mode.
 
