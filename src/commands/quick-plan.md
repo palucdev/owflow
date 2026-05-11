@@ -5,7 +5,7 @@ description: Enter planning mode with AI SDLC standards awareness
 
 # Planning Mode with Standards Awareness
 
-Enter Claude Code's planning mode for a task, with automatic discovery of project standards from `.owflow/docs/`.
+Enter OpenCode's planning mode for a task, with automatic discovery of project standards from `.owflow/docs/`.
 
 ## Usage
 
@@ -37,7 +37,7 @@ Enter Claude Code's planning mode for a task, with automatic discovery of projec
 
 ### Step 2: Discover and Read Standards (BEFORE Plan Mode)
 
-**CRITICAL: This step MUST complete before calling EnterPlanMode.**
+**CRITICAL: This step MUST complete before calling Plan Agent.**
 
 1. **Check if `.owflow/docs/INDEX.md` exists**
    - **If not exists**: Note that no standards are available, skip to Step 3
@@ -56,7 +56,7 @@ Enter Claude Code's planning mode for a task, with automatic discovery of projec
 
 ### Step 3: Enter Planning Mode
 
-**Use the `EnterPlanMode` tool to trigger Claude Code's builtin planning mode.**
+**Use the `Plan agent` to trigger OpenCode's builtin planning mode.**
 
 **Standards context from Step 2 MUST actively inform all plan mode phases:**
 
@@ -70,11 +70,11 @@ The planning mode will:
 2. Launch Plan agents to design implementation approach (with standards constraints)
 3. Review and verify alignment with user intent
 4. Write final plan to plan file (with standards woven into steps)
-5. Call ExitPlanMode for user approval (gated on mandatory standards sections)
+5. Ask for user approval (gated on mandatory standards sections)
 
-### ExitPlanMode Gate: Mandatory Standards Sections
+### Approval question gate: Mandatory Standards Sections
 
-**BLOCKING: Do NOT call `ExitPlanMode` until the plan file contains these sections:**
+**BLOCKING: Do NOT call ask user for approval until the plan file contains these sections:**
 
 1. **"## Applicable Standards"** — list each standard file that was read, with key guidelines extracted from each. If no standards exist, state: "No AI SDLC standards found. Consider running `/flow-init`."
 
@@ -85,7 +85,7 @@ The planning mode will:
    - [ ] New components use TypeScript strict mode (from `standards/frontend/components.md`)
    ```
 
-If these sections are missing from the plan file, add them before calling ExitPlanMode.
+If these sections are missing from the plan file, add them before asking user for approval.
 
 ### Graceful Fallback
 
@@ -102,9 +102,9 @@ project documentation and coding standards for better consistency.
 
 1. **Parses** task description from user input
 2. **Discovers and READS** applicable standard files from `.owflow/docs/` (BEFORE plan mode)
-3. **Enters** Claude Code's builtin planning mode via `EnterPlanMode` with standards already loaded
+3. **Enters** OpenCode's builtin planning mode via delegating to `Plan Agent` with standards already loaded
 4. **Produces** a plan file with implementation approach, applicable standards, and compliance checklist
-5. **Gates** ExitPlanMode on mandatory standards sections in the plan file
+5. **Gates** Approval question on mandatory standards sections in the plan file
 
 ## Benefits Over Manual Planning
 

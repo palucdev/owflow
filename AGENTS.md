@@ -313,11 +313,11 @@ Task types can add specialized subdirectories as needed (e.g., `analysis/bug-ana
 
 ## Plugin Documentation Principles
 
-These principles guide how we document skills, commands, orchestrators, and agents in this plugin to avoid verbosity and duplication while trusting Claude to reason effectively.
+These principles guide how we document skills, commands, orchestrators, and agents in this plugin to avoid verbosity and duplication while trusting LLM models to reason effectively.
 
 ### Philosophy
 
-**Trust Claude to reason.** Provide principles and patterns, not prescriptive implementations. Claude can discover technical details from skill.md files when needed—AGENTS.md and commands should guide thinking, not dictate exact steps.
+**Trust Agent to reason.** Provide principles and patterns, not prescriptive implementations. Agent can discover technical details from skill.md files when needed—AGENTS.md and commands should guide thinking, not dictate exact steps.
 
 ### Core Principles
 
@@ -326,7 +326,7 @@ These principles guide how we document skills, commands, orchestrators, and agen
 3. **Avoid Duplication** - If technical details exist in skill.md, reference them in AGENTS.md/commands
 4. **Commands as Thin Wrappers** - User-facing guidance in commands, technical orchestration logic in skills
 5. **Single Source of Truth** - Orchestration logic lives in skill.md, not scattered across multiple files
-6. **Principle Over Process** - Explain WHY and WHEN, trust Claude to figure out HOW
+6. **Principle Over Process** - Explain WHY and WHEN, trust Agent to figure out HOW
 
 ### Content Guidelines
 
@@ -347,7 +347,7 @@ Ask these questions before documenting:
 
 1. **"Does this duplicate skill.md content?"** → Reference instead of duplicating
 2. **"Am I providing exact implementation?"** → Simplify to principles
-3. **"Would Claude need this spelled out?"** → Probably not, trust reasoning ability
+3. **"Would Agent need this spelled out?"** → Probably not, trust reasoning ability
 4. **"Is this a manual or guidance?"** → Should be guidance, not manual
 
 ### Examples
@@ -477,7 +477,7 @@ When creating or auditing orchestrators, follow the patterns established in exis
 
 ## Available Skills
 
-Skills are automatically invoked by Claude when appropriate. Details live in each skill's `skill.md` file.
+Skills are automatically invoked by Agent when appropriate. Details live in each skill's `skill.md` file.
 
 ### Core Workflow Skills
 

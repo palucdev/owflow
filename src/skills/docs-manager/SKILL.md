@@ -185,7 +185,7 @@ Use this to add new documentation to the project, either from plugin baseline or
    - Ask for the filename and purpose
    - Create a template file with appropriate frontmatter and structure
 4. Update INDEX.md to include the new documentation (see "Manage INDEX.md" operation)
-5. If this is a technical standard and corresponds to a Claude Code Skill, ensure consistency
+5. If this is a technical standard and corresponds to a Agent Skill, ensure consistency
 
 **Result:** New documentation is added to the project and indexed in INDEX.md.
 
@@ -211,7 +211,7 @@ Use this to help the user update or modify existing project documentation.
    - Check if INDEX.md needs updating (if the purpose/description changed significantly)
    - If updating tech-stack.md or architecture.md, suggest reviewing AGENTS.md for consistency
 6. For technical standards:
-   - If a corresponding Claude Code Skill exists, suggest reviewing it for consistency
+   - If a corresponding Agent Skill exists, suggest reviewing it for consistency
    - Standards should align with actual code patterns in the project
 
 **Result:** Documentation is updated to reflect current project state and team decisions.
@@ -273,7 +273,7 @@ Use this to ensure the project's AGENTS.md properly integrates with the document
 2. If it doesn't exist, ask the user if they want to create it
 3. Look for a documentation reference section in AGENTS.md
 4. If the section doesn't exist or is incomplete:
-   - Read `references/claude-md-template.md` for the template
+   - Read `references/agents-md-template.md` for the template
    - Add the template section to AGENTS.md
 5. Ensure the documentation section is placed prominently in AGENTS.md (near the top)
 6. Verify that the INDEX.md path is correct and the file exists
@@ -307,7 +307,7 @@ Use this to check that documentation is consistent, up-to-date, and properly int
    - Check if they contain placeholder text vs. actual project information
    - Warn if critical documentation is missing or empty
 5. **Check standards consistency:**
-   - If Claude Code Skills exist, check if corresponding standards documentation exists
+   - If Agent Skills exist, check if corresponding standards documentation exists
    - If standards exist without skills, suggest creating skills (if appropriate)
    - Report any inconsistencies
 6. **Generate validation report:**
@@ -330,42 +330,42 @@ Use this to check that documentation is consistent, up-to-date, and properly int
 
 ```
 User: "Set up documentation for this project"
-Claude: [Executes Initialize Documentation - creates structure, copies baseline docs, generates INDEX.md, updates AGENTS.md, gathers project info]
+Agent: [Executes Initialize Documentation - creates structure, copies baseline docs, generates INDEX.md, updates AGENTS.md, gathers project info]
 ```
 
 **Update project vision:**
 
 ```
 User: "I want to update our project vision to include AI-first approach"
-Claude: [Executes Update Documentation - reads current vision.md, helps user edit it, updates INDEX.md if needed]
+Agent: [Executes Update Documentation - reads current vision.md, helps user edit it, updates INDEX.md if needed]
 ```
 
 **Add custom documentation:**
 
 ```
 User: "Add documentation for our deployment process"
-Claude: [Executes Add Documentation File - creates custom project/deployment.md, updates INDEX.md]
+Agent: [Executes Add Documentation File - creates custom project/deployment.md, updates INDEX.md]
 ```
 
 **Reference plugin baseline:**
 
 ```
 User: "Show me the plugin's baseline error handling standard"
-Claude: [Executes Use Plugin Documentation as Reference - shows plugin baseline, compares with project version, no changes unless user requests]
+Agent: [Executes Use Plugin Documentation as Reference - shows plugin baseline, compares with project version, no changes unless user requests]
 ```
 
 **Validate documentation:**
 
 ```
 User: "Check if our documentation is complete and consistent"
-Claude: [Executes Validate Documentation Consistency - checks structure, INDEX.md, AGENTS.md integration, generates report]
+Agent: [Executes Validate Documentation Consistency - checks structure, INDEX.md, AGENTS.md integration, generates report]
 ```
 
 **Manage INDEX.md:**
 
 ```
 User: "Rebuild the documentation index"
-Claude: [Executes Manage INDEX.md - scans .owflow/docs/, regenerates comprehensive INDEX.md]
+Agent: [Executes Manage INDEX.md - scans .owflow/docs/, regenerates comprehensive INDEX.md]
 ```
 
 ---
