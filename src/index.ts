@@ -13,7 +13,7 @@ import type { OpenCodeConfig } from "./types/opencode-types";
 import matter from "gray-matter";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PLUGIN_ROOT = path.resolve(__dirname, "../..");
+const PLUGIN_ROOT = __dirname; // Points to dist/ where skills/commands/agents are copied
 
 /**
  * Resolves model aliases to the configured small_model value.
