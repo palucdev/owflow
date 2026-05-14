@@ -235,6 +235,15 @@ question - "UI mockups complete. Continue to Phase 5?"
 
 **SELF-CHECK**: Did you just invoke the Task tool with `specification-creator`? Or did you start writing spec.md yourself? If the latter, STOP immediately and invoke the Task tool instead.
 
+**Part D — Diagram Refinement (Skill, content-preserving)**:
+
+7. Invoke Skill tool: `diagrams-mermaid` to refine `implementation/spec.md`
+8. Add diagrams that clarify scope and communication (without replacing prose):
+   - `flowchart` for primary functional path,
+   - `sequenceDiagram` for key component interaction,
+   - optionally `C4Component` if internal module structure is required by scope.
+9. If required context is missing, add explicit open questions/assumptions section instead of inventing entities.
+
 **Output**: `analysis/technical-clarifications.md` (conditional), `analysis/requirements.md`, `implementation/spec.md`
 **State**: Update `task_context.tech_clarified`, `task_context.architecture_decision`, `phase_summaries.specification`
 
@@ -284,6 +293,12 @@ question - Display executive summary before asking. Read `verification/spec-audi
 **Context to pass to subagent**: task_path, task_description, task_characteristics, phase_summaries (specification, gap_analysis, codebase_analysis), research_context (if any)
 
 **SELF-CHECK**: Did you just invoke the Task tool with `implementation-planner`? Or did you start writing implementation-plan.md yourself? If the latter, STOP immediately and invoke the Task tool instead.
+
+**Post-plan diagram refinement (Skill, content-preserving)**:
+
+- Invoke Skill tool: `diagrams-mermaid` for `implementation/implementation-plan.md`
+- Add a compact execution diagram (task-group dependency flow or phase/state view).
+- Keep implementation steps authoritative; diagrams are explanatory, not a replacement for task descriptions.
 
 → Pause
 
