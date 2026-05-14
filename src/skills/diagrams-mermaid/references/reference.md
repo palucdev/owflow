@@ -136,11 +136,13 @@ Better:
 
 ## Integration Candidates
 
-- `src/skills/init/SKILL.md`
-- `src/skills/init/references/architecture-template.md`
-- `src/skills/work/SKILL.md`
-- `src/skills/orchestrator-framework/references/orchestrator-patterns.md`
+Integrated into:
+- `src/skills/flow-init/SKILL.md` - Phase 6 (architecture and tech-stack doc refinement)
+- `src/skills/development/SKILL.md` - Phase 5 (spec refinement), Phase 7 (plan refinement)
+- `src/skills/research/SKILL.md` - Phase 5 (high-level design refinement)
+- `src/skills/performance/SKILL.md` - Phase 3 (spec refinement), Phase 5 (plan refinement)
+- `src/skills/migration/SKILL.md` - Phase 3 (spec refinement), Phase 4 (plan refinement)
 
-Not targeted:
-- `docs/flow/overview.md`
-- `docs/flow/workflows.md`
+Reference files:
+- `src/skills/flow-init/references/architecture-template.md`
+- `src/skills/orchestrator-framework/references/orchestrator-patterns.md`
