@@ -150,6 +150,12 @@ question - Display executive summary before asking. Extract from gap analysis: c
 **Output**: `analysis/requirements.md`, `implementation/spec.md`, `analysis/rollback-plan.md`, optionally `analysis/dual-run-plan.md`
 **State**: Update `rollback_plan_created`, `dual_run_configured`
 
+**Part C — Diagram Refinement (Skill, content-preserving)**:
+
+4. Invoke Skill tool: `diagrams-mermaid` to refine `implementation/spec.md`
+5. Add migration-focused visuals (target architecture and transition/compatibility flow) as supplements, not replacements for strategy prose.
+6. If minimum context is missing, record open gaps instead of inventing systems, protocols, or migration paths.
+
 → Pause
 
 question - Display executive summary before asking. Read `implementation/spec.md` and extract: migration strategy chosen, scope boundaries, rollback approach, breaking changes identified, key constraints. Format as brief overview then "Continue to implementation planning?"
@@ -166,6 +172,12 @@ question - Display executive summary before asking. Read `implementation/spec.md
 **State**: Update task groups and dependencies
 
 **Context to pass to subagent**: task_path, task_type (migration), migration_type, task_description, phase_summaries (current_state_analysis, gap_analysis, specification)
+
+**Post-plan diagram refinement (Skill, content-preserving)**:
+
+- Invoke Skill tool: `diagrams-mermaid` for `implementation/implementation-plan.md`
+- Add one migration execution/state flow with rollback checkpoints.
+- Preserve written task steps and rollback details as source of truth.
 
 → Pause
 

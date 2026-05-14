@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTML Renderer Reference</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="hr-page">
+      <section class="hr-section hr-stack">
+        <span class="hr-heading-eyebrow">Reference Base</span>
+        <h1 class="hr-heading-h1">Warm editorial HTML component reference</h1>
+        <p class="hr-text-muted">
+          This page demonstrates all required building blocks for markdown to
+          HTML output.
+        </p>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Heading scale</h2>
+        <h1 class="hr-heading-h1">H1 Display Headline</h1>
+        <h2 class="hr-heading-h2">H2 Section Headline</h2>
+        <h3 class="hr-heading-h3">H3 Subsection Headline</h3>
+        <h4 class="hr-heading-h4">H4 Utility Headline</h4>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Text block</h2>
+        <div class="hr-text-block hr-stack">
+          <p>
+            Text blocks should carry the main narrative, with generous line
+            height and warm contrast against the canvas.
+          </p>
+          <p>
+            Lists remain simple and semantic, while styles stay tied to global
+            tokens.
+          </p>
+          <ul>
+            <li>Use one visual rhythm across all paragraphs.</li>
+            <li>Keep spacing and emphasis token-based.</li>
+            <li>Avoid local one-off colors in content blocks.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Cards</h2>
+        <div class="hr-grid">
+          <article class="hr-card">
+            <h3 class="hr-card-title">Default content card</h3>
+            <p class="hr-card-text">
+              Standard container for summaries, supporting notes, and grouped
+              metadata.
+            </p>
+            <span class="hr-badge">Default</span>
+          </article>
+
+          <article class="hr-card hr-card-featured">
+            <h3 class="hr-card-title">Featured surface card</h3>
+            <p class="hr-card-text">
+              High-emphasis card for key outcomes, strategic calls to action,
+              or highlighted analysis.
+            </p>
+            <span class="hr-badge">Priority</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Table</h2>
+        <div class="hr-table-wrap">
+          <table class="hr-table">
+            <thead>
+              <tr>
+                <th>Element</th>
+                <th>Purpose</th>
+                <th>Main token group</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Card</td>
+                <td>Grouped content blocks</td>
+                <td>surface + radius + spacing</td>
+                <td>High</td>
+              </tr>
+              <tr>
+                <td>Quote</td>
+                <td>Context and citations</td>
+                <td>primary + display typography</td>
+                <td>Medium</td>
+              </tr>
+              <tr>
+                <td>Highlight</td>
+                <td>Important callouts</td>
+                <td>semantic + border accent</td>
+                <td>High</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Diagram container</h2>
+
+        <h3 class="hr-heading-h3">Flowchart</h3>
+        <div class="hr-diagram">
+          <div class="mermaid">
+flowchart TD
+  markdownInput[MarkdownInput] --> semanticParse[SemanticParse]
+  semanticParse --> componentSelect[ComponentSelect]
+  componentSelect --> tokenBind[TokenBinding]
+  tokenBind --> htmlOutput[HtmlOutput]
+          </div>
+        </div>
+
+        <h3 class="hr-heading-h3">Sequence diagram</h3>
+        <div class="hr-diagram">
+          <div class="mermaid">
+sequenceDiagram
+  participant U as User
+  participant CLI as Copilot CLI
+  participant S as html-renderer skill
+  participant FS as Filesystem
+  U->>CLI: render notes.md
+  CLI->>S: invoke skill
+  S->>FS: read notes.md + references/
+  S->>FS: write notes.html
+  S-->>CLI: done
+  CLI-->>U: open notes.html
+          </div>
+        </div>
+
+        <h3 class="hr-heading-h3">State diagram</h3>
+        <div class="hr-diagram">
+          <div class="mermaid">
+stateDiagram-v2
+  [*] --> Draft
+  Draft --> Review: submit
+  Review --> Draft: request changes
+  Review --> Approved: accept
+  Approved --> Published: publish
+  Published --> [*]
+          </div>
+        </div>
+
+        <h3 class="hr-heading-h3">Entity relationship</h3>
+        <div class="hr-diagram">
+          <div class="mermaid">
+erDiagram
+  AUTHOR ||--o{ DOCUMENT : writes
+  DOCUMENT ||--|{ SECTION : contains
+  SECTION ||--o{ BLOCK : contains
+  AUTHOR {
+    string id PK
+    string name
+  }
+  DOCUMENT {
+    string id PK
+    string title
+    string authorId FK
+  }
+          </div>
+        </div>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Grid templates</h2>
+
+        <h3 class="hr-heading-h3">Two columns</h3>
+        <div class="hr-grid hr-grid-2">
+          <article class="hr-card">
+            <h3 class="hr-card-title">Left column</h3>
+            <p class="hr-card-text">Equal-width cells. Good for compare/contrast pairs.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Right column</h3>
+            <p class="hr-card-text">Stacks to a single column under 720px.</p>
+          </article>
+        </div>
+
+        <h3 class="hr-heading-h3">Three columns</h3>
+        <div class="hr-grid hr-grid-3">
+          <article class="hr-card">
+            <h3 class="hr-card-title">Discover</h3>
+            <p class="hr-card-text">Frame the problem and surface signals.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Decide</h3>
+            <p class="hr-card-text">Pick an approach with a clear rationale.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Deliver</h3>
+            <p class="hr-card-text">Ship in small, verifiable steps.</p>
+          </article>
+        </div>
+
+        <h3 class="hr-heading-h3">Four columns</h3>
+        <div class="hr-grid hr-grid-4">
+          <article class="hr-card">
+            <h3 class="hr-card-title">Spec</h3>
+            <p class="hr-card-text">Define what success looks like.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Plan</h3>
+            <p class="hr-card-text">Sequence the work into task groups.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Build</h3>
+            <p class="hr-card-text">Implement against the plan.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Verify</h3>
+            <p class="hr-card-text">Prove the outcome with tests.</p>
+          </article>
+        </div>
+
+        <h3 class="hr-heading-h3">Featured + supporting (2 / 1)</h3>
+        <div class="hr-grid hr-grid-feature">
+          <article class="hr-card hr-card-featured">
+            <h3 class="hr-card-title">Primary outcome</h3>
+            <p class="hr-card-text">
+              A wide, high-emphasis card that anchors the section while the
+              two narrow cards carry supporting detail.
+            </p>
+            <span class="hr-badge">Priority</span>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Supporting note</h3>
+            <p class="hr-card-text">Context that complements the primary outcome.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Supporting note</h3>
+            <p class="hr-card-text">Additional context, kept secondary.</p>
+          </article>
+        </div>
+
+        <h3 class="hr-heading-h3">Content + sidebar</h3>
+        <div class="hr-grid hr-grid-sidebar">
+          <article class="hr-card">
+            <h3 class="hr-card-title">Main content</h3>
+            <p class="hr-card-text">
+              A wider primary cell paired with a narrower companion. Use for
+              feature descriptions with quick-reference metadata to the side.
+            </p>
+          </article>
+          <aside class="hr-card">
+            <h3 class="hr-card-title">At a glance</h3>
+            <p class="hr-card-text">Status, owner, last update, links.</p>
+            <span class="hr-badge">Meta</span>
+          </aside>
+        </div>
+
+        <h3 class="hr-heading-h3">Auto-fit (default)</h3>
+        <div class="hr-grid">
+          <article class="hr-card">
+            <h3 class="hr-card-title">Auto-fit cell</h3>
+            <p class="hr-card-text">Reflows from 1 to N columns based on viewport width.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Auto-fit cell</h3>
+            <p class="hr-card-text">Each cell respects a 260px minimum.</p>
+          </article>
+          <article class="hr-card">
+            <h3 class="hr-card-title">Auto-fit cell</h3>
+            <p class="hr-card-text">Best default when card count is unknown.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Quote</h2>
+        <blockquote class="hr-quote">
+          <p>
+            Great readability comes from predictable rhythm, not from visual
+            noise.
+          </p>
+          <footer>Design rule for long-form interface blocks</footer>
+        </blockquote>
+      </section>
+
+      <section class="hr-section hr-stack">
+        <h2 class="hr-heading-h2">Important highlights</h2>
+
+        <aside class="hr-highlight hr-highlight-note">
+          <p class="hr-highlight-title">Note</p>
+          <p>
+            Use this variant for neutral guidance and implementation tips.
+          </p>
+        </aside>
+
+        <aside class="hr-highlight hr-highlight-warning">
+          <p class="hr-highlight-title">Warning</p>
+          <p>
+            Use this variant for constraints that may break consistency or
+            accessibility.
+          </p>
+        </aside>
+
+        <aside class="hr-highlight hr-highlight-important">
+          <p class="hr-highlight-title">Important</p>
+          <p>
+            Use this variant for decisions that affect rendering output and
+            shared conventions.
+          </p>
+        </aside>
+      </section>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      window.mermaid &&
+        mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+  </body>
+</html>

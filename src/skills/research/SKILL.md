@@ -326,6 +326,14 @@ question - "Brainstorming complete. Continue to high-level design?"
 - Key decision highlights (1 line each)
 - Integration points with existing system (if applicable)
 
+**Part D — Diagram Refinement (Skill, content-preserving)**:
+
+5. Invoke Skill tool: `diagrams-mermaid` to refine visual communication in `outputs/high-level-design.md`
+6. Add diagrams that supplement (not replace) existing architecture content:
+   - one architecture view (`C4Container` preferred, `C4Component` only if needed),
+   - one interaction/state view (`sequenceDiagram` or `flowchart`) for the critical flow.
+7. If minimum context for a diagram is missing, record explicit gaps in the document and avoid speculative components/relationships.
+
 → Pause
 
 question - "Design complete. Continue to output generation?"

@@ -514,6 +514,15 @@ Orchestrators manage complete workflows with state management, auto-recovery, an
 | `research`       | Multi-source research with synthesis, solution brainstorming, high-level design, and citations                                                                                                                                                                                                                              | `skills/research/SKILL.md`       |
 | `product-design` | **Interactive product/feature design** (9 phases: 0-8) with adaptive scope (feature-level default, product-level when detected), mixed interaction pattern (questioning for exploration, propose-and-refine for convergence), iterative refinement loops, browser-based visual companion, and layered product brief output. | `skills/product-design/SKILL.md` |
 
+### Content & Visualization Skills
+
+Skills for generating diagrams and rendering markdown content into shareable formats.
+
+| Skill              | Purpose                                                                                                                                                                                                                | Details                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `diagrams-mermaid` | Generate Mermaid diagrams from natural language descriptions. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.           | `skills/diagrams-mermaid/SKILL.md`  |
+| `html-renderer`    | Render markdown plans, ideas, RFCs, or design notes into self-contained HTML files with warm editorial styling. Outputs single-file HTML with inlined CSS and optional Mermaid diagram support via CDN when detected. | `skills/html-renderer/SKILL.md`     |
+
 ## Available Commands
 
 Commands invoke orchestrators and utilities. All orchestrators support `--from=phase` (resume point).
@@ -570,6 +579,13 @@ Research context flows through ALL phases without skipping any. Research artifac
 | `/quick-dev`    | `[task description]` | Implement directly with standards awareness (no planning)        |
 | `/quick-bugfix` | `[bug description]`  | Quick bug fix with TDD red/green gates and complexity escalation |
 
+### Content & Visualization Commands
+
+| Command             | Usage                          | Purpose                                                     |
+| ------------------- | ------------------------------ | ----------------------------------------------------------- |
+| `/diagrams-mermaid` | `[diagram description]`        | Generate Mermaid diagrams from natural language             |
+| `/html-renderer`    | `[path to markdown file]`      | Render markdown into self-contained HTML with warm styling  |
+
 **See**: Individual `commands/` and `skills/*/skill.md` files for detailed documentation.
 
 ### Auto-Generated Commands (OpenCode)
@@ -588,6 +604,8 @@ For the OpenCode platform, commands are automatically generated during the build
 - `performance` - Performance optimization with bottleneck detection
 - `product-design` - Interactive product/feature design with visual prototyping
 - `research` - Comprehensive research with synthesis and solution brainstorming
+- `diagrams-mermaid` - Generate Mermaid diagrams from natural language descriptions
+- `html-renderer` - Render markdown into self-contained HTML with warm editorial styling
 
 **Key characteristics:**
 
