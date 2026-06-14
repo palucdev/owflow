@@ -23,6 +23,7 @@ Systematic migration workflow from current state analysis to verified migration 
 1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
 2. **Create Task Directory**: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`
 3. **Initialize State**: Create `orchestrator-state.yml` with migration context
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-migration.yml`.
 4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
 
 **Output**:

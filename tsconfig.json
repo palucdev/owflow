@@ -29,6 +29,7 @@
     "noPropertyAccessFromIndexSignature": false
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "src/__tests__/verify_template.test.ts"
   ],
 }

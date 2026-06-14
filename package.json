@@ -14,7 +14,8 @@
   "scripts": {
     "build": "rm -rf dist && tsc && npm run copy-markdowns",
     "copy-markdowns": "node ./scripts/copy-markdowns.js",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test": "bun test"
   },
   "keywords": [
     "opencode",

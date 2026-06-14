@@ -64,6 +64,7 @@ Unified workflow for all development tasks — bug fixes, enhancements, and new 
 1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
 2. **Create Task Directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/`
 3. **Initialize State**: Create `orchestrator-state.yml` with task info and research reference
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-development.yml`.
 4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section. This includes predefined docs (vision, roadmap, tech-stack, architecture) AND any user-added project docs (e.g., deployment.md, api-strategy.md). Store complete list as `project_context.project_doc_paths` in state.
 
 **Output**:

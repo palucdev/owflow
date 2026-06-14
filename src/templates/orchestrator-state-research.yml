@@ -25,7 +25,7 @@ task:
   priority: null
 
 research_context:
-  research_type: "technical" | "requirements" | "literature" | "mixed"
+  research_type: "technical | requirements | literature | mixed"
   research_question: null
   scope:
     included: []
@@ -33,11 +33,11 @@ research_context:
     constraints: []
   methodology: []
   sources: []
-  confidence_level: "high" | "medium" | "low"
+  confidence_level: "high | medium | low"
   gathering_strategy:
     categories: []
     count: 0
-    source: "planner" | "default"
+    source: "planner | default"
   phase_summaries:
     phase-1:
       summary: null

@@ -59,6 +59,7 @@ For complex bugs that grow beyond a quick fix, suggests escalating to the full d
 2. Create directory: `.owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name/`
 3. Create `analysis/` subdirectory inside it
 4. Write `task.yml` with initial state using the template [src/templates/quick-bugfix-task.yml](../../templates/quick-bugfix-task.yml).
+5. **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `quick-bugfix-task.yml`.
 
 ### Step 3: Discover Standards
 
