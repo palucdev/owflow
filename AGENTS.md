@@ -526,11 +526,10 @@ Orchestrators manage complete workflows with state management, auto-recovery, an
 
 Skills for generating diagrams and rendering markdown content into shareable formats.
 
-| Skill              | Purpose                                                                                                                                                                                                                | Details                             |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `diagrams-mermaid`    | Generate Mermaid diagrams from natural language descriptions. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.           | `skills/diagrams-mermaid/SKILL.md`     |
-| `html-renderer`       | Render markdown plans, ideas, RFCs, or design notes into self-contained HTML files with warm editorial styling. Outputs single-file HTML with inlined CSS and optional Mermaid diagram support via CDN when detected. | `skills/html-renderer/SKILL.md`        |
-| `research-to-story`   | Convert completed research findings into a JIRA-ready story or epic description. Detects information gaps via a structured checklist, fills them through targeted questions, and generates business justification, Given/When/Then acceptance criteria, developer hints, and potential challenges. | `skills/research-to-story/SKILL.md` |
+| Skill              | Purpose                                                                                                                                                                                                               | Details                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `diagrams-mermaid` | Generate Mermaid diagrams from natural language descriptions. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.          | `skills/diagrams-mermaid/SKILL.md` |
+| `html-renderer`    | Render markdown plans, ideas, RFCs, or design notes into self-contained HTML files with warm editorial styling. Outputs single-file HTML with inlined CSS and optional Mermaid diagram support via CDN when detected. | `skills/html-renderer/SKILL.md`    |
 
 ## Available Commands
 
@@ -592,11 +591,10 @@ Quick commands create lightweight task directories with `task.yml` for artifact 
 
 ### Content & Visualization Commands
 
-| Command               | Usage                                                                    | Purpose                                                               |
-| --------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `/diagrams-mermaid`   | `[diagram description]`                                                  | Generate Mermaid diagrams from natural language                       |
-| `/html-renderer`      | `[path to markdown file]`                                                | Render markdown into self-contained HTML with warm styling            |
-| `/research-to-story`  | `[research-task-path \| research-report.md] [--template=path] [--type=story\|epic]` | Convert research findings into a JIRA story or epic description |
+| Command             | Usage                     | Purpose                                                    |
+| ------------------- | ------------------------- | ---------------------------------------------------------- |
+| `/diagrams-mermaid` | `[diagram description]`   | Generate Mermaid diagrams from natural language            |
+| `/html-renderer`    | `[path to markdown file]` | Render markdown into self-contained HTML with warm styling |
 
 **See**: Individual `commands/` and `skills/*/skill.md` files for detailed documentation.
 
@@ -618,7 +616,6 @@ For the OpenCode platform, commands are automatically generated during the build
 - `research` - Comprehensive research with synthesis and solution brainstorming
 - `diagrams-mermaid` - Generate Mermaid diagrams from natural language descriptions
 - `html-renderer` - Render markdown into self-contained HTML with warm editorial styling
-- `research-to-story` - Convert research findings into a JIRA story or epic description
 
 **Key characteristics:**
 
