@@ -1,0 +1,65 @@
+orchestrator:
+  started_phase: null
+  completed_phases: []
+  failed_phases: []
+  auto_fix_attempts:
+    phase-0: 0
+    phase-1: 0
+    phase-2: 0
+    phase-3: 0
+    phase-4: 0
+    phase-5: 0
+    phase-6: 0
+    phase-7: 0
+    phase-8: 0
+  options:
+    visual_enabled: null
+  created: "YYYY-MM-DDTHH:MM:SSZ"
+  updated: "YYYY-MM-DDTHH:MM:SSZ"
+  task_path: null
+  task_ids: {}
+
+task:
+  title: null
+  description: null
+  status: pending
+  tags: []
+  priority: null
+
+design_context:
+  design_characteristics:
+    is_greenfield: false
+    is_enhancement: false
+    is_ui_focused: false
+    is_backend: false
+    is_complex: false
+    is_simple: false
+  complexity_level: "standard"
+  collected_urls: []
+  research_topics: []
+  user_files_list: []
+  refinement_iterations:
+    phase_2: 0
+    phase_3: 0
+    phase_5: 0
+    phase_6_sections: {}
+    phase_7: 0
+  visual_companion:
+    available: null
+    port: null
+    pid: null
+    fallback_to_ascii: false
+  research_reference:
+    path: null
+    research_question: null
+  phase_summaries:
+    context_synthesis: { summary: null, sources_count: 0 }
+    problem_exploration:
+      { problem_statement: null, constraints: [], success_criteria: [] }
+    persona_exploration: { personas: [], user_journeys: [] }
+    idea_generation: { alternatives_count: 0, summary: null }
+    idea_convergence:
+      { selected_approach: null, trade_offs_accepted: [], key_decisions: [] }
+    feature_specification: { spec_sections: {}, sections_count: 0 }
+    visual_prototyping: { mockup_references: [], summary: null }
+    review_handoff: { brief_layers: [], summary: null }

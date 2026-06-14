@@ -1,0 +1,55 @@
+orchestrator:
+  started_phase: null
+  completed_phases: []
+  failed_phases: []
+  auto_fix_attempts:
+    phase-1: 0
+    phase-2: 0
+    phase-3: 0
+    phase-4: 0
+    phase-5: 0
+    phase-6: 0
+    phase-7: 0
+    phase-8: 0
+  options:
+    docs_enabled: false
+  created: "YYYY-MM-DDTHH:MM:SSZ"
+  updated: "YYYY-MM-DDTHH:MM:SSZ"
+  task_path: null
+  task_ids: {}
+
+task:
+  title: null
+  description: null
+  status: pending
+  tags: []
+  priority: null
+
+migration_context:
+  migration_type: "code" | "data" | "architecture" | "general"
+  current_system:
+    description: null
+    technologies: []
+  target_system:
+    description: null
+    technologies: []
+  migration_strategy:
+    approach: "incremental" | "big-bang" | "dual-run" | "phased"
+    phases: []
+  risk_level: null
+  breaking_changes: []
+  rollback_plan_created: false
+  dual_run_configured: false
+
+external_research:
+  performed: false
+  category: null
+  breaking_changes: []
+  migration_guide_url: null
+
+verification_context:
+  last_status: null
+  issues_found: null
+  fixes_applied: []
+  decisions_made: []
+  reverify_count: 0

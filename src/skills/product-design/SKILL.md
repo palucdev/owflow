@@ -715,48 +715,7 @@ To start development based on this design, clear context first or start a new se
 
 Product-design-specific fields in `orchestrator-state.yml`:
 
-```yaml
-design_context:
-  design_characteristics:
-    is_greenfield: false
-    is_enhancement: false
-    is_ui_focused: false
-    is_backend: false
-    is_complex: false
-    is_simple: false
-  complexity_level: "standard" # "simple" | "standard" | "complex"
-  collected_urls: []
-  research_topics: []
-  user_files_list: []
-  refinement_iterations:
-    phase_2: 0
-    phase_3: 0
-    phase_5: 0
-    phase_6_sections: {} # per-section tracking: {problem_statement: 1, features: 0, ...}
-    phase_7: 0
-  visual_companion:
-    available: null # null=not yet checked, true/false after check
-    port: null
-    pid: null
-    fallback_to_ascii: false
-  research_reference:
-    path: null
-    research_question: null
-  phase_summaries:
-    context_synthesis: { summary: null, sources_count: 0 }
-    problem_exploration:
-      { problem_statement: null, constraints: [], success_criteria: [] }
-    persona_exploration: { personas: [], user_journeys: [] }
-    idea_generation: { alternatives_count: 0, summary: null }
-    idea_convergence:
-      { selected_approach: null, trade_offs_accepted: [], key_decisions: [] }
-    feature_specification: { spec_sections: {}, sections_count: 0 }
-    visual_prototyping: { mockup_references: [], summary: null }
-    review_handoff: { brief_layers: [], summary: null }
-
-options:
-  visual_enabled: null # null=auto-detect, false=--no-visual flag
-```
+Refer to the template [src/templates/orchestrator-state-product-design.yml](../../templates/orchestrator-state-product-design.yml).
 
 ---
 

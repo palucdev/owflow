@@ -369,40 +369,7 @@ question - "Design complete. Continue to output generation?"
 
 Research-specific fields in `orchestrator-state.yml`:
 
-```yaml
-research_context:
-  research_type: "technical" | "requirements" | "literature" | "mixed"
-  research_question: "[user's question]"
-  scope:
-    included: []
-    excluded: []
-    constraints: []
-  methodology: []
-  sources: []
-  confidence_level: "high" | "medium" | "low"
-  gathering_strategy:
-    categories: []       # e.g., ["codebase", "documentation", "external-apis"]
-    count: 4             # number of gatherer instances
-    source: "planner" | "default"  # where strategy came from
-  phase_summaries:
-    phase-1:
-      summary: "..."
-      steps_completed: []  # track which steps completed for resume
-    phase-3:
-      summary: "..."
-    phase-4:
-      summary: "..."
-      decision_areas: []        # list of {area, alternatives_count, chosen_approach}
-      deferred_ideas: []
-    phase-5:
-      summary: "..."
-      architecture_style: null
-      decisions_count: 0
-
-options:
-  brainstorming_enabled: null  # null=not yet decided, set by Phase 2 or --brainstorm/--no-brainstorm flag
-  design_enabled: null          # independent, set by Phase 2 or --design/--no-design flag
-```
+Refer to the template [src/templates/orchestrator-state-research.yml](../../templates/orchestrator-state-research.yml).
 
 ---
 
@@ -468,14 +435,7 @@ options:
 
 **Handoff**:
 
-```yaml
-research_outputs:
-  research_report: "[path to outputs/research-report.md]"
-  findings_directory: "[path to analysis/findings/]"
-  solution_exploration: "[path to outputs/solution-exploration.md]"
-  high_level_design: "[path to outputs/high-level-design.md]"
-  decision_log: "[path to outputs/decision-log.md]"
-```
+Refer to `research_outputs` in the template [src/templates/orchestrator-state-research.yml](../../templates/orchestrator-state-research.yml).
 
 ---
 

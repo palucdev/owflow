@@ -548,49 +548,7 @@ question - "Documentation complete. Continue to Phase 14?"
 
 Development-specific fields in `orchestrator-state.yml`:
 
-```yaml
-orchestrator:
-  options:
-    spec_audit_enabled: true
-    skip_test_suite: true
-    e2e_enabled: null
-    user_docs_enabled: null
-    code_review_enabled: true
-    pragmatic_review_enabled: true
-    reality_check_enabled: true
-    production_check_enabled: true
-  task_context:
-    risk_level: null
-    clarifications_resolved: null
-    scope_expanded: null
-    architecture_decision: null
-    task_characteristics:
-      has_reproducible_defect: false
-      modifies_existing_code: false
-      creates_new_entities: false
-      involves_data_operations: false
-      ui_heavy: false
-    research_reference:
-      path: null
-      research_question: null
-      research_type: null
-      confidence_level: null
-    quick_reference:
-      path: null
-      command: null          # quick-bugfix | quick-plan | quick-dev
-      escalation_reason: null
-    phase_summaries:
-      research: { summary: null, key_findings: [], recommended_approach: null }
-      quick_analysis: { summary: null, affected_files: [], root_cause: null }
-      codebase_analysis:
-        { key_files: [], primary_language: null, summary: null }
-      clarifications: []
-      gap_analysis: { integration_points: [], summary: null }
-      scope_clarifications: { scope_expanded: null, summary: null }
-      ui_mockups: { components_designed: [], summary: null }
-      specification: { summary: null }
-      architecture_decision: { decision: null, summary: null }
-```
+Refer to the template [src/templates/orchestrator-state-development.yml](../../templates/orchestrator-state-development.yml).
 
 ---
 

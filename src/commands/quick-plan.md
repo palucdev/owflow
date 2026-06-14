@@ -45,21 +45,7 @@ Enter OpenCode's planning mode for a task, with automatic discovery of project s
    - Examples: "Add retry logic to API client" → `2026-05-28-add-api-retry-logic`, "Refactor the payment processing module" → `2026-05-28-refactor-payment-module`
 2. Create directory: `.owflow/tasks/quick-plan/YYYY-MM-DD-task-name/`
 3. Create `analysis/` subdirectory inside it
-4. Write `task.yml` with initial state:
-
-```yaml
-command: quick-plan
-title: "Short title from task description"
-description: "Full task description as provided by user"
-status: in_progress
-created: "YYYY-MM-DDTHH:MM:SSZ"
-updated: "YYYY-MM-DDTHH:MM:SSZ"
-task_path: .owflow/tasks/quick-plan/YYYY-MM-DD-task-name
-escalated_to: null
-escalation_reason: null
-standards_applied: []
-plan_path: null
-```
+4. Write `task.yml` with initial state using the template [src/templates/quick-plan-task.yml](../templates/quick-plan-task.yml).
 
 ### Step 2: Discover and Read Standards (BEFORE Plan Mode)
 

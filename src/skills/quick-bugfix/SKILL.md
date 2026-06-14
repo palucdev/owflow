@@ -58,20 +58,7 @@ For complex bugs that grow beyond a quick fix, suggests escalating to the full d
    - Examples: "Fix login timeout bug" → `2026-05-28-fix-login-timeout`, "Login form submits twice on slow connections" → `2026-05-28-login-double-submit`
 2. Create directory: `.owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name/`
 3. Create `analysis/` subdirectory inside it
-4. Write `task.yml` with initial state:
-
-```yaml
-command: quick-bugfix
-title: "Short title from bug description"
-description: "Full bug description as provided by user"
-status: in_progress
-created: "YYYY-MM-DDTHH:MM:SSZ"
-updated: "YYYY-MM-DDTHH:MM:SSZ"
-task_path: .owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name
-escalated_to: null
-escalation_reason: null
-standards_applied: []
-```
+4. Write `task.yml` with initial state using the template [src/templates/quick-bugfix-task.yml](../../templates/quick-bugfix-task.yml).
 
 ### Step 3: Discover Standards
 

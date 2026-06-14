@@ -1,0 +1,10 @@
+command: quick-bugfix
+title: "Short title from bug description"
+description: "Full bug description as provided by user"
+status: in_progress
+created: "YYYY-MM-DDTHH:MM:SSZ"
+updated: "YYYY-MM-DDTHH:MM:SSZ"
+task_path: .owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name
+escalated_to: null
+escalation_reason: null
+standards_applied: []

@@ -1,0 +1,61 @@
+orchestrator:
+  started_phase: null
+  completed_phases: []
+  failed_phases: []
+  auto_fix_attempts:
+    phase-1: 0
+    phase-2: 0
+    phase-3: 0
+    phase-4: 0
+    phase-5: 0
+    phase-6: 0
+  options:
+    brainstorming_enabled: null
+    design_enabled: null
+  created: "YYYY-MM-DDTHH:MM:SSZ"
+  updated: "YYYY-MM-DDTHH:MM:SSZ"
+  task_path: null
+  task_ids: {}
+
+task:
+  title: null
+  description: null
+  status: pending
+  tags: []
+  priority: null
+
+research_context:
+  research_type: "technical" | "requirements" | "literature" | "mixed"
+  research_question: null
+  scope:
+    included: []
+    excluded: []
+    constraints: []
+  methodology: []
+  sources: []
+  confidence_level: "high" | "medium" | "low"
+  gathering_strategy:
+    categories: []
+    count: 0
+    source: "planner" | "default"
+  phase_summaries:
+    phase-1:
+      summary: null
+      steps_completed: []
+    phase-3:
+      summary: null
+    phase-4:
+      summary: null
+      decision_areas: []
+      deferred_ideas: []
+    phase-5:
+      summary: null
+      architecture_style: null
+      decisions_count: 0
+
+research_outputs:
+  research_report: null
+  findings_directory: null
+  solution_exploration: null
+  high_level_design: null
+  decision_log: null

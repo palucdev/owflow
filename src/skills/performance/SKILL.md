@@ -353,36 +353,7 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 Performance-specific fields in `orchestrator-state.yml`:
 
-```yaml
-performance_context:
-  bottlenecks_identified: null # count from bottleneck-analyzer
-  user_data_available: false # whether user provided profiling data
-  bottleneck_priorities:
-    p0: 0
-    p1: 0
-    p2: 0
-    p3: 0
-  phase_summaries:
-    codebase_analysis: { key_files: [], summary: null }
-    bottleneck_analysis:
-      { bottlenecks: [], summary: null, user_data_incorporated: false }
-    specification: { summary: null }
-
-verification_context:
-  last_status: null
-  issues_found: null
-  fixes_applied: []
-  decisions_made: []
-  reverify_count: 0
-
-options:
-  spec_audit_enabled: null
-  skip_test_suite: true
-  code_review_enabled: true
-  pragmatic_review_enabled: true
-  reality_check_enabled: true
-  production_check_enabled: null
-```
+Refer to the template [src/templates/orchestrator-state-performance.yml](../../templates/orchestrator-state-performance.yml).
 
 ---
 
