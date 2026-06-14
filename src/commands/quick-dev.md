@@ -53,6 +53,30 @@ Implement a task directly without entering planning mode, while still applying p
   "What would you like to implement? Please describe the task."
   ```
 
+### Step 1b: Create Task Directory
+
+**Create a lightweight task directory for artifact anchoring.**
+
+1. Generate a task name from the task description:
+   - Extract 3–5 key words, convert to lowercase kebab-case
+   - Prepend today's date: `YYYY-MM-DD-kebab-name`
+   - Examples: "Add a logout button to the navbar" → `2026-05-28-add-navbar-logout-button`, "Update the API endpoint to accept JSON" → `2026-05-28-update-api-accept-json`
+2. Create directory: `.owflow/tasks/quick-dev/YYYY-MM-DD-task-name/`
+3. Write `task.yml` with initial state:
+
+```yaml
+command: quick-dev
+title: "Short title from task description"
+description: "Full task description as provided by user"
+status: in_progress
+created: "YYYY-MM-DDTHH:MM:SSZ"
+updated: "YYYY-MM-DDTHH:MM:SSZ"
+task_path: .owflow/tasks/quick-dev/YYYY-MM-DD-task-name
+escalated_to: null
+escalation_reason: null
+standards_applied: []
+```
+
 ### Step 2: Discover Standards
 
 **Check if `.owflow/docs/INDEX.md` exists:**
@@ -65,6 +89,7 @@ Implement a task directly without entering planning mode, while still applying p
    - The nature of the task
    - Keywords in the task description
 3. **READ the applicable standard files** (see Standards Reading Enforcement below)
+4. **Update `task.yml`**: Add paths of standards read to `standards_applied` list
 
 **If not exists:**
 
@@ -110,7 +135,34 @@ Implement a task directly without entering planning mode, while still applying p
 
 ### Step 5: Summary
 
-**Provide completion summary:**
+**Write `summary.md`** in the task directory:
+
+```markdown
+# Task Summary
+
+**Command**: quick-dev
+**Date**: YYYY-MM-DD
+**Status**: completed
+
+## What Was Done
+[What was implemented]
+
+## Files Modified
+- `path/to/file`
+
+## Standards Applied
+- [standard]: [guideline]
+
+## Tests
+- [test file] — [result]
+
+## Commit Suggestion
+[conventional commit message]
+```
+
+**Update `task.yml`**: set `status: completed`, `updated: [now]`.
+
+**Provide completion summary to user:**
 
 - What was implemented
 - Which standards from INDEX.md were applied
@@ -122,11 +174,13 @@ Implement a task directly without entering planning mode, while still applying p
 ## What This Does
 
 1. **Parses** task description from user input
-2. **Discovers** applicable standards from `.owflow/docs/INDEX.md`
-3. **READS** actual standard files (MANDATORY - not just INDEX.md)
-4. **Implements** directly without planning mode approval
-5. **Verifies** standards were followed
-6. **Summarizes** what was done and which standards were read and applied
+2. **Creates** lightweight task directory with `task.yml` for artifact anchoring
+3. **Discovers** applicable standards from `.owflow/docs/INDEX.md`
+4. **READS** actual standard files (MANDATORY - not just INDEX.md)
+5. **Implements** directly without planning mode approval
+6. **Verifies** standards were followed
+7. **Writes** `summary.md` in task directory and updates `task.yml` to `completed`
+8. **Summarizes** what was done and which standards were read and applied
 
 ## Graceful Fallback
 

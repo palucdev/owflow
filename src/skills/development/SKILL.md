@@ -18,7 +18,7 @@ Unified workflow for all development tasks — bug fixes, enhancements, and new 
 
 1. `../orchestrator-framework/references/orchestrator-patterns.md` - Delegation rules, interactive mode, state schema, initialization, context passing, issue resolution
 
-### Step 2: Detect Research Context
+### Step 2: Detect Prior Work Context
 
 **If argument is a research folder path** (matches `.owflow/tasks/research/*`):
 
@@ -31,6 +31,32 @@ Unified workflow for all development tasks — bug fixes, enhancements, and new 
 - Read research artifacts from specified path
 - Copy to `analysis/research-context/`
 - Set `research_reference` in state
+
+**If argument is a quick-\* task folder path** (matches `.owflow/tasks/quick-*/`):
+
+1. Read `task.yml` — extract `command`, `description`, `standards_applied`, `escalation_reason`
+2. Read `analysis/findings.md` — extract root cause, affected files, complexity assessment, test strategy
+3. Use `description` as the task description (same as research extracts `research_question`)
+4. Set `quick_reference` in orchestrator state:
+   ```yaml
+   task_context:
+     quick_reference:
+       path: .owflow/tasks/quick-bugfix/2026-05-28-fix-login-timeout
+       command: quick-bugfix
+       escalation_reason: "5+ files, unclear root cause"
+     phase_summaries:
+       quick_analysis: {summary: "...", affected_files: [...], root_cause: "..."}
+   ```
+5. Update the quick-\* `task.yml`: set `escalated_to` to the new development task path
+
+**How quick-\* context informs development phases**:
+
+| Phase | How Quick-\* Context is Used |
+|-------|----------------------------|
+| Phase 1 | Codebase analyzer receives affected files and root cause as search guidance |
+| Phase 2 | Gap analyzer uses complexity assessment for risk level |
+| Phase 3 | TDD gate uses test strategy from findings.md as starting point |
+| Phase 5 | Specification creator receives prior analysis as input context |
 
 ### Step 3: Initialize Workflow
 
@@ -549,8 +575,13 @@ orchestrator:
       research_question: null
       research_type: null
       confidence_level: null
+    quick_reference:
+      path: null
+      command: null          # quick-bugfix | quick-plan | quick-dev
+      escalation_reason: null
     phase_summaries:
       research: { summary: null, key_findings: [], recommended_approach: null }
+      quick_analysis: { summary: null, affected_files: [], root_cause: null }
       codebase_analysis:
         { key_files: [], primary_language: null, summary: null }
       clarifications: []

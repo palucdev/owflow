@@ -204,11 +204,17 @@ Implement a task directly with standards awareness. Reads INDEX.md, loads applic
 
 **When to use**: Task is clear, no architectural decisions needed, you know what needs doing.
 
+**Task directory**: `.owflow/tasks/quick-dev/YYYY-MM-DD-task-name/`
+**Artifacts**: `task.yml`, `summary.md`
+
 ### `/quick-plan [task description]`
 
 Enter OpenCode's planning mode with standards awareness. Discovers and reads applicable standards _before_ entering plan mode, so your plan is informed by project conventions.
 
 Standards compliance checklist is required in the plan file before exiting plan mode.
+
+**Task directory**: `.owflow/tasks/quick-plan/YYYY-MM-DD-task-name/`
+**Artifacts**: `task.yml` (+ `plan_path`), `analysis/findings.md`
 
 ### `/quick-bugfix [bug description]`
 
@@ -216,4 +222,5 @@ Lightweight TDD-driven bug fix without a full orchestrator workflow. Analyzes th
 
 **When to use**: Simple, isolated bugs where you can quickly identify the root cause. If the bug is too complex (multiple files, unclear root cause, architectural impact), the skill suggests escalating to `/development`.
 
-No task directory created — works directly in your codebase.
+**Task directory**: `.owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name/`
+**Artifacts**: `task.yml`, `analysis/findings.md`, `summary.md`
