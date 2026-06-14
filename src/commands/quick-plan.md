@@ -35,6 +35,32 @@ Enter OpenCode's planning mode for a task, with automatic discovery of project s
   "What would you like to plan? Please describe the task or feature."
   ```
 
+### Step 1b: Create Task Directory
+
+**Create a lightweight task directory for artifact anchoring.**
+
+1. Generate a task name from the task description:
+   - Extract 3–5 key words, convert to lowercase kebab-case
+   - Prepend today's date: `YYYY-MM-DD-kebab-name`
+   - Examples: "Add retry logic to API client" → `2026-05-28-add-api-retry-logic`, "Refactor the payment processing module" → `2026-05-28-refactor-payment-module`
+2. Create directory: `.owflow/tasks/quick-plan/YYYY-MM-DD-task-name/`
+3. Create `analysis/` subdirectory inside it
+4. Write `task.yml` with initial state:
+
+```yaml
+command: quick-plan
+title: "Short title from task description"
+description: "Full task description as provided by user"
+status: in_progress
+created: "YYYY-MM-DDTHH:MM:SSZ"
+updated: "YYYY-MM-DDTHH:MM:SSZ"
+task_path: .owflow/tasks/quick-plan/YYYY-MM-DD-task-name
+escalated_to: null
+escalation_reason: null
+standards_applied: []
+plan_path: null
+```
+
 ### Step 2: Discover and Read Standards (BEFORE Plan Mode)
 
 **CRITICAL: This step MUST complete before calling Plan Agent.**
@@ -53,6 +79,24 @@ Enter OpenCode's planning mode for a task, with automatic discovery of project s
 4. **READ the actual standard files** using the Read tool — reading INDEX.md alone is NOT sufficient
 
 5. **Summarize key guidelines** from each standard file read — these will carry into plan mode as context
+6. **Update `task.yml`**: Add paths of standards read to `standards_applied` list
+
+### Step 2b: Write Findings
+
+**After standards discovery, write `analysis/findings.md`** in the task directory:
+
+```markdown
+# Task Analysis
+
+## Context
+[What was analyzed to inform the plan — codebase areas explored, existing patterns found]
+
+## Key Decisions
+[Architectural or implementation decisions made during planning]
+
+## Standards Referenced
+- [standard file]: [key guideline applied]
+```
 
 ### Step 3: Enter Planning Mode
 
@@ -101,10 +145,13 @@ project documentation and coding standards for better consistency.
 ## What This Does
 
 1. **Parses** task description from user input
-2. **Discovers and READS** applicable standard files from `.owflow/docs/` (BEFORE plan mode)
-3. **Enters** OpenCode's builtin planning mode via delegating to `Plan Agent` with standards already loaded
-4. **Produces** a plan file with implementation approach, applicable standards, and compliance checklist
-5. **Gates** Approval question on mandatory standards sections in the plan file
+2. **Creates** lightweight task directory with `task.yml` for artifact anchoring
+3. **Discovers and READS** applicable standard files from `.owflow/docs/` (BEFORE plan mode)
+4. **Writes** `analysis/findings.md` with task context and key decisions
+5. **Enters** OpenCode's builtin planning mode via delegating to `Plan Agent` with standards already loaded
+6. **Produces** a plan file with implementation approach, applicable standards, and compliance checklist
+7. **Gates** Approval question on mandatory standards sections in the plan file
+8. **Updates** `task.yml` with `status: completed` and `plan_path` after plan approval
 
 ## Benefits Over Manual Planning
 
@@ -117,6 +164,7 @@ project documentation and coding standards for better consistency.
 
 Once the plan is approved:
 
+- **Update `task.yml`**: set `status: completed`, `plan_path: [path to plan file]`, `updated: [now]`
 - Implementation begins based on the plan
 - Standards are applied during coding
 

@@ -7,7 +7,7 @@ user-invocable: true
 
 # Quick Bug Fix
 
-Lightweight TDD-driven bug fix workflow with planning mode. Analyze the bug, present a fix plan for approval, then reproduce with a failing test, fix, and verify. No orchestrator state, no task directory, no subagents.
+Lightweight TDD-driven bug fix workflow with planning mode. Analyze the bug, present a fix plan for approval, then reproduce with a failing test, fix, and verify. No orchestrator state, no subagents. Creates lightweight task directory for artifact anchoring.
 
 For complex bugs that grow beyond a quick fix, suggests escalating to the full development workflow (`/development`).
 
@@ -48,7 +48,32 @@ For complex bugs that grow beyond a quick fix, suggests escalating to the full d
   "Describe the bug — what's the expected behavior vs actual behavior?"
   ```
 
-### Step 2: Discover Standards
+### Step 2: Create Task Directory
+
+**Create a lightweight task directory for artifact anchoring.**
+
+1. Generate a task name from the bug description:
+   - Extract 3–5 key words, convert to lowercase kebab-case
+   - Prepend today's date: `YYYY-MM-DD-kebab-name`
+   - Examples: "Fix login timeout bug" → `2026-05-28-fix-login-timeout`, "Login form submits twice on slow connections" → `2026-05-28-login-double-submit`
+2. Create directory: `.owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name/`
+3. Create `analysis/` subdirectory inside it
+4. Write `task.yml` with initial state:
+
+```yaml
+command: quick-bugfix
+title: "Short title from bug description"
+description: "Full bug description as provided by user"
+status: in_progress
+created: "YYYY-MM-DDTHH:MM:SSZ"
+updated: "YYYY-MM-DDTHH:MM:SSZ"
+task_path: .owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name
+escalated_to: null
+escalation_reason: null
+standards_applied: []
+```
+
+### Step 3: Discover Standards
 
 **CRITICAL: This step MUST complete before entering plan mode.**
 
@@ -62,6 +87,7 @@ For complex bugs that grow beyond a quick fix, suggests escalating to the full d
    - The area of the bug (e.g., API, frontend, database)
    - Keywords in the bug description
 3. **READ the applicable standard files** (see Standards Reading Enforcement below)
+4. **Update `task.yml`**: Add paths of standards read to `standards_applied` list
 
 **If not exists:**
 
@@ -86,7 +112,7 @@ For complex bugs that grow beyond a quick fix, suggests escalating to the full d
 - Bug in form validation → Read validation and frontend standards
 - Bug in database query → Read database and backend standards
 
-### Step 3: Analyze & Assess Complexity
+### Step 4: Analyze & Assess Complexity
 
 **Explore the codebase to understand the bug:**
 
@@ -109,20 +135,57 @@ Assess whether this bug exceeds quick-fix scope. If **2 or more** of these signa
 
 **If escalation triggered:**
 
+**Write `analysis/findings.md`** in the task directory with the analysis captured so far:
+
+```markdown
+# Bug Analysis
+
+## Root Cause
+[Root cause hypothesis with evidence — file paths, code references]
+
+## Affected Files
+- `path/to/file` — reason
+
+## Complexity Assessment
+- [ ] Changes span 5+ files across multiple modules
+- [ ] Requires database schema changes
+- [ ] Multiple valid fix approaches with architectural trade-offs
+- [ ] Security-sensitive code
+- [ ] Root cause unclear after initial analysis
+
+Signals detected: X of 5
+
+## Test Strategy
+[How the bug will be reproduced with a failing test]
+
+## Standards Referenced
+- [standard file]: [key guideline applied]
+```
+
 Use question:
 
 - Question: "This bug appears more complex than a quick fix — [describe why]. How would you like to proceed?"
 - Options:
   1. "Continue with quick fix" — proceed, accepting the complexity
-  2. "Switch to full development workflow" — stop here and suggest running `/development` with the bug description and analysis context
+  2. "Switch to full development workflow" — escalate (see below)
 
-**If no escalation needed or user chooses to continue:** proceed to Step 4.
+**If user chooses to escalate:**
 
-### Step 4: Enter Planning Mode
+1. Ensure `analysis/findings.md` is written (above)
+2. Update `task.yml`: set `status: escalated`, `escalation_reason: "[signals detected]"`, `updated: [now]`
+3. Tell the user: "Run `/development .owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name` to continue with full workflow."
+4. Do NOT set `escalated_to` — the development orchestrator will set it
+5. `summary.md` is NOT written on escalation
+
+**If no escalation needed or user chooses to continue:**
+
+Write `analysis/findings.md` (same template above — captures analysis for auditability), then proceed to Step 5.
+
+### Step 5: Enter Planning Mode
 
 **Use the `Plan Agent` to present the fix plan for user approval.**
 
-Standards context from Step 2 and analysis from Step 3 MUST inform the plan.
+Standards context from Step 3 and analysis from Step 4 MUST inform the plan.
 
 **Plan file content:**
 
@@ -163,7 +226,7 @@ If no standards exist: "No AI SDLC standards found. Consider running `/flow-init
 
 If any section is missing, add it before asking for user approval.
 
-### Step 5: TDD Red Gate
+### Step 6: TDD Red Gate
 
 **Write a failing test that reproduces the bug.**
 
@@ -182,12 +245,12 @@ If any section is missing, add it before asking for user approval.
 - Investigate further — re-read the bug description, check if conditions are correct
 - Use question: "The reproduction test passes — the expected behavior already works under these conditions. Is the bug description accurate, or are there additional conditions?"
 
-### Step 6: Fix & Verify (TDD Green)
+### Step 7: Fix & Verify (TDD Green)
 
 **Implement the fix:**
 
-1. Apply the fix based on the approved plan from Step 4
-2. **Apply discovered standards** from Step 2
+1. Apply the fix based on the approved plan from Step 5
+2. **Apply discovered standards** from Step 3
 3. Run the failing test — it MUST now pass
 4. Run the full test file and related test files to check for regressions
 
@@ -203,16 +266,34 @@ If any section is missing, add it before asking for user approval.
 - Stop and present findings to the user
 - Suggest escalating to `/development` for a more thorough approach
 
-### Step 7: Summary
+### Step 8: Summary
 
-**Provide completion summary:**
+**Write `summary.md`** in the task directory:
 
-- **Root cause**: What caused the bug
-- **Fix**: What was changed and why
-- **Files modified**: List of changed files
-- **Standards applied**: Which standards from INDEX.md were followed
-- **Tests**: Which tests were run and their results (including the TDD red→green transition)
-- **Commit suggestion**: Propose a commit message
+```markdown
+# Task Summary
+
+**Command**: quick-bugfix
+**Date**: YYYY-MM-DD
+**Status**: completed
+
+## What Was Done
+[Root cause and fix description]
+
+## Files Modified
+- `path/to/file`
+
+## Standards Applied
+- [standard]: [guideline]
+
+## Tests
+- [test file] — [result]
+
+## Commit Suggestion
+[conventional commit message]
+```
+
+**Update `task.yml`**: set `status: completed`, `updated: [now]`.
 
 **Post-implementation: verify standards compliance using the checklist from the plan file.**
 
@@ -221,13 +302,14 @@ If any section is missing, add it before asking for user approval.
 ## What This Does
 
 1. **Parses** bug description from user input
-2. **Discovers** applicable standards from `.owflow/docs/INDEX.md`
-3. **Analyzes** codebase to find root cause and assess complexity
-4. **Escalates** to full development workflow if bug is too complex
-5. **Plans** the fix and presents for user approval via planning mode
-6. **Reproduces** bug with a failing test (TDD Red)
-7. **Fixes** the bug and verifies test passes (TDD Green)
-8. **Summarizes** root cause, fix, standards applied, and test results
+2. **Creates** lightweight task directory with `task.yml` for artifact anchoring
+3. **Discovers** applicable standards from `.owflow/docs/INDEX.md`
+4. **Analyzes** codebase to find root cause, writes `analysis/findings.md`, and assesses complexity
+5. **Escalates** to full development workflow if bug is too complex (updates `task.yml` status to `escalated`)
+6. **Plans** the fix and presents for user approval via planning mode
+7. **Reproduces** bug with a failing test (TDD Red)
+8. **Fixes** the bug and verifies test passes (TDD Green)
+9. **Summarizes** in `summary.md`, updates `task.yml` status to `completed`
 
 ## Graceful Fallback
 

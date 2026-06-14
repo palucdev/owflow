@@ -254,7 +254,13 @@ Development tasks are organized by workflow type in `.owflow/tasks/`:
 │   └── YYYY-MM-DD-task-name/
 ├── research/
 │   └── YYYY-MM-DD-task-name/
-└── product-design/
+├── product-design/
+│   └── YYYY-MM-DD-task-name/
+├── quick-bugfix/           # Lightweight task artifacts
+│   └── YYYY-MM-DD-task-name/
+├── quick-plan/             # Lightweight task artifacts
+│   └── YYYY-MM-DD-task-name/
+└── quick-dev/              # Lightweight task artifacts
     └── YYYY-MM-DD-task-name/
 ```
 
@@ -286,6 +292,8 @@ YYYY-MM-DD-task-name/
 ```
 
 Task types can add specialized subdirectories as needed (e.g., `analysis/bug-analysis/` for bug fixes, `implementation/metrics/` for performance tasks).
+
+Quick commands (`quick-bugfix`, `quick-plan`, `quick-dev`) use a lighter structure with `task.yml` instead of `orchestrator-state.yml` for metadata tracking.
 
 **Note**: The `implementation/implementation-plan.md` file contains implementation steps (the detailed breakdown of actions), created by the implementation-planner subagent after the specification is approved.
 
@@ -518,10 +526,10 @@ Orchestrators manage complete workflows with state management, auto-recovery, an
 
 Skills for generating diagrams and rendering markdown content into shareable formats.
 
-| Skill              | Purpose                                                                                                                                                                                                                | Details                             |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `diagrams-mermaid` | Generate Mermaid diagrams from natural language descriptions. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.           | `skills/diagrams-mermaid/SKILL.md`  |
-| `html-renderer`    | Render markdown plans, ideas, RFCs, or design notes into self-contained HTML files with warm editorial styling. Outputs single-file HTML with inlined CSS and optional Mermaid diagram support via CDN when detected. | `skills/html-renderer/SKILL.md`     |
+| Skill              | Purpose                                                                                                                                                                                                               | Details                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `diagrams-mermaid` | Generate Mermaid diagrams from natural language descriptions. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.          | `skills/diagrams-mermaid/SKILL.md` |
+| `html-renderer`    | Render markdown plans, ideas, RFCs, or design notes into self-contained HTML files with warm editorial styling. Outputs single-file HTML with inlined CSS and optional Mermaid diagram support via CDN when detected. | `skills/html-renderer/SKILL.md`    |
 
 ## Available Commands
 
@@ -573,18 +581,20 @@ Research context flows through ALL phases without skipping any. Research artifac
 
 ### Quick Commands
 
-| Command         | Usage                | Purpose                                                          |
-| --------------- | -------------------- | ---------------------------------------------------------------- |
-| `/quick-plan`   | `[task description]` | Enter planning mode with standards awareness from INDEX.md       |
-| `/quick-dev`    | `[task description]` | Implement directly with standards awareness (no planning)        |
-| `/quick-bugfix` | `[bug description]`  | Quick bug fix with TDD red/green gates and complexity escalation |
+| Command         | Usage                | Purpose                                                          | Task Directory                |
+| --------------- | -------------------- | ---------------------------------------------------------------- | ----------------------------- |
+| `/quick-plan`   | `[task description]` | Enter planning mode with standards awareness from INDEX.md       | `.owflow/tasks/quick-plan/`   |
+| `/quick-dev`    | `[task description]` | Implement directly with standards awareness (no planning)        | `.owflow/tasks/quick-dev/`    |
+| `/quick-bugfix` | `[bug description]`  | Quick bug fix with TDD red/green gates and complexity escalation | `.owflow/tasks/quick-bugfix/` |
+
+Quick commands create lightweight task directories with `task.yml` for artifact anchoring and traceability. See individual command files for per-command artifact details.
 
 ### Content & Visualization Commands
 
-| Command             | Usage                          | Purpose                                                     |
-| ------------------- | ------------------------------ | ----------------------------------------------------------- |
-| `/diagrams-mermaid` | `[diagram description]`        | Generate Mermaid diagrams from natural language             |
-| `/html-renderer`    | `[path to markdown file]`      | Render markdown into self-contained HTML with warm styling  |
+| Command             | Usage                     | Purpose                                                    |
+| ------------------- | ------------------------- | ---------------------------------------------------------- |
+| `/diagrams-mermaid` | `[diagram description]`   | Generate Mermaid diagrams from natural language            |
+| `/html-renderer`    | `[path to markdown file]` | Render markdown into self-contained HTML with warm styling |
 
 **See**: Individual `commands/` and `skills/*/skill.md` files for detailed documentation.
 

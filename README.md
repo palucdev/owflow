@@ -25,17 +25,29 @@ Started as a simple OpenCode fork of [Maister Claude Code plugin](https://github
 
 ### Installation
 
-#### Install the plugin
+#### Add owflow to the `plugin` array in your `opencode.json` ([global or project-level](https://opencode.ai/docs/plugins/#load-order)):
 
-```bash
-npm install owflow
+To use it across multiple repos it is advised to use the global level:
+
+Linux/MacOS:
+
+```sh
+~/.config/opencode/opencode.json
 ```
 
-#### Add owflow to the `plugin` array in your `opencode.json` ([global or project-level](https://opencode.ai/docs/plugins/#load-order)):
+Windows:
+
+```powershell
+\Users\YourUsername\.config\opencode\opencode.json
+```
+
+In `opencode.json`:
 
 ```json
 {
-  "plugin": ["owflow"]
+  ...
+  "plugin": ["owflow@latest"]
+  ...
 }
 ```
 
@@ -112,11 +124,13 @@ Task type (feature/bug/enhancement) is auto-detected from context. Override with
 
 For smaller tasks that don't need a full workflow:
 
-| Command         | Use When                                                    |
-| --------------- | ----------------------------------------------------------- |
-| `/quick-plan`   | You want a plan with standards awareness before coding      |
-| `/quick-dev`    | You know what to do - just implement with standards applied |
-| `/quick-bugfix` | Quick TDD-driven bug fix — write failing test, fix, verify  |
+| Command         | Use When                                                    | Artifacts                    |
+| --------------- | ----------------------------------------------------------- | ---------------------------- |
+| `/quick-plan`   | You want a plan with standards awareness before coding      | `task.yml`, `findings.md`    |
+| `/quick-dev`    | You know what to do - just implement with standards applied | `task.yml`, `summary.md`     |
+| `/quick-bugfix` | Quick TDD-driven bug fix — write failing test, fix, verify  | `task.yml`, `findings.md`, `summary.md` |
+
+All quick commands create lightweight task directories under `.owflow/tasks/quick-{type}/` with a `task.yml` for traceability.
 
 ## Standards-Aware Development
 
