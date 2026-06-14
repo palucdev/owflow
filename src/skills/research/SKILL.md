@@ -23,6 +23,7 @@ Systematic research workflow from question definition to evidence-based document
 1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
 2. **Create Task Directory**: `.owflow/tasks/research/YYYY-MM-DD-task-name/`
 3. **Initialize State**: Create `orchestrator-state.yml` with research context
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-research.yml`.
 
 **Output**:
 

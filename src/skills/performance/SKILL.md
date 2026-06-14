@@ -24,6 +24,7 @@ Static-analysis-first performance optimization workflow. Identifies bottlenecks 
 2. **Create Task Directory**: `.owflow/tasks/performance/YYYY-MM-DD-task-name/`
 3. **Create Subdirectories**: `analysis/`, `analysis/user-profiling-data/`, `implementation/`, `verification/`
 4. **Initialize State**: Create `orchestrator-state.yml` with performance context
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-performance.yml`.
 5. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
 
 **Output**:

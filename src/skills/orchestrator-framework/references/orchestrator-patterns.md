@@ -202,6 +202,7 @@ Refer to `verification_context` in the template [src/templates/orchestrator-stat
 2. **Determine starting phase**: New task starts Phase 1; resume reads state for first incomplete phase
 3. **Create task directory**: Standard structure with analysis/, implementation/, verification/, documentation/ _(skip on resume)_
 4. **Create state file**: `orchestrator-state.yml` _(skip on resume)_
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against the corresponding template.
 5. **Create task items**: `TaskCreate` for all phases, then `TaskUpdate addBlockedBy` for dependencies. On resume, also restore completed phase statuses.
 6. **Output summary**: Show task info, phases, starting message
 

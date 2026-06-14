@@ -39,6 +39,7 @@ Interactive workflow for product and feature design -- from fuzzy idea to develo
    - Create `context/` folder with `README.md` instructing users to drop relevant files there (meeting transcripts, existing designs, spreadsheets, docs, PDFs, images)
    - Create `analysis/` and `outputs/` directories
 3. **Initialize State**: Create `orchestrator-state.yml` with design context schema (see Domain Context section)
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-product-design.yml`.
 
 **Output**:
 

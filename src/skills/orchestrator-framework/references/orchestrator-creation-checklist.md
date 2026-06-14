@@ -10,6 +10,7 @@ Before considering an orchestrator complete, verify ALL items:
 
 - [ ] **Step 0: Load Framework** — Initialization reads `orchestrator-patterns.md`
 - [ ] **State file creation** — Explicit step to CREATE `orchestrator-state.yml`
+- [ ] **State verification** — Explicit step to use `verify_template` to check YAML validity after creation
 - [ ] **Phase structure** — Each phase has: Purpose, Execute, Output, State, Transition (`→ Pause` / `→ AUTO-CONTINUE` / `→ Conditional`)
 - [ ] **Delegation enforcement** — Each delegated phase has: ANTI-PATTERN block, INVOKE NOW block, SELF-CHECK
 - [ ] **POST-CONTINUATION blocks** — After Skill tool phases, explicit instructions to read state, update completed_phases, and continue

@@ -26,7 +26,7 @@ task:
   priority: null
 
 migration_context:
-  migration_type: "code" | "data" | "architecture" | "general"
+  migration_type: "code | data | architecture | general"
   current_system:
     description: null
     technologies: []
@@ -34,7 +34,7 @@ migration_context:
     description: null
     technologies: []
   migration_strategy:
-    approach: "incremental" | "big-bang" | "dual-run" | "phased"
+    approach: "incremental | big-bang | dual-run | phased"
     phases: []
   risk_level: null
   breaking_changes: []

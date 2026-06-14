@@ -46,6 +46,7 @@ Enter OpenCode's planning mode for a task, with automatic discovery of project s
 2. Create directory: `.owflow/tasks/quick-plan/YYYY-MM-DD-task-name/`
 3. Create `analysis/` subdirectory inside it
 4. Write `task.yml` with initial state using the template [src/templates/quick-plan-task.yml](../templates/quick-plan-task.yml).
+5. **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `quick-plan-task.yml`.
 
 ### Step 2: Discover and Read Standards (BEFORE Plan Mode)
 

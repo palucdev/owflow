@@ -63,6 +63,7 @@ Implement a task directly without entering planning mode, while still applying p
    - Examples: "Add a logout button to the navbar" → `2026-05-28-add-navbar-logout-button`, "Update the API endpoint to accept JSON" → `2026-05-28-update-api-accept-json`
 2. Create directory: `.owflow/tasks/quick-dev/YYYY-MM-DD-task-name/`
 3. Write `task.yml` with initial state using the template [src/templates/quick-dev-task.yml](../templates/quick-dev-task.yml).
+4. **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `quick-dev-task.yml`.
 
 ### Step 2: Discover Standards
 
