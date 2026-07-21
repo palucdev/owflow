@@ -9,9 +9,9 @@ import path from "node:path";
 import fs from "node:fs";
 
 import { fileURLToPath } from "url";
-import type { OpenCodeConfig } from "./types/opencode-types";
+import type { OpenCodeConfig } from "./types/opencode-types.js";
 import matter from "gray-matter";
-import { verify_template } from "./tools/verify_template";
+import { verify_template } from "./tools/verify_template.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = __dirname; // Points to dist/ where skills/commands/agents are copied

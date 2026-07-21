@@ -1,10 +1,11 @@
 {
   "name": "owflow",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
   "module": "index.ts",
   "main": "dist/index.js",
+  "exports": "./dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
@@ -14,7 +15,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc && bun run copy-markdowns",
     "copy-markdowns": "node ./scripts/copy-markdowns.js",
-    "prepack": "npm run build",
+    "prepack": "bun run build",
     "test": "bun test"
   },
   "keywords": [
@@ -30,7 +31,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "yaml": "^2.4.1"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.18.4",

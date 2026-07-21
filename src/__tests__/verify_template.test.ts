@@ -2,7 +2,7 @@ import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { verify_template } from "../tools/verify_template";
+import { verify_template } from "../tools/verify_template.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
