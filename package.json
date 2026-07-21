@@ -1,6 +1,6 @@
 {
   "name": "owflow",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
   "module": "index.ts",
@@ -14,7 +14,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc && bun run copy-markdowns",
     "copy-markdowns": "node ./scripts/copy-markdowns.js",
-    "prepack": "bun run build",
+    "prepack": "npm run build",
     "test": "bun test"
   },
   "keywords": [
