@@ -1,4 +1,6 @@
-import { tool } from "@opencode-ai/plugin";
+
+import { make as makeTool } from "@opencode-ai/plugin/v2/effect/tool";
+import { Schema, Effect } from "effect";
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "yaml";
@@ -6,14 +8,18 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const verify_template = tool({
+export const verify_template = makeTool({
   description: "Check if file in the given path exists and follows correct YAML structure by checking against the template file from /templates.",
-  args: {
-    filePath: tool.schema.string().describe("Path to the file to check"),
-    templateName: tool.schema.string().describe("Name of the template from /templates (e.g. orchestrator-state-development.yml)"),
-  },
-  async execute({ filePath, templateName }, context) {
-    const absolutePath = path.resolve(context.directory, filePath);
+  input: Schema.Struct({
+    filePath: Schema.String,
+    templateName: Schema.String,
+  }),
+  output: Schema.Struct({
+    output: Schema.String
+  }),
+  execute: (input: any, context: any) => Effect.sync(() => {
+    const { filePath, templateName } = input;
+    const absolutePath = path.resolve(process.cwd(), filePath);
     
     if (!fs.existsSync(absolutePath)) {
       return { output: `File not found at ${filePath}. Hint: Double-check the path, create the file if it's missing, or verify you are in the correct directory.` };
@@ -71,5 +77,5 @@ export const verify_template = tool({
     }
 
     return { output: "File exists and follows the correct YAML structure." };
-  }
+  })
 });
