@@ -215,7 +215,6 @@ Use question with options:
 2. Performance - Optimize speed/efficiency
 3. Migration - Move to new tech/pattern
 4. Research - Investigate and document findings
-5. Product Design - Design features or products before building them
 
 Then route to selected workflow using Skill tool.
 ```

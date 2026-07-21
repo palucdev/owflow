@@ -156,13 +156,6 @@ If description contains error messages or stack traces:
 - Discovery: spike, proof of concept, prototype, feasibility
 - Documentation: document findings, write guide, create documentation
 
-**Product Design**:
-
-- Primary: design, product design, feature design, wireframe, prototype, mockup
-- Exploration: user journey, persona, user story, product brief, user flow
-- Planning: scope definition, requirements gathering, feature spec (before code)
-- **Key distinction**: Designing what to build before building it — if implementation is implied, route to development instead
-
 **Calculate Confidence Score**:
 
 ```
@@ -233,7 +226,6 @@ Please choose the workflow type that best fits:
 2. Performance - Optimize speed/efficiency
 3. Migration - Move to new tech/pattern
 4. Research - Investigate, document, explore options
-5. Product Design - Design features or products before building them
 
 Which type best describes your task?
 ```

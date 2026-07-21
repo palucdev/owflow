@@ -10,7 +10,7 @@ Started as a simple OpenCode fork of [Maister Claude Code plugin](https://github
 
 ## What You Get
 
-- **Guided workflows** for features, bug fixes, enhancements, performance, migrations, research, and product design
+- **Guided workflows** for features, bug fixes, enhancements, performance, migrations and research
 - **Auto-discovered standards** from your codebase - config files, source patterns, and documentation are analyzed and enforced throughout every workflow
 - **Test-driven implementation** with automated planning, incremental verification, and full test suite runs before completion
 - **Pause and resume** any workflow - state is preserved across sessions
