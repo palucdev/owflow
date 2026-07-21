@@ -16,7 +16,6 @@ orchestrator:
     phase-11: 0
     phase-12: 0
     phase-13: 0
-    phase-14: 0
   options:
     spec_audit_enabled: true
     skip_test_suite: true
