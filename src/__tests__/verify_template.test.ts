@@ -2,6 +2,7 @@ import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Effect } from "effect";
 import { verify_template } from "../tools/verify_template";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -11,6 +12,7 @@ describe("verify_template tool", () => {
   const testDir = path.join(__dirname, "test_tmp_dir");
   const testTemplateName = "test-template.yml";
   const testTemplatePath = path.join(templatesDir, testTemplateName);
+  const originalCwd = process.cwd();
 
   beforeAll(() => {
     // Ensure templates dir exists
@@ -31,9 +33,12 @@ key2:
     if (!fs.existsSync(testDir)) {
       fs.mkdirSync(testDir, { recursive: true });
     }
+
+    process.chdir(testDir);
   });
 
   afterAll(() => {
+    process.chdir(originalCwd);
     // Cleanup
     if (fs.existsSync(testTemplatePath)) {
       fs.rmSync(testTemplatePath);
@@ -44,10 +49,10 @@ key2:
   });
 
   test("should return error if file not found", async () => {
-    const result = await verify_template.execute(
+    const result = await Effect.runPromise(verify_template.execute(
       { filePath: "nonexistent.yml", templateName: testTemplateName },
-      { directory: testDir } as any,
-    );
+      {} as any
+    ));
     expect((result as any).output).toContain(
       "File not found at nonexistent.yml",
     );
@@ -57,10 +62,10 @@ key2:
     const filePath = "target.yml";
     fs.writeFileSync(path.join(testDir, filePath), "key1: value");
 
-    const result = await verify_template.execute(
+    const result = await Effect.runPromise(verify_template.execute(
       { filePath, templateName: "nonexistent-template.yml" },
-      { directory: testDir } as any,
-    );
+      {} as any
+    ));
     expect((result as any).output).toContain(
       "Template 'nonexistent-template.yml' not found",
     );
@@ -70,10 +75,10 @@ key2:
     const filePath = "invalid.yml";
     fs.writeFileSync(path.join(testDir, filePath), "key1: : value\n  invalid");
 
-    const result = await verify_template.execute(
+    const result = await Effect.runPromise(verify_template.execute(
       { filePath, templateName: testTemplateName },
-      { directory: testDir } as any,
-    );
+      {} as any
+    ));
     expect((result as any).output).toContain(
       "YAML Syntax Error in invalid.yml",
     );
@@ -84,10 +89,10 @@ key2:
     // Missing key2
     fs.writeFileSync(path.join(testDir, filePath), "key1: some-value");
 
-    const result = await verify_template.execute(
+    const result = await Effect.runPromise(verify_template.execute(
       { filePath, templateName: testTemplateName },
-      { directory: testDir } as any,
-    );
+      {} as any
+    ));
     expect((result as any).output).toContain(
       "YAML Structure Validation Failed",
     );
@@ -106,10 +111,10 @@ extraKey: this is fine
       `,
     );
 
-    const result = await verify_template.execute(
+    const result = await Effect.runPromise(verify_template.execute(
       { filePath, templateName: testTemplateName },
-      { directory: testDir } as any,
-    );
+      {} as any
+    ));
     expect((result as any).output).toBe(
       "File exists and follows the correct YAML structure.",
     );
@@ -126,10 +131,10 @@ extraKey: this is fine
       "key: something\nother: 456",
     );
 
-    const result = await verify_template.execute(
+    const result = await Effect.runPromise(verify_template.execute(
       { filePath, templateName: nullTemplateName },
-      { directory: testDir } as any,
-    );
+      {} as any
+    ));
 
     expect((result as any).output).toBe(
       "File exists and follows the correct YAML structure.",
@@ -149,14 +154,22 @@ extraKey: this is fine
       // templates dir might not exist or be readable in some contexts, though beforeAll ensures it exists
     }
 
+    beforeAll(() => {
+      process.chdir(templatesDir);
+    });
+
+    afterAll(() => {
+      process.chdir(testDir);
+    });
+
     for (const templateName of templateFiles) {
       test(`should successfully validate a valid instance of ${templateName}`, async () => {
         // We use the templates directory as the working directory 
         // and the template name as the filePath, effectively comparing the template to itself to ensure it's structurally valid.
-        const result = await verify_template.execute(
+        const result = await Effect.runPromise(verify_template.execute(
           { filePath: templateName, templateName },
-          { directory: templatesDir } as any,
-        );
+          {} as any
+        ));
         expect((result as any).output).toBe(
           "File exists and follows the correct YAML structure.",
         );
