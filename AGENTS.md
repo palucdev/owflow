@@ -44,13 +44,12 @@ All workflows in this plugin follow this pattern when failures occur:
 
 This plugin supports 4 workflow types that route to specialized orchestrators:
 
-| Workflow Type      | Purpose                                  | Orchestrator   | Classification Keywords                                                |
-| ------------------ | ---------------------------------------- | -------------- | ---------------------------------------------------------------------- |
-| **Development**    | Bug fixes, enhancements, new features    | development    | "fix", "bug", "add", "new", "improve", "enhance", "create"             |
-| **Performance**    | Optimize speed/efficiency                | performance    | "slow", "optimize", "speed up", "faster"                               |
-| **Migration**      | Move tech/patterns                       | migration      | "migrate", "move from X to Y", "upgrade"                               |
-| **Research**       | Investigate and document findings        | research       | "research", "investigate", "explore options"                           |
-| **Product Design** | Design features/products before building | product-design | "design", "product design", "feature design", "wireframe", "prototype" |
+| Workflow Type   | Purpose                               | Orchestrator | Classification Keywords                                    |
+| --------------- | ------------------------------------- | ------------ | ---------------------------------------------------------- |
+| **Development** | Bug fixes, enhancements, new features | development  | "fix", "bug", "add", "new", "improve", "enhance", "create" |
+| **Performance** | Optimize speed/efficiency             | performance  | "slow", "optimize", "speed up", "faster"                   |
+| **Migration**   | Move tech/patterns                    | migration    | "migrate", "move from X to Y", "upgrade"                   |
+| **Research**    | Investigate and document findings     | research     | "research", "investigate", "explore options"               |
 
 ### Design Principles
 
@@ -58,7 +57,7 @@ This plugin supports 4 workflow types that route to specialized orchestrators:
 - **Characteristic Detection**: The gap-analyzer detects whether a task involves reproducible defects, existing code modifications, new capabilities, data operations, or UI changes
 - **Flexible Granularity**: Complex steps can have substeps when needed
 - **Consistent Core**: All workflows share planning, specification, implementation, and verification phases
-- **Conditional Stages**: Phases activate based on context (e.g., TDD gates when defects detected, UI mockups when UI-heavy)
+- **Conditional Stages**: Phases activate based on context (e.g., TDD gates when defects detected)
 
 ## Terminology
 
@@ -144,41 +143,6 @@ _With data lifecycle analysis_:
 
 **Output**: Ensures features are discoverable, accessible, complete, and logically integrated into the application
 
-### ASCII Mockup Generation
-
-For UI-heavy features/enhancements, the plugin can generate ASCII mockups:
-
-- Shows how new UI integrates with existing layout structure
-- Identifies reusable components from current codebase
-- Visualizes navigation patterns and placement
-- Annotates with actual component file references
-- Ensures consistency with existing app patterns
-
-**When Used**:
-
-- Optional phase in development workflow
-- Auto-triggered when `task_characteristics.ui_heavy` is true
-- Invoked automatically by development orchestrator
-
-**Output**: `analysis/ui-mockups.md` with ASCII diagrams
-
-**Example**:
-
-```
-┌──────────────────────────────────────┐
-│ Toolbar: [Existing] [Buttons] [NEW] │
-│          └─ Integration point here   │
-└──────────────────────────────────────┘
-```
-
-**Benefits**:
-
-- Visualize layout before implementation
-- Ensure consistency with existing UI
-- Identify reusable components early
-- Prevent navigation confusion
-- No external design tools needed
-
 ## Structure Organization
 
 ### Separation of Concerns
@@ -231,7 +195,6 @@ The owflow plugin uses this structure:
     ├── performance/
     ├── migrations/
     ├── research/
-    └── product-design/
 ```
 
 **Core Principle**:
@@ -253,8 +216,6 @@ Development tasks are organized by workflow type in `.owflow/tasks/`:
 ├── migrations/
 │   └── YYYY-MM-DD-task-name/
 ├── research/
-│   └── YYYY-MM-DD-task-name/
-├── product-design/
 │   └── YYYY-MM-DD-task-name/
 ├── quick-bugfix/           # Lightweight task artifacts
 │   └── YYYY-MM-DD-task-name/
@@ -301,7 +262,7 @@ Quick commands (`quick-bugfix`, `quick-plan`, `quick-dev`) use a lighter structu
 
 **Workflow Type Directories:**
 
-- Use workflow names: `development/`, `performance/`, `migrations/`, `research/`, `product-design/`
+- Use workflow names: `development/`, `performance/`, `migrations/`, `research/`
 
 **Task Directories:**
 
@@ -514,13 +475,12 @@ Each orchestrator reads `orchestrator-patterns.md` at initialization and impleme
 
 Orchestrators manage complete workflows with state management, auto-recovery, and pause/resume.
 
-| Skill            | Purpose                                                                                                                                                                                                                                                                                                                     | Details                          |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `development`    | **Unified workflow** (14 phases: 1-14) for all development tasks. Phases activate based on detected task characteristics (not predetermined types). TDD gates activate when defects detected, UI mockups when UI-heavy.                                                                                                     | `skills/development/SKILL.md`    |
-| `performance`    | Static code analysis for bottleneck detection, reuses standard spec/plan/implement/verify pipeline                                                                                                                                                                                                                          | `skills/performance/SKILL.md`    |
-| `migration`      | Code/data/architecture migrations with rollback plans                                                                                                                                                                                                                                                                       | `skills/migration/SKILL.md`      |
-| `research`       | Multi-source research with synthesis, solution brainstorming, high-level design, and citations                                                                                                                                                                                                                              | `skills/research/SKILL.md`       |
-| `product-design` | **Interactive product/feature design** (9 phases: 0-8) with adaptive scope (feature-level default, product-level when detected), mixed interaction pattern (questioning for exploration, propose-and-refine for convergence), iterative refinement loops, browser-based visual companion, and layered product brief output. | `skills/product-design/SKILL.md` |
+| Skill         | Purpose                                                                                                                                                                                       | Details                       |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `development` | **Unified workflow** (14 phases: 1-14) for all development tasks. Phases activate based on detected task characteristics (not predetermined types). TDD gates activate when defects detected. | `skills/development/SKILL.md` |
+| `performance` | Static code analysis for bottleneck detection, reuses standard spec/plan/implement/verify pipeline                                                                                            | `skills/performance/SKILL.md` |
+| `migration`   | Code/data/architecture migrations with rollback plans                                                                                                                                         | `skills/migration/SKILL.md`   |
+| `research`    | Multi-source research with synthesis, solution brainstorming, high-level design, and citations                                                                                                | `skills/research/SKILL.md`    |
 
 ### Content & Visualization Skills
 
@@ -549,13 +509,12 @@ Commands invoke orchestrators and utilities. All orchestrators support `--from=p
 
 Each workflow skill handles both new tasks and resuming existing ones. Pass a task description to start new, or a task path to resume.
 
-| Command           | Usage                                                                                                                              | Task Directory                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `/development`    | `[desc] [--e2e] [--user-docs] [--research=PATH]` (new) / `[task-path] [--from=PHASE] [--reset-attempts]` (resume)                  | `.owflow/tasks/development/`    |
-| `/performance`    | `[desc]` (new) / `[task-path] [--from=PHASE]` (resume)                                                                             | `.owflow/tasks/performance/`    |
-| `/migration`      | `[desc] [--type=TYPE]` (new) / `[task-path] [--from=PHASE]` (resume)                                                               | `.owflow/tasks/migrations/`     |
-| `/research`       | `[question] [--type=TYPE] [--brainstorm] [--no-brainstorm] [--design] [--no-design]` (new) / `[task-path] [--from=PHASE]` (resume) | `.owflow/tasks/research/`       |
-| `/product-design` | `[desc] [--research=PATH] [--no-visual]` (new) / `[task-path] [--from=PHASE]` (resume)                                             | `.owflow/tasks/product-design/` |
+| Command        | Usage                                                                                                                              | Task Directory               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `/development` | `[desc] [--e2e] [--user-docs] [--research=PATH]` (new) / `[task-path] [--from=PHASE] [--reset-attempts]` (resume)                  | `.owflow/tasks/development/` |
+| `/performance` | `[desc]` (new) / `[task-path] [--from=PHASE]` (resume)                                                                             | `.owflow/tasks/performance/` |
+| `/migration`   | `[desc] [--type=TYPE]` (new) / `[task-path] [--from=PHASE]` (resume)                                                               | `.owflow/tasks/migrations/`  |
+| `/research`    | `[question] [--type=TYPE] [--brainstorm] [--no-brainstorm] [--design] [--no-design]` (new) / `[task-path] [--from=PHASE]` (resume) | `.owflow/tasks/research/`    |
 
 **Research-Based Development**: Start development informed by a completed research workflow:
 
@@ -612,7 +571,6 @@ For the OpenCode platform, commands are automatically generated during the build
 - `development` - Unified workflow for all development tasks (bugs, features, enhancements)
 - `migration` - Code/data/architecture migration workflows
 - `performance` - Performance optimization with bottleneck detection
-- `product-design` - Interactive product/feature design with visual prototyping
 - `research` - Comprehensive research with synthesis and solution brainstorming
 - `diagrams-mermaid` - Generate Mermaid diagrams from natural language descriptions
 - `html-renderer` - Render markdown into self-contained HTML with warm editorial styling
@@ -650,11 +608,10 @@ Subagents are specialized AI agents invoked by skills and orchestrators. All age
 
 ### UI & Documentation Agents
 
-| Agent                 | Purpose                                                                          | Invoked By                                                                                           | Details                         |
-| --------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `ui-mockup-generator` | ASCII mockups showing UI integration with existing layouts                       | development orchestrator (feature/enhancement), product-design orchestrator (Phase 7 ASCII fallback) | `agents/ui-mockup-generator.md` |
-| `e2e-test-verifier`   | Runtime browser verification via Playwright MCP tools (not test file generation) | development orchestrator (optional)                                                                  | `agents/e2e-test-verifier.md`   |
-| `user-docs-generator` | User documentation with Playwright screenshots                                   | development orchestrator (optional)                                                                  | `agents/user-docs-generator.md` |
+| Agent                 | Purpose                                                                          | Invoked By                          | Details                         |
+| --------------------- | -------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------- |
+| `e2e-test-verifier`   | Runtime browser verification via Playwright MCP tools (not test file generation) | development orchestrator (optional) | `agents/e2e-test-verifier.md`   |
+| `user-docs-generator` | User documentation with Playwright screenshots                                   | development orchestrator (optional) | `agents/user-docs-generator.md` |
 
 ### Performance Agents
 
@@ -664,13 +621,13 @@ Subagents are specialized AI agents invoked by skills and orchestrators. All age
 
 ### Research Agents
 
-| Agent                   | Purpose                                                         | Invoked By                                                                 | Details                           |
-| ----------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------- |
-| `research-planner`      | Creates methodology and identifies sources                      | research orchestrator                                                      | `agents/research-planner.md`      |
-| `information-gatherer`  | Multi-source data collection with citations                     | research orchestrator, product-design orchestrator (Phase 1 mini-research) | `agents/information-gatherer.md`  |
-| `research-synthesizer`  | Pattern identification, insights generation                     | research orchestrator                                                      | `agents/research-synthesizer.md`  |
-| `solution-brainstormer` | Solution alternatives with multi-perspective trade-off analysis | research orchestrator, product-design orchestrator                         | `agents/solution-brainstormer.md` |
-| `solution-designer`     | High-level C4 architecture design and ADR documentation         | research orchestrator                                                      | `agents/solution-designer.md`     |
+| Agent                   | Purpose                                                         | Invoked By            | Details                           |
+| ----------------------- | --------------------------------------------------------------- | --------------------- | --------------------------------- |
+| `research-planner`      | Creates methodology and identifies sources                      | research orchestrator | `agents/research-planner.md`      |
+| `information-gatherer`  | Multi-source data collection with citations                     | research orchestrator | `agents/information-gatherer.md`  |
+| `research-synthesizer`  | Pattern identification, insights generation                     | research orchestrator | `agents/research-synthesizer.md`  |
+| `solution-brainstormer` | Solution alternatives with multi-perspective trade-off analysis | research orchestrator | `agents/solution-brainstormer.md` |
+| `solution-designer`     | High-level C4 architecture design and ADR documentation         | research orchestrator | `agents/solution-designer.md`     |
 
 ### Verification Agents
 

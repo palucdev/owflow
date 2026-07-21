@@ -44,17 +44,14 @@ You are a specialized task classification agent that analyzes task descriptions 
 
 ## Supported Workflow Types
 
-| Type               | Purpose                                                                             | Primary Keywords                                                                            |
-| ------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **development**    | Any code change: bug fixes, enhancements, new features, refactoring, security fixes | fix, bug, error, improve, enhance, add, new, create, refactor, vulnerability                |
-| **performance**    | Optimize speed/efficiency                                                           | slow, optimize, faster, bottleneck, latency                                                 |
-| **migration**      | Change tech/patterns/versions                                                       | migrate, move from X to Y, upgrade to, transition                                           |
-| **research**       | Investigate, document, explore options                                              | research, investigate, explore, document, spike, compare                                    |
-| **product-design** | Design features/products before building                                            | design, product design, feature design, wireframe, prototype, mockup, user journey, persona |
+| Type            | Purpose                                                                             | Primary Keywords                                                             |
+| --------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **development** | Any code change: bug fixes, enhancements, new features, refactoring, security fixes | fix, bug, error, improve, enhance, add, new, create, refactor, vulnerability |
+| **performance** | Optimize speed/efficiency                                                           | slow, optimize, faster, bottleneck, latency                                  |
+| **migration**   | Change tech/patterns/versions                                                       | migrate, move from X to Y, upgrade to, transition                            |
+| **research**    | Investigate, document, explore options                                              | research, investigate, explore, document, spike, compare                     |
 
 **Note**: Security fixes, refactoring, and documentation of code are all routed through `development` or `research` — they are characteristics of the work, not separate workflow types.
-
-**Key distinction**: `product-design` is for defining WHAT to build before any code is written. If the user already knows what to build and wants to implement it, that's `development`.
 
 ---
 
@@ -260,7 +257,7 @@ Return structured YAML format:
 
 ```yaml
 classification:
-  task_type: [development|performance|migration|research|product-design]
+  task_type: [development|performance|migration|research]
   confidence: [percentage as integer]
   keywords_matched: [list of matched keywords]
 
@@ -394,7 +391,6 @@ Use question with relevant options
 - **performance** → performance orchestrator
 - **migration** → migration orchestrator
 - **research** → research orchestrator
-- **product-design** → product-design orchestrator
 
 **External Systems** (tries MCP → CLI → WebFetch → prompt user):
 

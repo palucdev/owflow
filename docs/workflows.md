@@ -18,22 +18,21 @@ When run without arguments, the plugin extracts the task description from your c
 
 ### Phases
 
-| #   | Phase                                   | Applies To                         |
-| --- | --------------------------------------- | ---------------------------------- |
-| 1   | Codebase analysis + clarifications      | All                                |
-| 2   | Gap analysis with decision gates        | All                                |
-| 3   | TDD Red gate (write failing test first) | Bug fixes only                     |
-| 4   | UI mockups (ASCII)                      | Features & enhancements (UI-heavy) |
-| 5   | Requirements + specification            | All                                |
-| 6   | Specification audit                     | All (recommended)                  |
-| 7   | Implementation planning                 | All                                |
-| 8   | Implementation execution                | All                                |
-| 9   | TDD Green gate (verify test passes)     | Bug fixes only                     |
-| 10  | Verification options selection          | All                                |
-| 11  | Verification + issue resolution         | All                                |
-| 12  | E2E testing                             | Optional (`--e2e`)                 |
-| 13  | User documentation                      | Optional (`--user-docs`)           |
-| 14  | Finalization                            | All                                |
+| #   | Phase                                   | Applies To               |
+| --- | --------------------------------------- | ------------------------ |
+| 1   | Codebase analysis + clarifications      | All                      |
+| 2   | Gap analysis with decision gates        | All                      |
+| 3   | TDD Red gate (write failing test first) | Bug fixes only           |
+| 4   | Requirements + specification            | All                      |
+| 5   | Specification audit                     | All (recommended)        |
+| 6   | Implementation planning                 | All                      |
+| 7   | Implementation execution                | All                      |
+| 8   | TDD Green gate (verify test passes)     | Bug fixes only           |
+| 9   | Verification options selection          | All                      |
+| 10  | Verification + issue resolution         | All                      |
+| 11  | E2E testing                             | Optional (`--e2e`)       |
+| 12  | User documentation                      | Optional (`--user-docs`) |
+| 13  | Finalization                            | All                      |
 
 ### Research-Based Development
 
@@ -169,52 +168,6 @@ Resume phases: `foundation`, `brainstorming-decision`, `brainstorming`, `design`
 
 ---
 
-## Product Design
-
-Interactive workflow for designing features and products before building them. Transforms ideas into structured product briefs through collaborative exploration, iterative refinement, and visual prototyping. Phases adapt based on design characteristics (greenfield vs enhancement, simple vs complex, UI-focused vs backend).
-
-```
-/product-design
-/product-design "Design a dashboard for monitoring API usage"
-/product-design --research=.owflow/tasks/research/2026-01-12-auth-research
-```
-
-When run without arguments, the plugin extracts the design brief from your conversation.
-
-**Flags**: `--research=PATH`, `--no-visual`, `--from=PHASE`
-
-### Phases
-
-| #   | Phase                                                            | Activation                    |
-| --- | ---------------------------------------------------------------- | ----------------------------- |
-| 0   | Initialize, gather context & detect characteristics              | Always                        |
-| 1   | Context synthesis (codebase analysis or mini-research)           | Always (scope adapts)         |
-| 2   | Problem space exploration (interactive, iterative)               | Always (depth adapts)         |
-| 3   | User & persona exploration                                       | Greenfield or complex designs |
-| 4   | Design alternatives generation (agent-driven, unbiased)          | Always                        |
-| 5   | Converge on design direction (interactive)                       | Always                        |
-| 6   | Feature specification, section-by-section (interactive)          | Always (depth adapts)         |
-| 7   | Visual prototyping (browser-based companion with ASCII fallback) | UI-focused designs            |
-| 8   | Review & hand off product brief                                  | Always                        |
-
-Phases 2, 5, and 6 include iterative refinement loops — you can request revisions before moving on. Phase 4 uses an agent to generate alternatives without anchoring bias.
-
-The output is a structured product brief that can be passed directly to the development workflow:
-
-```
-/development .owflow/tasks/product-design/2026-03-10-api-dashboard
-```
-
-### Resume
-
-```
-/product-design [task-path] [--from=PHASE] [--reset-attempts]
-```
-
-Resume phases: `context`, `synthesis`, `problem`, `personas`, `alternatives`, `convergence`, `specification`, `prototyping`, `handoff`
-
----
-
 ## Task Directory Structure
 
 All workflows create structured directories in `.owflow/tasks/`:
@@ -225,7 +178,6 @@ All workflows create structured directories in `.owflow/tasks/`:
 ├── performance/           # Performance optimization
 ├── migrations/            # Migrations
 ├── research/              # Research
-└── product-design/        # Product design
 ```
 
 Each task folder follows the pattern `YYYY-MM-DD-task-name/`:
@@ -235,8 +187,7 @@ Each task folder follows the pattern `YYYY-MM-DD-task-name/`:
 ├── orchestrator-state.yml        # Workflow state (pause/resume, phase tracking)
 ├── analysis/
 │   ├── requirements.md           # Gathered requirements
-│   ├── research-context/         # Research artifacts (if --research used)
-│   └── visuals/                  # UI mockups (if UI-heavy)
+│   └── research-context/         # Research artifacts (if --research used)
 ├── implementation/
 │   ├── spec.md                   # Specification (WHAT to build)
 │   ├── implementation-plan.md    # Step breakdown (HOW to build it)
