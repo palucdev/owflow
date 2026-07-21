@@ -12,9 +12,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc && npm run copy-markdowns",
+    "build": "rm -rf dist && tsc && bun run copy-markdowns",
     "copy-markdowns": "node ./scripts/copy-markdowns.js",
-    "prepack": "npm run build",
+    "prepack": "bun run build",
     "test": "bun test"
   },
   "keywords": [
