@@ -101,6 +101,7 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
      * them without requiring manual config file edits.
      */
     config: async (config: unknown) => {
+      console.log("[owflow] Starting plugin installation...");
       let typedConfig = config as OpenCodeConfig;
 
       // Get small_model config for alias resolution
@@ -169,6 +170,7 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
       }
 
       config = typedConfig;
+      console.log("[owflow] Plugin installation completed successfully.");
     },
 
     /**
