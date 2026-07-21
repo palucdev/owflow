@@ -11,6 +11,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "url";
 import type { OpenCodeConfig } from "./types/opencode-types";
 import matter from "gray-matter";
+import { verify_template } from "./tools/verify_template";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = __dirname; // Points to dist/ where skills/commands/agents are copied
@@ -92,6 +93,9 @@ const prepareAgent = (
 const OwflowPlugin: Plugin = async ({ $, directory }) => {
   const agentBySession = new Map();
   return {
+    tool: {
+      verify_template,
+    },
     /**
      * Register owflow's skills, commands, and agents so OpenCode discovers
      * them without requiring manual config file edits.

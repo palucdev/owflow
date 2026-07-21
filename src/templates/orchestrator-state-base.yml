@@ -1,0 +1,17 @@
+orchestrator:
+  started_phase: null
+  completed_phases: []
+  failed_phases: []
+  auto_fix_attempts: {}
+  options: {}
+  created: "YYYY-MM-DDTHH:MM:SSZ"
+  updated: "YYYY-MM-DDTHH:MM:SSZ"
+  task_path: null
+  task_ids: {}
+
+task:
+  title: null
+  description: null
+  status: pending
+  tags: []
+  priority: null

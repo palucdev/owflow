@@ -1,0 +1,53 @@
+orchestrator:
+  started_phase: null
+  completed_phases: []
+  failed_phases: []
+  auto_fix_attempts:
+    phase-1: 0
+    phase-2: 0
+    phase-3: 0
+    phase-4: 0
+    phase-5: 0
+    phase-6: 0
+    phase-7: 0
+    phase-8: 0
+    phase-9: 0
+  options:
+    spec_audit_enabled: null
+    skip_test_suite: true
+    code_review_enabled: true
+    pragmatic_review_enabled: true
+    reality_check_enabled: true
+    production_check_enabled: null
+  created: "YYYY-MM-DDTHH:MM:SSZ"
+  updated: "YYYY-MM-DDTHH:MM:SSZ"
+  task_path: null
+  task_ids: {}
+
+task:
+  title: null
+  description: null
+  status: pending
+  tags: []
+  priority: null
+
+performance_context:
+  bottlenecks_identified: null
+  user_data_available: false
+  bottleneck_priorities:
+    p0: 0
+    p1: 0
+    p2: 0
+    p3: 0
+  phase_summaries:
+    codebase_analysis: { key_files: [], summary: null }
+    bottleneck_analysis:
+      { bottlenecks: [], summary: null, user_data_incorporated: false }
+    specification: { summary: null }
+
+verification_context:
+  last_status: null
+  issues_found: null
+  fixes_applied: []
+  decisions_made: []
+  reverify_count: 0

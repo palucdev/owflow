@@ -14,3 +14,9 @@ console.log("Copied agents to dist/");
 fs.cpSync("src/commands", "dist/commands", { recursive: true });
 
 console.log("Copied commands to dist/");
+
+// Copy the 'templates' folder recursively into 'dist/templates'
+fs.cpSync("src/templates", "dist/templates", { recursive: true });
+
+console.log("Copied templates to dist/");
+

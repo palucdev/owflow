@@ -10,7 +10,7 @@ Started as a simple OpenCode fork of [Maister Claude Code plugin](https://github
 
 ## What You Get
 
-- **Guided workflows** for features, bug fixes, enhancements, performance, migrations, research, and product design
+- **Guided workflows** for features, bug fixes, enhancements, performance, migrations and research
 - **Auto-discovered standards** from your codebase - config files, source patterns, and documentation are analyzed and enforced throughout every workflow
 - **Test-driven implementation** with automated planning, incremental verification, and full test suite runs before completion
 - **Pause and resume** any workflow - state is preserved across sessions
@@ -110,13 +110,12 @@ You can always be explicit when you prefer - arguments and flags simply override
 
 ## Supported Workflows
 
-| Command           | Use When                                    |
-| ----------------- | ------------------------------------------- |
-| `/development`    | Features, bug fixes, enhancements           |
-| `/research`       | Research with synthesis and solution design |
-| `/performance`    | Optimizing speed or resource usage          |
-| `/migration`      | Changing technologies or patterns           |
-| `/product-design` | Product and feature design                  |
+| Command        | Use When                                    |
+| -------------- | ------------------------------------------- |
+| `/development` | Features, bug fixes, enhancements           |
+| `/research`    | Research with synthesis and solution design |
+| `/performance` | Optimizing speed or resource usage          |
+| `/migration`   | Changing technologies or patterns           |
 
 Task type (feature/bug/enhancement) is auto-detected from context. Override with `--type=feature|bug|enhancement` if needed. Or use `/work` as a single entry point that routes to the right workflow.
 
@@ -124,10 +123,10 @@ Task type (feature/bug/enhancement) is auto-detected from context. Override with
 
 For smaller tasks that don't need a full workflow:
 
-| Command         | Use When                                                    | Artifacts                    |
-| --------------- | ----------------------------------------------------------- | ---------------------------- |
-| `/quick-plan`   | You want a plan with standards awareness before coding      | `task.yml`, `findings.md`    |
-| `/quick-dev`    | You know what to do - just implement with standards applied | `task.yml`, `summary.md`     |
+| Command         | Use When                                                    | Artifacts                               |
+| --------------- | ----------------------------------------------------------- | --------------------------------------- |
+| `/quick-plan`   | You want a plan with standards awareness before coding      | `task.yml`, `findings.md`               |
+| `/quick-dev`    | You know what to do - just implement with standards applied | `task.yml`, `summary.md`                |
 | `/quick-bugfix` | Quick TDD-driven bug fix — write failing test, fix, verify  | `task.yml`, `findings.md`, `summary.md` |
 
 All quick commands create lightweight task directories under `.owflow/tasks/quick-{type}/` with a `task.yml` for traceability.
@@ -155,9 +154,9 @@ TBD
 
 **Don't use plan mode when starting a workflow.** Planning is a built-in part of every workflow — the orchestrator creates specs, plans, and other files as it goes. OpenCode's plan mode restricts file creation, which conflicts with this. Let the workflow handle planning on its own.
 
-**Start workflows in a fresh session.** This is especially useful when chaining workflows (e.g., research → development). Research and product-design artifacts already contain all the context needed, so a clean session avoids noise from prior conversation.
+**Start workflows in a fresh session.** This is especially useful when chaining workflows (e.g., research → development). Research artifacts already contain all the context needed, so a clean session avoids noise from prior conversation.
 
-**Chain workflows by passing a task folder.** If you've completed a research or product-design workflow and want to build on those results, pass the task folder directly:
+**Chain workflows by passing a task folder.** If you've completed a research workflow and want to build on those results, pass the task folder directly:
 
 ```bash
 /development .owflow/tasks/research/2026-01-12-oauth-research
@@ -166,7 +165,7 @@ TBD
 You can also append additional instructions to narrow scope or guide the workflow:
 
 ```bash
-/development .owflow/tasks/product-design/2026-03-10-dashboard-redesign Implement only phase 1
+/development .owflow/tasks/research/2026-01-12-oauth-research Implement only phase 1
 ```
 
 ## Known Issues

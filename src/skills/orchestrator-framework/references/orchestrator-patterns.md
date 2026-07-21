@@ -163,42 +163,7 @@ All orchestrators use `orchestrator-state.yml` at `.owflow/tasks/[type]/YYYY-MM-
 
 ### Common Fields
 
-```yaml
-orchestrator:
-  # Phase tracking
-  started_phase: [phase-name]
-  completed_phases: []
-  failed_phases: []
-
-  # Auto-fix tracking (per phase)
-  auto_fix_attempts:
-    phase-1: 0
-    phase-2: 0
-
-  # Optional phase flags
-  options:
-    e2e_enabled: true | false | null
-    user_docs_enabled: true | false | null
-    code_review_enabled: true | false | null
-
-  # Timestamps
-  created: [ISO 8601 timestamp]
-  updated: [ISO 8601 timestamp]
-  task_path: .owflow/tasks/[type]/YYYY-MM-DD-task-name
-
-  # Task tracking IDs (maps phase names to TaskCreate IDs)
-  task_ids:
-    phase-1: null
-    phase-2: null
-
-# Task metadata
-task:
-  title: [human-readable task title]
-  description: [full task description]
-  status: pending | in_progress | completed | failed | blocked
-  tags: []
-  priority: null # high | medium | low
-```
+Refer to the template [src/templates/orchestrator-state-base.yml](../../../templates/orchestrator-state-base.yml).
 
 ### Extension Pattern
 
@@ -217,21 +182,7 @@ See each orchestrator's SKILL.md "Domain Context" section for full schema.
 
 When development starts from completed research (`--research` flag):
 
-```yaml
-task_context:
-  research_reference:
-    path: null
-    research_question: null
-    research_type: null # technical | requirements | literature | mixed
-    confidence_level: null # high | medium | low
-
-  phase_summaries:
-    research:
-      summary: null
-      key_findings: []
-      recommended_approach: null
-      decisions_made: []
-```
+Refer to `research_reference` in the template [src/templates/orchestrator-state-development.yml](../../../templates/orchestrator-state-development.yml).
 
 Research context flows to ALL phases via context passing. Artifacts are also copied to `analysis/research-context/`.
 
@@ -239,14 +190,7 @@ Research context flows to ALL phases via context passing. Artifacts are also cop
 
 All orchestrators with verification phases use:
 
-```yaml
-verification_context:
-  last_status: passed | passed_with_issues | failed | null
-  issues_found: []
-  fixes_applied: []
-  decisions_made: []
-  reverify_count: 0 # max 3
-```
+Refer to `verification_context` in the template [src/templates/orchestrator-state-base.yml](../../../templates/orchestrator-state-base.yml) or domain templates.
 
 ---
 
@@ -258,6 +202,7 @@ verification_context:
 2. **Determine starting phase**: New task starts Phase 1; resume reads state for first incomplete phase
 3. **Create task directory**: Standard structure with analysis/, implementation/, verification/, documentation/ _(skip on resume)_
 4. **Create state file**: `orchestrator-state.yml` _(skip on resume)_
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against the corresponding template.
 5. **Create task items**: `TaskCreate` for all phases, then `TaskUpdate addBlockedBy` for dependencies. On resume, also restore completed phase statuses.
 6. **Output summary**: Show task info, phases, starting message
 

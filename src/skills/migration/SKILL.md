@@ -23,6 +23,7 @@ Systematic migration workflow from current state analysis to verified migration 
 1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
 2. **Create Task Directory**: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`
 3. **Initialize State**: Create `orchestrator-state.yml` with migration context
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-migration.yml`.
 4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
 
 **Output**:
@@ -308,39 +309,7 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 Migration-specific fields in `orchestrator-state.yml`:
 
-```yaml
-migration_context:
-  migration_type: "code" | "data" | "architecture" | "general"
-  current_system:
-    description: null
-    technologies: []
-  target_system:
-    description: null
-    technologies: []
-  migration_strategy:
-    approach: "incremental" | "big-bang" | "dual-run" | "phased"
-    phases: []
-  risk_level: null
-  breaking_changes: []
-  rollback_plan_created: false
-  dual_run_configured: false
-
-external_research:
-  performed: false
-  category: null
-  breaking_changes: []
-  migration_guide_url: null
-
-verification_context:
-  last_status: null
-  issues_found: null
-  fixes_applied: []
-  decisions_made: []
-  reverify_count: 0
-
-options:
-  docs_enabled: false
-```
+Refer to the template [src/templates/orchestrator-state-migration.yml](../../templates/orchestrator-state-migration.yml).
 
 ---
 

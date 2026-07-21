@@ -45,24 +45,26 @@ Unified workflow for all development tasks — bug fixes, enhancements, and new 
        command: quick-bugfix
        escalation_reason: "5+ files, unclear root cause"
      phase_summaries:
-       quick_analysis: {summary: "...", affected_files: [...], root_cause: "..."}
+       quick_analysis:
+         { summary: "...", affected_files: [...], root_cause: "..." }
    ```
 5. Update the quick-\* `task.yml`: set `escalated_to` to the new development task path
 
 **How quick-\* context informs development phases**:
 
-| Phase | How Quick-\* Context is Used |
-|-------|----------------------------|
+| Phase   | How Quick-\* Context is Used                                                |
+| ------- | --------------------------------------------------------------------------- |
 | Phase 1 | Codebase analyzer receives affected files and root cause as search guidance |
-| Phase 2 | Gap analyzer uses complexity assessment for risk level |
-| Phase 3 | TDD gate uses test strategy from findings.md as starting point |
-| Phase 5 | Specification creator receives prior analysis as input context |
+| Phase 2 | Gap analyzer uses complexity assessment for risk level                      |
+| Phase 3 | TDD gate uses test strategy from findings.md as starting point              |
+| Phase 4 | Specification creator receives prior analysis as input context              |
 
 ### Step 3: Initialize Workflow
 
 1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
 2. **Create Task Directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/`
 3. **Initialize State**: Create `orchestrator-state.yml` with task info and research reference
+   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-development.yml`.
 4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section. This includes predefined docs (vision, roadmap, tech-stack, architecture) AND any user-added project docs (e.g., deployment.md, api-strategy.md). Store complete list as `project_context.project_doc_paths` in state.
 
 **Output**:
@@ -93,17 +95,16 @@ Use for **all development tasks**: bug fixes, enhancements, new features, and an
 | 1     | "Analyze codebase & clarify requirements"    | "Analyzing codebase & clarifying"                 | Always                         |
 | 2     | "Analyze gaps & clarify scope"               | "Analyzing gaps & clarifying scope"               | Always                         |
 | 3     | "Write failing test (TDD Red)"               | "Writing failing test"                            | When `has_reproducible_defect` |
-| 4     | "Generate UI mockups"                        | "Generating UI mockups"                           | When `ui_heavy`                |
-| 5     | "Gather requirements & create specification" | "Gathering requirements & creating specification" | Always                         |
-| 6     | "Audit specification"                        | "Auditing specification"                          | Always (conditional)           |
-| 7     | "Plan implementation"                        | "Planning implementation"                         | Always                         |
-| 8     | "Execute implementation"                     | "Executing implementation"                        | Always                         |
-| 9     | "Verify test passes (TDD Green)"             | "Verifying test passes"                           | When Phase 3 was executed      |
-| 10    | "Prompt verification options"                | "Prompting verification options"                  | Always                         |
-| 11    | "Verify implementation & resolve issues"     | "Verifying implementation"                        | Always                         |
-| 12    | "Run E2E tests"                              | "Running E2E tests"                               | When `e2e_enabled`             |
-| 13    | "Generate user documentation"                | "Generating user documentation"                   | When `user_docs_enabled`       |
-| 14    | "Finalize workflow"                          | "Finalizing workflow"                             | Always                         |
+| 4     | "Gather requirements & create specification" | "Gathering requirements & creating specification" | Always                         |
+| 5     | "Audit specification"                        | "Auditing specification"                          | Always (conditional)           |
+| 6     | "Plan implementation"                        | "Planning implementation"                         | Always                         |
+| 7     | "Execute implementation"                     | "Executing implementation"                        | Always                         |
+| 8     | "Verify test passes (TDD Green)"             | "Verifying test passes"                           | When Phase 3 was executed      |
+| 9     | "Prompt verification options"                | "Prompting verification options"                  | Always                         |
+| 10    | "Verify implementation & resolve issues"     | "Verifying implementation"                        | Always                         |
+| 11    | "Run E2E tests"                              | "Running E2E tests"                               | When `e2e_enabled`             |
+| 12    | "Generate user documentation"                | "Generating user documentation"                   | When `user_docs_enabled`       |
+| 13    | "Finalize workflow"                          | "Finalizing workflow"                             | Always                         |
 
 ---
 
@@ -162,14 +163,12 @@ Use for **all development tasks**: bug fixes, enhancements, new features, and an
 
 **ANTI-PATTERN — DO NOT DO THIS:**
 
-- ❌ "The UI change is small/simple, skipping Phase 4..." — STOP. If `ui_heavy` is true, Phase 4 runs. The gap-analyzer made this assessment, not you.
 - ❌ "No new screens needed, just a component..." — STOP. `ui_heavy` is a signal from the gap-analyzer. Do NOT override it with your own complexity judgment.
 
-question - Display executive summary before asking. Read `analysis/gap-analysis.md` and extract: task type detected, risk level, key characteristics enabled (TDD gates, UI mockups, E2E, user docs), scope decisions made (if any). Then read `task_context.task_characteristics` from `orchestrator-state.yml` and determine the next phase:
+question - Display executive summary before asking. Read `analysis/gap-analysis.md` and extract: task type detected, risk level, key characteristics enabled (TDD gates, E2E, user docs), scope decisions made (if any). Then read `task_context.task_characteristics` from `orchestrator-state.yml` and determine the next phase:
 
 - If `has_reproducible_defect` is true → ask "Continue to Phase 3: TDD Red Gate?"
-- If `ui_heavy` is true → ask "Continue to Phase 4: UI Mockup Generation?"
-- Otherwise → ask "Continue to Phase 5: Technical Approach, Requirements & Specification?"
+- Otherwise → ask "Continue to Phase 4: Technical Approach, Requirements & Specification?"
 
 ---
 
@@ -192,30 +191,11 @@ question - "TDD red gate complete. Continue to Phase 4?"
 
 ---
 
-### Phase 4: UI Mockup Generation (Conditional)
+### Phase 4: Technical Approach, Requirements & Specification
 
 > **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
 
-**Purpose**: Generate ASCII mockups showing UI integration
-**Execute**: Task tool - `ui-mockup-generator` subagent
-**Output**: `analysis/ui-mockups.md`
-**State**: Update `phase_summaries.ui_mockups`
-
-**Skip if**: `task_characteristics.ui_heavy` is false
-
-**Context to pass**: Gap analysis, scope decisions, component choices
-
-→ Pause
-
-question - "UI mockups complete. Continue to Phase 5?"
-
----
-
-### Phase 5: Technical Approach, Requirements & Specification
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**⛔ ROUTING GUARD**: Read `task_context.task_characteristics` from `orchestrator-state.yml`. If `has_reproducible_defect` is true and Phase 3 is NOT in `completed_phases` → STOP, execute Phase 3 first. If `ui_heavy` is true and Phase 4 is NOT in `completed_phases` → STOP, execute Phase 4 first.
+**⛔ ROUTING GUARD**: Read `task_context.task_characteristics` from `orchestrator-state.yml`. If `has_reproducible_defect` is true and Phase 3 is NOT in `completed_phases` → STOP, execute Phase 3 first.
 
 **Purpose**: Resolve technical decisions, gather specification requirements, then create comprehensive specification
 **Execute**:
@@ -279,9 +259,9 @@ question - Display executive summary before asking. Read `implementation/spec.md
 
 ---
 
-### Phase 6: Specification Audit (Recommended)
+### Phase 5: Specification Audit (Recommended)
 
-> **Phase gate**: Requires `question` confirmation from Phase 5 before executing.
+> **Phase gate**: Requires `question` confirmation from Phase 4 before executing.
 
 **Purpose**: Independent review of specification before implementation
 **Execute**: Task tool - `spec-auditor` subagent
@@ -298,9 +278,9 @@ question - Display executive summary before asking. Read `verification/spec-audi
 
 ---
 
-### Phase 7: Implementation Planning
+### Phase 6: Implementation Planning
 
-> **Phase gate**: Requires `question` confirmation from Phase 6 before executing.
+> **Phase gate**: Requires `question` confirmation from Phase 5 before executing.
 
 **Purpose**: Break specification into implementation steps
 
@@ -332,9 +312,9 @@ question - Display executive summary before asking. Read `implementation/impleme
 
 ---
 
-### Phase 8: Implementation
+### Phase 7: Implementation
 
-> **Phase gate**: Requires `question` confirmation from Phase 7 before executing.
+> **Phase gate**: Requires `question` confirmation from Phase 6 before executing.
 
 **Purpose**: Execute the implementation plan
 
@@ -354,8 +334,8 @@ question - Display executive summary before asking. Read `implementation/impleme
 **⚠️ POST-IMPLEMENTATION CONTINUATION** — After the skill completes and returns control:
 
 1. Read `orchestrator-state.yml` to confirm you are the orchestrator
-2. Update state: add Phase 8 to `completed_phases`
-3. Evaluate conditional: if `task_characteristics.has_reproducible_defect` AND Phase 3 in `completed_phases` → Phase 9, else → Phase 10
+2. Update state: add Phase 7 to `completed_phases`
+3. Evaluate conditional: if `task_characteristics.has_reproducible_defect` AND Phase 3 in `completed_phases` → Phase 8, else → Phase 9
 
 → Pause
 
@@ -363,9 +343,9 @@ question - Display executive summary before asking. Extract from `phase_summarie
 
 ---
 
-### Phase 9: TDD Green Gate (Conditional)
+### Phase 8: TDD Green Gate (Conditional)
 
-> **Phase gate**: Requires `question` confirmation from Phase 8 before executing.
+> **Phase gate**: Requires `question` confirmation from Phase 7 before executing.
 
 **Purpose**: Verify the failing test now passes
 **Execute**: Direct - run the test written in Phase 3
@@ -378,11 +358,11 @@ question - Display executive summary before asking. Extract from `phase_summarie
 
 → Pause
 
-question - "TDD gate passed. Continue to Phase 10?"
+question - "TDD gate passed. Continue to Phase 9?"
 
 ---
 
-### Phase 10: Verification Options Prompt
+### Phase 9: Verification Options Prompt
 
 > **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
 
@@ -424,9 +404,9 @@ Options: "Code review (Recommended)", "Pragmatic review (Recommended)", "Reality
 
 ---
 
-### Phase 11: Verification & Issue Resolution
+### Phase 10: Verification & Issue Resolution
 
-> **Phase gate**: Requires `question` confirmation from Phase 10 before executing.
+> **Phase gate**: Requires `question` confirmation from Phase 9 before executing.
 
 **Purpose**: Comprehensive implementation verification with fix-then-reverify cycles
 **Output**: `verification/implementation-verification.md`, optional code-review/pragmatic/reality reports, updated `implementation/work-log.md`
@@ -479,18 +459,18 @@ Verification Results:
 **⚠️ POST-VERIFICATION CONTINUATION** — After issue resolution completes:
 
 1. Read `orchestrator-state.yml` to confirm you are the orchestrator
-2. Update state: add Phase 11 to `completed_phases`
-3. Proceed to Phase 12
+2. Update state: add Phase 10 to `completed_phases`
+3. Proceed to Phase 11
 
 → Pause
 
-question - Display executive summary: total issues found, issues fixed, issues remaining by severity. Then "Continue to Phase 12?"
+question - Display executive summary: total issues found, issues fixed, issues remaining by severity. Then "Continue to Phase 11?"
 
 ---
 
-### Phase 12: E2E Testing (Optional)
+### Phase 11: E2E Testing (Optional)
 
-> **Phase gate**: Requires `question` confirmation from Phase 11 before executing.
+> **Phase gate**: Requires `question` confirmation from Phase 10 before executing.
 
 **Purpose**: Runtime browser verification with screenshots (via Playwright MCP tools, not test file generation)
 **Execute**: Task tool - `e2e-test-verifier` subagent
@@ -502,11 +482,11 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 → Pause
 
-question - "E2E complete. Continue to Phase 13?"
+question - "E2E complete. Continue to Phase 12?"
 
 ---
 
-### Phase 13: User Documentation (Optional)
+### Phase 12: User Documentation (Optional)
 
 > **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
 
@@ -520,11 +500,11 @@ question - "E2E complete. Continue to Phase 13?"
 
 → Pause
 
-question - "Documentation complete. Continue to Phase 14?"
+question - "Documentation complete. Continue to Phase 13?"
 
 ---
 
-### Phase 14: Finalization
+### Phase 13: Finalization
 
 > **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
 
@@ -548,49 +528,7 @@ question - "Documentation complete. Continue to Phase 14?"
 
 Development-specific fields in `orchestrator-state.yml`:
 
-```yaml
-orchestrator:
-  options:
-    spec_audit_enabled: true
-    skip_test_suite: true
-    e2e_enabled: null
-    user_docs_enabled: null
-    code_review_enabled: true
-    pragmatic_review_enabled: true
-    reality_check_enabled: true
-    production_check_enabled: true
-  task_context:
-    risk_level: null
-    clarifications_resolved: null
-    scope_expanded: null
-    architecture_decision: null
-    task_characteristics:
-      has_reproducible_defect: false
-      modifies_existing_code: false
-      creates_new_entities: false
-      involves_data_operations: false
-      ui_heavy: false
-    research_reference:
-      path: null
-      research_question: null
-      research_type: null
-      confidence_level: null
-    quick_reference:
-      path: null
-      command: null          # quick-bugfix | quick-plan | quick-dev
-      escalation_reason: null
-    phase_summaries:
-      research: { summary: null, key_findings: [], recommended_approach: null }
-      quick_analysis: { summary: null, affected_files: [], root_cause: null }
-      codebase_analysis:
-        { key_files: [], primary_language: null, summary: null }
-      clarifications: []
-      gap_analysis: { integration_points: [], summary: null }
-      scope_clarifications: { scope_expanded: null, summary: null }
-      ui_mockups: { components_designed: [], summary: null }
-      specification: { summary: null }
-      architecture_decision: { decision: null, summary: null }
-```
+Refer to the template [src/templates/orchestrator-state-development.yml](../../templates/orchestrator-state-development.yml).
 
 ---
 
@@ -605,21 +543,20 @@ orchestrator:
 │   ├── clarifications.md          # Phase 1
 │   ├── gap-analysis.md            # Phase 2
 │   ├── scope-clarifications.md    # Phase 2 (conditional)
-│   ├── technical-clarifications.md # Phase 5 (conditional)
-│   └── ui-mockups.md              # Phase 4 (conditional)
+│   └── technical-clarifications.md # Phase 4 (conditional)
 ├── implementation/
-│   ├── spec.md                    # Phase 5
-│   ├── requirements.md            # Phase 5
-│   ├── implementation-plan.md     # Phase 7
-│   ├── work-log.md                # Phase 8
+│   ├── spec.md                    # Phase 4
+│   ├── requirements.md            # Phase 4
+│   ├── implementation-plan.md     # Phase 6
+│   ├── work-log.md                # Phase 7
 │   ├── tdd-red-gate.md            # Phase 3 (conditional)
-│   └── tdd-green-gate.md          # Phase 9 (conditional)
+│   └── tdd-green-gate.md          # Phase 8 (conditional)
 ├── verification/
-│   ├── spec-audit.md              # Phase 6 (recommended)
-│   ├── implementation-verification.md  # Phase 11
-│   └── e2e-verification-report.md      # Phase 12 (optional)
+│   ├── spec-audit.md              # Phase 5 (recommended)
+│   ├── implementation-verification.md  # Phase 10
+│   └── e2e-verification-report.md      # Phase 11 (optional)
 └── documentation/
-    └── user-guide.md              # Phase 13 (optional)
+    └── user-guide.md              # Phase 12 (optional)
 ```
 
 ---
@@ -683,9 +620,9 @@ When research context is detected, read these files from the research folder:
 | -------------------- | --------------------------------- | ---------------------------------------------- |
 | State                | `orchestrator-state.yml`          | research_type, confidence_level                |
 | Report               | `outputs/research-report.md`      | Main findings and conclusions                  |
-| Solution Exploration | `outputs/solution-exploration.md` | Alternatives and trade-offs (input to Phase 5) |
-| High-Level Design    | `outputs/high-level-design.md`    | C4 architecture (input to Phase 5)             |
-| Decision Log         | `outputs/decision-log.md`         | ADR decisions (input to Phase 5)               |
+| Solution Exploration | `outputs/solution-exploration.md` | Alternatives and trade-offs (input to Phase 4) |
+| High-Level Design    | `outputs/high-level-design.md`    | C4 architecture (input to Phase 4)             |
+| Decision Log         | `outputs/decision-log.md`         | ADR decisions (input to Phase 4)               |
 
 ### How Research Informs Each Phase
 
@@ -695,8 +632,8 @@ When research context is detected, read these files from the research folder:
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 1 | Codebase analyzer receives research findings as search guidance                                                                                                                      |
 | Phase 2 | Gap analyzer uses research recommendations for comparison                                                                                                                            |
-| Phase 5 | Specification creator uses high-level-design.md as INPUT (still creates full spec). Architecture decisions use research report AND decision-log.md (lighter when ADRs comprehensive) |
-| Phase 7 | Implementation planner references research approach for task grouping                                                                                                                |
+| Phase 4 | Specification creator uses high-level-design.md as INPUT (still creates full spec). Architecture decisions use research report AND decision-log.md (lighter when ADRs comprehensive) |
+| Phase 6 | Implementation planner references research approach for task grouping                                                                                                                |
 
 ---
 
@@ -712,4 +649,4 @@ Invoked via:
 ## TDD Gate Rules
 
 **Phase 3 (Red Gate)**: Test MUST FAIL before implementation (activated when gap-analyzer detects reproducible defect)
-**Phase 9 (Green Gate)**: Test MUST PASS after implementation (activated when Phase 3 was executed)
+**Phase 8 (Green Gate)**: Test MUST PASS after implementation (activated when Phase 3 was executed)

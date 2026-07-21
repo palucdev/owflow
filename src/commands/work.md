@@ -59,7 +59,6 @@ Auto-classifies tasks and routes to the appropriate workflow orchestrator. Suppo
 | performance    | `performance`     |
 | migration      | `migration`       |
 | research       | `research`        |
-| product-design | `product-design`  |
 
 ---
 
@@ -93,13 +92,12 @@ Auto-classifies tasks and routes to the appropriate workflow orchestrator. Suppo
 1. Read `orchestrator-state.yml` from task folder
 2. Determine workflow type from folder path:
 
-| Folder            | Workflow Type  |
-| ----------------- | -------------- |
-| `development/`    | development    |
-| `performance/`    | performance    |
-| `migrations/`     | migration      |
-| `research/`       | research       |
-| `product-design/` | product-design |
+| Folder         | Workflow Type |
+| -------------- | ------------- |
+| `development/` | development   |
+| `performance/` | performance   |
+| `migrations/`  | migration     |
+| `research/`    | research      |
 
 3. Extract status from state file:
    - `completed`: null = in-progress, timestamp = finished
@@ -177,7 +175,7 @@ The subagent will:
 
 ```yaml
 classification:
-  task_type: [development|performance|migration|research|product-design]
+  task_type: [development|performance|migration|research]
   confidence: [percentage]
   reasoning: [explanation]
 ```
@@ -217,7 +215,6 @@ Use question with options:
 2. Performance - Optimize speed/efficiency
 3. Migration - Move to new tech/pattern
 4. Research - Investigate and document findings
-5. Product Design - Design features or products before building them
 
 Then route to selected workflow using Skill tool.
 ```
@@ -236,13 +233,12 @@ Display:
 
 ## Resume Skill Reference
 
-| Workflow Type  | Skill            | Args                                                |
-| -------------- | ---------------- | --------------------------------------------------- |
-| development    | `development`    | `--resume [path] [--from=PHASE] [--reset-attempts]` |
-| performance    | `performance`    | `--resume [path] [--from=PHASE]`                    |
-| migration      | `migration`      | `--resume [path] [--from=PHASE]`                    |
-| research       | `research`       | `--resume [path] [--from=PHASE]`                    |
-| product-design | `product-design` | `--resume [path] [--from=PHASE]`                    |
+| Workflow Type | Skill         | Args                                                |
+| ------------- | ------------- | --------------------------------------------------- |
+| development   | `development` | `--resume [path] [--from=PHASE] [--reset-attempts]` |
+| performance   | `performance` | `--resume [path] [--from=PHASE]`                    |
+| migration     | `migration`   | `--resume [path] [--from=PHASE]`                    |
+| research      | `research`    | `--resume [path] [--from=PHASE]`                    |
 
 ---
 
