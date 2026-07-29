@@ -29,7 +29,12 @@
     "noPropertyAccessFromIndexSignature": false
   },
   "include": [
-    "src/**/*",
-    "src/__tests__/**/*"
+    "src/**/*"
   ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/__tests__",
+    "**/*.test.ts"
+  ]
 }

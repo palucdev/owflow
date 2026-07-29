@@ -80,6 +80,29 @@ key2:
       );
     });
 
+    test("should return error if reference template file has invalid YAML syntax", async () => {
+      const invalidTemplateName = "invalid-template.yml";
+      const invalidTemplatePath = path.join(templatesDir, invalidTemplateName);
+      fs.writeFileSync(invalidTemplatePath, "key1: : value\n  invalid");
+
+      const filePath = "target.yml";
+      fs.writeFileSync(path.join(testDir, filePath), "key1: value");
+
+      try {
+        const result = await verify_template.execute(
+          { filePath, templateName: invalidTemplateName },
+          { directory: testDir } as any,
+        );
+        expect((result as any).output).toContain(
+          `Internal Error: Failed to parse reference template YAML '${invalidTemplateName}'`,
+        );
+      } finally {
+        if (fs.existsSync(invalidTemplatePath)) {
+          fs.rmSync(invalidTemplatePath);
+        }
+      }
+    });
+
     test("should return error if target file is missing keys from template", async () => {
       const filePath = "missing-keys.yml";
       // Missing key2

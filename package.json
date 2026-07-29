@@ -12,11 +12,12 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc && bun run copy-markdowns",
+    "build": "rm -rf dist && bun run type-check && bun run test && bun run copy-markdowns",
     "copy-markdowns": "bun run ./scripts/copy-markdowns.js",
     "local-install": "bun run build && opencode plugin \"$(pwd)\" --global --force",
     "prepack": "bun run build",
-    "test": "bun test"
+    "test": "bun test src",
+    "type-check": "bun tsc"
   },
   "keywords": [
     "opencode",
