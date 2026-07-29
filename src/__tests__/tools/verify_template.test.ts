@@ -2,7 +2,7 @@ import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { verify_template } from "../tools/verify_template.js";
+import { verify_template } from "../../tools/verify_template.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -142,16 +142,20 @@ extraKey: this is fine
     let templateFiles: string[] = [];
     try {
       const files = fs.readdirSync(templatesDir);
-      templateFiles = files.filter(f => f.endsWith('.yml') || f.endsWith('.yaml') || f.endsWith('.md'));
+      templateFiles = files.filter(
+        (f) => f.endsWith(".yml") || f.endsWith(".yaml") || f.endsWith(".md"),
+      );
       // Filter out our dummy test template
-      templateFiles = templateFiles.filter(f => f !== "test-template.yml" && f !== "null-template.yml");
+      templateFiles = templateFiles.filter(
+        (f) => f !== "test-template.yml" && f !== "null-template.yml",
+      );
     } catch (e) {
       // templates dir might not exist or be readable in some contexts, though beforeAll ensures it exists
     }
 
     for (const templateName of templateFiles) {
       test(`should successfully validate a valid instance of ${templateName}`, async () => {
-        // We use the templates directory as the working directory 
+        // We use the templates directory as the working directory
         // and the template name as the filePath, effectively comparing the template to itself to ensure it's structurally valid.
         const result = await verify_template.execute(
           { filePath: templateName, templateName },

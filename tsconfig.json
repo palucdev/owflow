@@ -30,6 +30,6 @@
   },
   "include": [
     "src/**/*",
-    "src/__tests__/verify_template.test.ts"
+    "src/__tests__/**/*"
   ],
 }

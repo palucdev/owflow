@@ -1,6 +1,6 @@
 {
   "name": "owflow",
-  "version": "0.1.10",
+  "version": "0.2.0",
   "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
   "main": "dist/index.js",
@@ -13,7 +13,8 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc && bun run copy-markdowns",
-    "copy-markdowns": "node ./scripts/copy-markdowns.js",
+    "copy-markdowns": "bun run ./scripts/copy-markdowns.js",
+    "local-install": "bun run build && opencode plugin \"$(pwd)\" --global --force",
     "prepack": "bun run build",
     "test": "bun test"
   },
