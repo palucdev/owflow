@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import OwflowPlugin, { PLUGIN_ROOT } from "../index.js";
+import OwflowPlugin from "../index.js";
+import { PLUGIN_ROOT } from "../constants.js";
 import * as skillsConfig from "../configuration/skills-config.js";
 import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";

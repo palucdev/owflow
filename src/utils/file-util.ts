@@ -1,7 +1,7 @@
 import matter from "gray-matter";
 import fs from "node:fs";
 import path from "node:path";
-import { PLUGIN_ROOT } from "../index.js";
+import { PLUGIN_ROOT } from "../constants.js";
 
 export const loadMarkdownDir = (
   dirPath: string,

@@ -15,10 +15,8 @@ import { guardAgainstDestructiveActions } from "./hooks/before-tool.js";
 import { configureSkills } from "./configuration/skills-config.js";
 import { configureCommands } from "./configuration/commands-config.js";
 import { configureAgents } from "./configuration/agents-config.js";
-import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const PLUGIN_ROOT = __dirname; // Points to dist/ where skills/commands/agents are copied
+// Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 
 const OwflowPlugin: Plugin = async ({ $, directory }) => {
   const agentBySession = new Map();

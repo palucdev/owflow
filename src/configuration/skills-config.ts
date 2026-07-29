@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { OpenCodeConfig } from "../types/opencode-types.js";
-import { PLUGIN_ROOT } from "../index.js";
+import { PLUGIN_ROOT } from "../constants.js";
 
 export const configureSkills = (config: OpenCodeConfig): void => {
   config.skills = config.skills || {};

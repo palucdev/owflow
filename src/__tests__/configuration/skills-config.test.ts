@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import { configureSkills } from "../../configuration/skills-config.js";
-import { PLUGIN_ROOT } from "../../index.js";
+import { PLUGIN_ROOT } from "../../constants.js";
 import type { OpenCodeConfig } from "../../types/opencode-types.js";
 
 describe("configureSkills", () => {
