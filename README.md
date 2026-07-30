@@ -18,6 +18,26 @@ Started as a simple OpenCode fork of [Maister Claude Code plugin](https://github
 
 ## Getting Started
 
+### Directory Structure
+
+```
+owflow/
+├── docs/                   # Plugin documentation (commands, workflows)
+├── scripts/                # Build and utility scripts
+└── src/                    # Source code
+    ├── __tests__/          # Test suites
+    ├── agents/             # Agent definitions and prompts (.md)
+    ├── commands/           # OpenCode slash commands (.md)
+    ├── configuration/      # Handlers for agent, command, and skill configurations
+    ├── hooks/              # OpenCode lifecycle hooks (tool execution, compaction)
+    ├── skills/             # Workflows, orchestrators, and reusable skills
+    ├── templates/          # Orchestrator state and task YAML templates
+    ├── tools/              # Custom OpenCode tool implementations
+    ├── types/              # TypeScript type definitions
+    ├── utils/              # Internal utility functions
+    └── index.ts            # Main plugin entry point
+```
+
 ### Prerequisites
 
 - [Opencode](https://opencode.ai/) CLI installed and configured

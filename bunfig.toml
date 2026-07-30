@@ -1,0 +1,5 @@
+[test]
+coverage = true
+coverageReporter = ["text", "lcov"]
+coverageThreshold = 0.8
+coveragePathIgnorePatterns = ["dist/**/*", "src/__tests__/**/*"]
