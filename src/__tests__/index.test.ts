@@ -4,7 +4,6 @@ import path from "node:path";
 import os from "node:os";
 
 import OwflowPlugin from "../index.js";
-import { PLUGIN_ROOT } from "../constants.js";
 import * as skillsConfig from "../configuration/skills-config.js";
 import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";
@@ -36,10 +35,7 @@ describe("OwflowPlugin index", () => {
     }
   });
 
-  test("should export PLUGIN_ROOT and default plugin factory", async () => {
-    expect(PLUGIN_ROOT).toBeDefined();
-    expect(typeof PLUGIN_ROOT).toBe("string");
-
+  test("should export default plugin factory", async () => {
     const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
     expect(plugin).toBeDefined();
     expect(plugin.tool).toBeDefined();
@@ -52,9 +48,18 @@ describe("OwflowPlugin index", () => {
 
   describe("config hook", () => {
     test("should use small_model directly from input config if provided", async () => {
-      const skillsSpy = spyOn(skillsConfig, "configureSkills").mockImplementation(() => {});
-      const commandsSpy = spyOn(commandsConfig, "configureCommands").mockImplementation(() => {});
-      const agentsSpy = spyOn(agentsConfig, "configureAgents").mockImplementation(() => {});
+      const skillsSpy = spyOn(
+        skillsConfig,
+        "configureSkills",
+      ).mockImplementation(() => {});
+      const commandsSpy = spyOn(
+        commandsConfig,
+        "configureCommands",
+      ).mockImplementation(() => {});
+      const agentsSpy = spyOn(
+        agentsConfig,
+        "configureAgents",
+      ).mockImplementation(() => {});
       const consoleLogSpy = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -65,9 +70,16 @@ describe("OwflowPlugin index", () => {
 
         expect(skillsSpy).toHaveBeenCalledWith(inputConfig as any);
         expect(commandsSpy).toHaveBeenCalledWith(inputConfig as any);
-        expect(agentsSpy).toHaveBeenCalledWith(inputConfig as any, "test-haiku");
-        expect(consoleLogSpy).toHaveBeenCalledWith("[owflow] Starting plugin installation...");
-        expect(consoleLogSpy).toHaveBeenCalledWith("[owflow] Plugin installation completed successfully.");
+        expect(agentsSpy).toHaveBeenCalledWith(
+          inputConfig as any,
+          "test-haiku",
+        );
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+          "[owflow] Starting plugin installation...",
+        );
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+          "[owflow] Plugin installation completed successfully.",
+        );
       } finally {
         skillsSpy.mockRestore();
         commandsSpy.mockRestore();
@@ -78,11 +90,24 @@ describe("OwflowPlugin index", () => {
 
     test("should read small_model from project opencode.json if not in config", async () => {
       const opencodeJsonPath = path.join(tmpDir, "opencode.json");
-      fs.writeFileSync(opencodeJsonPath, JSON.stringify({ small_model: "file-haiku" }), "utf8");
+      fs.writeFileSync(
+        opencodeJsonPath,
+        JSON.stringify({ small_model: "file-haiku" }),
+        "utf8",
+      );
 
-      const skillsSpy = spyOn(skillsConfig, "configureSkills").mockImplementation(() => {});
-      const commandsSpy = spyOn(commandsConfig, "configureCommands").mockImplementation(() => {});
-      const agentsSpy = spyOn(agentsConfig, "configureAgents").mockImplementation(() => {});
+      const skillsSpy = spyOn(
+        skillsConfig,
+        "configureSkills",
+      ).mockImplementation(() => {});
+      const commandsSpy = spyOn(
+        commandsConfig,
+        "configureCommands",
+      ).mockImplementation(() => {});
+      const agentsSpy = spyOn(
+        agentsConfig,
+        "configureAgents",
+      ).mockImplementation(() => {});
       const consoleLogSpy = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -91,7 +116,10 @@ describe("OwflowPlugin index", () => {
 
         await plugin.config!(inputConfig as any);
 
-        expect(agentsSpy).toHaveBeenCalledWith(inputConfig as any, "file-haiku");
+        expect(agentsSpy).toHaveBeenCalledWith(
+          inputConfig as any,
+          "file-haiku",
+        );
       } finally {
         skillsSpy.mockRestore();
         commandsSpy.mockRestore();
@@ -104,10 +132,21 @@ describe("OwflowPlugin index", () => {
       const opencodeJsonPath = path.join(tmpDir, "opencode.json");
       fs.writeFileSync(opencodeJsonPath, "invalid-json{", "utf8");
 
-      const skillsSpy = spyOn(skillsConfig, "configureSkills").mockImplementation(() => {});
-      const commandsSpy = spyOn(commandsConfig, "configureCommands").mockImplementation(() => {});
-      const agentsSpy = spyOn(agentsConfig, "configureAgents").mockImplementation(() => {});
-      const consoleWarnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      const skillsSpy = spyOn(
+        skillsConfig,
+        "configureSkills",
+      ).mockImplementation(() => {});
+      const commandsSpy = spyOn(
+        commandsConfig,
+        "configureCommands",
+      ).mockImplementation(() => {});
+      const agentsSpy = spyOn(
+        agentsConfig,
+        "configureAgents",
+      ).mockImplementation(() => {});
+      const consoleWarnSpy = spyOn(console, "warn").mockImplementation(
+        () => {},
+      );
       const consoleLogSpy = spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -117,7 +156,7 @@ describe("OwflowPlugin index", () => {
         await plugin.config!(inputConfig as any);
 
         expect(consoleWarnSpy).toHaveBeenCalledWith(
-          "Couldn't read or parse opencode.json config - small_model remains undefined"
+          "Couldn't read or parse opencode.json config - small_model remains undefined",
         );
         expect(agentsSpy).toHaveBeenCalledWith(inputConfig as any, "");
       } finally {
@@ -132,13 +171,19 @@ describe("OwflowPlugin index", () => {
 
   describe("experimental.session.compacting hook", () => {
     test("should delegate to rereadOrchestratorState with directory and output", async () => {
-      const rereadSpy = spyOn(sessionCompaction, "rereadOrchestratorState").mockImplementation(async () => {});
+      const rereadSpy = spyOn(
+        sessionCompaction,
+        "rereadOrchestratorState",
+      ).mockImplementation(async () => {});
 
       try {
         const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
         const output = { context: [] };
 
-        await plugin["experimental.session.compacting"]!({ sessionID: "sess-test" }, output);
+        await plugin["experimental.session.compacting"]!(
+          { sessionID: "sess-test" },
+          output,
+        );
 
         expect(rereadSpy).toHaveBeenCalledWith(tmpDir, output);
       } finally {
@@ -152,14 +197,19 @@ describe("OwflowPlugin index", () => {
       const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
 
       // Record chat message with custom agent
-      await plugin["chat.message"]!({ sessionID: "sess-123", agent: "codebase-analyzer" }, {} as any);
+      await plugin["chat.message"]!(
+        { sessionID: "sess-123", agent: "codebase-analyzer" },
+        {} as any,
+      );
 
       // Call tool.execute.before with destructive action for non-whitelisted agent
       const input = { tool: "bash", sessionID: "sess-123", callID: "c-1" };
       const output = { args: { command: "git reset --hard" } };
 
-      await expect(plugin["tool.execute.before"]!(input, output)).rejects.toThrow(
-        'Blocked: destructive command not permitted for agent "codebase-analyzer"'
+      await expect(
+        plugin["tool.execute.before"]!(input, output),
+      ).rejects.toThrow(
+        'Blocked: destructive command not permitted for agent "codebase-analyzer"',
       );
     });
 
@@ -171,8 +221,10 @@ describe("OwflowPlugin index", () => {
       const input = { tool: "bash", sessionID: "sess-default", callID: "c-2" };
       const output = { args: { command: "git stash" } };
 
-      await expect(plugin["tool.execute.before"]!(input, output)).rejects.toThrow(
-        'Blocked: destructive command not permitted for agent "main"'
+      await expect(
+        plugin["tool.execute.before"]!(input, output),
+      ).rejects.toThrow(
+        'Blocked: destructive command not permitted for agent "main"',
       );
     });
 
@@ -180,13 +232,22 @@ describe("OwflowPlugin index", () => {
       const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
 
       // Pass an invalid object to trigger internal error if any, or test resilience
-      const badInput = { get sessionID() { throw new Error("Session access error"); } };
+      const badInput = {
+        get sessionID() {
+          throw new Error("Session access error");
+        },
+      };
 
-      await expect(plugin["chat.message"]!(badInput as any, {} as any)).resolves.toBeUndefined();
+      await expect(
+        plugin["chat.message"]!(badInput as any, {} as any),
+      ).resolves.toBeUndefined();
     });
 
     test("should re-throw 'Blocked:' error from guardAgainstDestructiveActions", async () => {
-      const guardSpy = spyOn(beforeTool, "guardAgainstDestructiveActions").mockImplementation(async () => {
+      const guardSpy = spyOn(
+        beforeTool,
+        "guardAgainstDestructiveActions",
+      ).mockImplementation(async () => {
         throw new Error("Blocked: custom block message");
       });
 
@@ -195,16 +256,19 @@ describe("OwflowPlugin index", () => {
         const input = { tool: "bash", sessionID: "sess-test", callID: "c-3" };
         const output = { args: { command: "rm -rf /" } };
 
-        await expect(plugin["tool.execute.before"]!(input, output)).rejects.toThrow(
-          "Blocked: custom block message"
-        );
+        await expect(
+          plugin["tool.execute.before"]!(input, output),
+        ).rejects.toThrow("Blocked: custom block message");
       } finally {
         guardSpy.mockRestore();
       }
     });
 
     test("should swallow non-'Blocked:' errors from guardAgainstDestructiveActions", async () => {
-      const guardSpy = spyOn(beforeTool, "guardAgainstDestructiveActions").mockImplementation(async () => {
+      const guardSpy = spyOn(
+        beforeTool,
+        "guardAgainstDestructiveActions",
+      ).mockImplementation(async () => {
         throw new Error("Unexpected database connection error");
       });
 
@@ -213,7 +277,9 @@ describe("OwflowPlugin index", () => {
         const input = { tool: "bash", sessionID: "sess-test", callID: "c-4" };
         const output = { args: { command: "ls" } };
 
-        await expect(plugin["tool.execute.before"]!(input, output)).resolves.toBeUndefined();
+        await expect(
+          plugin["tool.execute.before"]!(input, output),
+        ).resolves.toBeUndefined();
       } finally {
         guardSpy.mockRestore();
       }
