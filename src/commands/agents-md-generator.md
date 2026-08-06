@@ -2,7 +2,6 @@
 name: agents-md-generator
 description: Generate AGENTS.md onboarding document for AI coding agents
 argument-hint: "[directory or file path]"
-generated-from-skill: true
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the agents-md-generator skill immediately as your FIRST action.

@@ -2,7 +2,6 @@
 name: standards-discover
 description: Discover coding standards from project configuration files, code patterns, documentation, and external sources (PRs, CI/CD)
 argument-hint: [task description]
-generated-from-skill: true
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the standards-discover skill immediately as your FIRST action.

@@ -2,7 +2,6 @@
 name: standards-update
 description: Update or create project standards from conversation context or explicit description
 argument-hint: "[description of standard/convention] [--from=PATH]"
-generated-from-skill: true
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the standards-update skill immediately as your FIRST action.
