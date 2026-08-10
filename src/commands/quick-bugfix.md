@@ -2,7 +2,6 @@
 name: quick-bugfix
 description: Quick bug fix with TDD red/green gates and complexity escalation
 argument-hint: "[bug description]"
-generated-from-skill: true
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the quick-bugfix skill immediately as your FIRST action.

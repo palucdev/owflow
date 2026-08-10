@@ -2,7 +2,6 @@
 name: html-renderer
 description: Render a markdown plan, idea, RFC, or design note into a self-contained, share-ready HTML file using the warm editorial visual system. Output is a single .html file with all CSS inlined, written next to the source markdown file.
 argument-hint: [path to markdown file]
-generated-from-skill: true
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the html-renderer skill immediately as your FIRST action.

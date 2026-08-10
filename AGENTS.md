@@ -459,6 +459,7 @@ Skills are automatically invoked by Agent when appropriate. Details live in each
 | `flow-init`               | Initialize `.owflow/docs/` with project analysis, documentation generation, and baseline standards                                                                                                     | `skills/flow-init/SKILL.md`               |
 | `standards-update`        | Update or create standards from conversation context or explicit input                                                                                                                                 | `skills/standards-update/SKILL.md`        |
 | `quick-bugfix`            | Quick TDD-driven bug fix with complexity escalation to full development workflow                                                                                                                       | `skills/quick-bugfix/SKILL.md`            |
+| `rule-reviewer`           | Score an AI rules file on 5 axes and return concrete actionable fixes                                                                                                                                  | `skills/rule-reviewer/SKILL.md`           |
 
 ### Orchestrator Framework
 
@@ -488,8 +489,9 @@ Skills for generating diagrams and rendering markdown content into shareable for
 
 | Skill              | Purpose                                                                                                                                                                                                               | Details                            |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `diagrams-mermaid` | Generate Mermaid diagrams from natural language descriptions. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.          | `skills/diagrams-mermaid/SKILL.md` |
-| `html-renderer`    | Render markdown plans, ideas, RFCs, or design notes into self-contained HTML files with warm editorial styling. Outputs single-file HTML with inlined CSS and optional Mermaid diagram support via CDN when detected. | `skills/html-renderer/SKILL.md`    |
+| `agents-md-generator` | Generate an AGENTS.md onboarding document for AI coding agents. Inspects repo (manifest, README, configs, layout, git history) and writes a concise, reference-heavy contributor guide. Supports both repo-level and directory-level scope with surgical update flow for existing files. | `skills/agents-md-generator/SKILL.md` |
+| `diagrams-mermaid`    | Generate Mermaid diagrams from natural language descriptions. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.                                                                            | `skills/diagrams-mermaid/SKILL.md`    |
+| `html-renderer`       | Render markdown plans, ideas, RFCs, or design notes into self-contained HTML files with warm editorial styling. Outputs single-file HTML with inlined CSS and optional Mermaid diagram support via CDN when detected.                                                                    | `skills/html-renderer/SKILL.md`       |
 
 ## Available Commands
 
@@ -552,8 +554,9 @@ Quick commands create lightweight task directories with `task.yml` for artifact 
 
 | Command             | Usage                     | Purpose                                                    |
 | ------------------- | ------------------------- | ---------------------------------------------------------- |
-| `/diagrams-mermaid` | `[diagram description]`   | Generate Mermaid diagrams from natural language            |
-| `/html-renderer`    | `[path to markdown file]` | Render markdown into self-contained HTML with warm styling |
+| `/agents-md-generator` | `[directory or file path]` | Generate or update AGENTS.md onboarding doc for AI agents |
+| `/diagrams-mermaid`    | `[diagram description]`   | Generate Mermaid diagrams from natural language            |
+| `/html-renderer`       | `[path to markdown file]` | Render markdown into self-contained HTML with warm styling |
 
 **See**: Individual `commands/` and `skills/*/skill.md` files for detailed documentation.
 
@@ -568,6 +571,7 @@ For the OpenCode platform, commands are automatically generated during the build
 
 **Currently auto-generated commands:**
 
+- `agents-md-generator` - Generate AGENTS.md onboarding documents for AI coding agents
 - `development` - Unified workflow for all development tasks (bugs, features, enhancements)
 - `migration` - Code/data/architecture migration workflows
 - `performance` - Performance optimization with bottleneck detection

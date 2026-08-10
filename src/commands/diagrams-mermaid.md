@@ -2,7 +2,6 @@
 name: diagrams-mermaid
 description: Generate Mermaid diagrams from natural language descriptions. Creates diagrams in markdown format with mermaid code fences. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.
 argument-hint: [diagram description]
-generated-from-skill: true
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the diagrams-mermaid skill immediately as your FIRST action.
