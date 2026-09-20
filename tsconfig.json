@@ -10,7 +10,8 @@
     "jsx": "react-jsx",
     "allowJs": true,
     "types": [
-      "bun"
+      "bun",
+      "bun-types"
     ],
     // Bundler mode
     "moduleResolution": "NodeNext",
