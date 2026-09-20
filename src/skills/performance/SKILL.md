@@ -8,24 +8,36 @@ user-invocable: true
 
 Static-analysis-first performance optimization workflow. Identifies bottlenecks by reading code, then uses the standard specification/planning/implementation/verification pipeline to fix them.
 
-## Initialization
+Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+
+## Entry Gate
 
 **BEFORE executing any phase, you MUST complete these steps:**
 
-### Step 1: Load Framework Patterns
+### Argument resolution
 
-**Read the framework reference file NOW using the Read tool:**
+- **Performance issue description provided** → use it as the task description.
+- **Task path / identifier** (directory under `.owflow/tasks/performance/`) → resume mode: read `orchestrator-state.yml`, find the first incomplete phase (`--from=PHASE` overrides), validate existing artifacts, then continue from there.
+- **Nothing provided** → ask via `question`: "What is slow or performance-constrained? Describe the symptom (endpoint, page, job), expected vs actual behavior, and any profiling data you have." — collect the description, plus optional profiling data paths, before proceeding.
 
-1. `../orchestrator-framework/references/orchestrator-patterns.md` - Delegation rules, interactive mode, state schema, initialization, context passing, issue resolution
+### Prerequisites
 
-### Step 2: Initialize Workflow
+| Required for this skill | Where verified                                        | Produced by                  |
+| ----------------------- | ----------------------------------------------------- | ---------------------------- |
+| State file exists       | `<task-path>/orchestrator-state.yml` (resume mode)    | prior `/owflow:performance` run |
 
-1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
-2. **Create Task Directory**: `.owflow/tasks/performance/YYYY-MM-DD-task-name/`
-3. **Create Subdirectories**: `analysis/`, `analysis/user-profiling-data/`, `implementation/`, `verification/`
-4. **Initialize State**: Create `orchestrator-state.yml` with performance context
-   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-performance.yml`.
-5. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
+On resume, if the state file is missing → print: `No performance task found at <path>. Run /owflow:performance <description> to start from scratch.` and STOP. Validate expected artifacts for completed phases (remove entries with missing artifacts).
+
+### Execution steps
+
+1. **Load framework patterns** — Read `../orchestrator-framework/references/orchestrator-patterns.md` NOW: delegation rules, interactive mode, state schema, initialization, context passing, issue resolution.
+2. **Initialize workflow:**
+   1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
+   2. **Create Task Directory**: `.owflow/tasks/performance/YYYY-MM-DD-task-name/`
+   3. **Create Subdirectories**: `analysis/`, `analysis/user-profiling-data/`, `implementation/`, `verification/`
+   4. **Initialize State**: Create `orchestrator-state.yml` with performance context
+      - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-performance.yml`.
+   5. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
 
 **Output**:
 
@@ -326,11 +338,11 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 ---
 
-### Phase 9: Finalization
+### Phase 9: Finalization → Exit Gate
 
 > **Phase gate**: Requires `question` confirmation from Phase 8 before executing.
 
-**Purpose**: Complete workflow and provide next steps
+**Purpose**: Present optimization results, confirm correctness with the user, and close the workflow (Exit Gate contract, `orchestrator-patterns.md` Section 9)
 **Execute**: Direct - create summary, update state, guide commit
 **Output**: Workflow summary
 **State**: Set `task.status: completed`
@@ -339,12 +351,36 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 1. Create workflow summary (bottlenecks found, optimizations implemented, verification result)
 2. Update task status to "completed"
-3. Provide commit message template
-4. Guide performance-specific next steps:
+3. **Results box**:
+
+```
+═══════════════════════════════════════════════════════
+  PERFORMANCE WORKFLOW COMPLETE: <task name>
+═══════════════════════════════════════════════════════
+  Bottlenecks found:      [count by severity]
+  Optimizations applied:  [count + key ones]
+  Verification:           [final verdict]
+  Estimated improvement:  [range from analysis]
+
+  Artifacts:
+    - analysis/performance-analysis.md
+    - implementation/work-log.md
+    - verification/implementation-verification.md
+═══════════════════════════════════════════════════════
+```
+
+4. **Results-acceptance question** — use `question` — "Are these results correct?" with options:
+   - **Accept** — workflow is complete; print next steps below.
+   - **Adjust** — re-run the affected phase (additional optimizations, re-verification) with the user's corrections, then re-present the results box.
+   - **Discuss** — walk through bottleneck findings, optimization rationale, and measurement caveats in more depth; then re-ask.
+   - **Stop here** — print the resume command (`/owflow:performance <task-path>`) and end.
+
+5. **Next steps (after Accept)** — performance-specific guidance:
    - Run the application and verify improvements manually
    - Consider profiling with runtime tools to measure actual impact
    - Monitor production metrics after deployment
    - Address remaining P2/P3 bottlenecks if needed
+   - `/owflow:standards-update "<lesson learned>"` — capture optimization patterns as standards
 
 → End of workflow
 

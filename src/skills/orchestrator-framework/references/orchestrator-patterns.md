@@ -288,11 +288,8 @@ Orchestrators MAY delegate phase bodies to user-invocable **subskills** instead 
 
 1. **State file is canonical.** `orchestrator-state.yml` remains the single source of truth. Subskills read it on entry and write phase results on exit. `completed_phases` values and phase numbering MUST stay stable so both modes intermix freely on the same task.
 2. **Subskills are self-contained.** Each has: an entry check (validate state + prerequisite artifacts), an execute section (delegation via Skill/Task tools per Section 1), and an exit (state update + closing ritual). **State updates are per-step**: a subskill writes `orchestrator-state.yml` immediately after each of its phases completes — appending only the `phase-N` entry actually performed, bumping `orchestrator.updated`, recording failures in `failed_phases`/`auto_fix_attempts`, and validating with `verify_template` — never as a single end-of-skill write.
-3. **Closing ritual (handoff).** Every subskill ends with:
-   - **Results** — artifacts written, with paths, plus a 1-2 line executive summary
-   - **Next steps** — the suggested next command, derived from state (e.g., `has_reproducible_defect` → TDD red gate command)
-   - **Other options** — alternative commands valid at this point
-4. **Entry checks replace phase gates in handoff mode.** A subskill invoked directly must validate the same prerequisites a phase gate would (e.g., spec exists before audit) and route to the prerequisite's command if missing.
+3. **Closing ritual (handoff) → Exit Gate.** Every subskill ends with the **Exit Gate** contract defined in Section 9 (results box → results-acceptance question → next-step hint on accept → STOP).
+4. **Entry checks replace phase gates in handoff mode.** A subskill invoked directly must validate the same prerequisites a phase gate would (e.g., spec exists before audit) and route to the prerequisite's command if missing — via its **Entry Gate** (Section 9).
 5. **Never chain automatically.** The orchestrated wrapper invokes; subskills only SUGGEST the next command and stop. Auto-chaining from a subskill skips user review.
 6. **Handoff mode is the gate.** In handoff mode, the user explicitly invoking the next command IS the phase gate — no additional `question` confirmation before a subskill starts.
 
@@ -303,3 +300,65 @@ Orchestrators MAY delegate phase bodies to user-invocable **subskills** instead 
 - Slash commands registered from `src/commands/*.md` use `name: owflow:<command>` in frontmatter; users invoke `/owflow:<command>`.
 - **Skill `name:` fields stay UNPREFIXED.** Skill-tool invocations (`skill: "development"`, `skills:` frontmatter preloads, work.md routing) always reference unprefixed skill names.
 - Handoff messages, docs, and cross-references always display the prefixed slash command — never the bare skill name — in user-facing text.
+
+---
+
+## 9. Entry Gate & Exit Gate (Skill Contract)
+
+Every **user-invocable** skill (orchestrators, subskills, dispatchers, utility commands) opens with an **Entry Gate** and closes with an **Exit Gate**. Internal skills (subagent-invoked, `user-invocable: false`) use lightweight input/structured-output contracts instead and never call `question`.
+
+### Entry Gate
+
+The Entry Gate runs BEFORE any phase work. It validates that this skill is allowed to run and routes to what is missing instead of guessing.
+
+1. **Argument resolution** — resolve the argument in priority order: full path → identifier (directory name under the workflow's task type) → fresh description. If missing, ambiguous, or unmatched:
+   - Print a structured ask: the exact inputs accepted, with format examples (10x-style "Initial Response" block), then WAIT.
+   - NEVER guess, auto-pick a task, or proceed with a resolved-by-hope path.
+2. **Prerequisite check** — verify each required upstream artifact, expressed as a table the skill keeps at the top of its body:
+
+   | Required for this skill        | Where verified                          | Produced by                      |
+   | ------------------------------ | --------------------------------------- | -------------------------------- |
+   | State file exists              | `<task-path>/orchestrator-state.yml`    | `/owflow:development <desc>`     |
+   | Analysis done                 | `phase-2` in `completed_phases` + `analysis/gap-analysis.md` exists | `/owflow:dev-analyze` |
+   | Spec approved                 | `implementation/spec.md` exists         | `/owflow:dev-spec`               |
+
+   Verify **presence and, where cheap, content** (state field values like `has_reproducible_defect`, marker artifacts like `implementation/tdd-red-gate.md`), not just file existence.
+3. **Blocked output** — when a prerequisite is unmet, print the blocked block and STOP:
+   1. Numbered "Steps that must be completed first (in order)", each with its exact prefixed command (`/owflow:dev-analyze <task-path>`).
+   2. List of resumable task identifiers (directories under the workflow's task type), if any exist.
+   3. Fresh-start hint: `Run /owflow:<entry-command> <description> to start a task from scratch.`
+4. **Skip/resume semantics** — when the skill's phases are already in `completed_phases` (validate artifacts before trusting state): report the existing results briefly and route to the Exit Gate instead of re-executing.
+5. **Conditional activation** — skills that only apply under a state condition (e.g., TDD red gate requires `has_reproducible_defect: true`) check it as part of the Entry Gate and route to the correct alternative command when inactive.
+
+### Exit Gate
+
+The Exit Gate runs after all phase work and state updates are final. It presents results, asks the user to confirm them, and only then hands off.
+
+1. **Results box** — one-screen summary in a fenced block (10x-style):
+
+   ```
+   ═══════════════════════════════════════════════
+     <SKILL> COMPLETE: <task name>
+   ═══════════════════════════════════════════════
+     <2-4 key outcome lines: verdicts, counts, levels>
+     Artifacts:
+       - <relative/path/to/artifact.md>
+   ═══════════════════════════════════════════════
+   ```
+
+2. **Results-acceptance question** (MANDATORY, fires before any handoff hint):
+
+   Use `question` — "Are these results correct?" with options:
+   - **Accept** — results are good; proceed to the next-step hint.
+   - **Adjust** — user specifies what to change; re-work ONLY the affected parts, update artifacts/state, then re-present the results box and re-ask.
+   - **Discuss** — walk through a specific result in more depth (evidence, reasoning, alternatives); after the discussion, re-ask.
+   - **Stop here** — artifacts persist; print the resume command (`/owflow:<this-skill> <task-path>` or the next phase command) and end.
+
+3. **Next-step hint** — only after Accept: print the suggested next command derived from state (e.g., `→ /owflow:dev-spec <task-path>`) plus an "Other options" block of alternative valid commands. Then STOP. Never auto-invoke the next skill.
+4. **Gate ordering** — per Section 2's state ordering rule: finish phase work → present results box → acceptance question → user responds → THEN the state is already consistent (per-step writes happened during Execute); the Exit Gate never mutates phase state on its own except recording the user's acceptance decision where the state schema has a field for it.
+
+### Exceptions
+
+- **Dispatchers** (`development`): the Exit Gate's acceptance question is adapted — the results box is the handoff block, and the question asks how to proceed (hand off to the suggested subskill / switch to loop mode / adjust / stop).
+- **Utility skills with explicit no-follow-up contracts** (`agents-md-generator`, `rule-reviewer`): the acceptance question is confirm-or-revise only; follow-up suggestions stay prohibited unless the user asks.
+- **Orchestrated mode** (`goal-development`): the subskill's own Exit Gate acceptance question IS the loop gate — Accept means "continue to the next subskill". The wrapper MUST NOT add a second consecutive `question`.

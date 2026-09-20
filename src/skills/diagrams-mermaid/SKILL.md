@@ -8,6 +8,8 @@ user-invocable: true
 
 Generate Mermaid diagrams from task context. Focus on visual structure and communication flow, not domain invention.
 
+Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 — the "Output Contract" below IS this skill's Exit Gate, and Step 1 (Extract Context) IS the Entry Gate: when required inputs are missing, ask targeted clarification questions (never invent them) before drawing.
+
 ## 🚨 Core Rules
 
 1. **Read `references/reference.md`** (located in the `references/` subdirectory of this skill) before generating any diagram.

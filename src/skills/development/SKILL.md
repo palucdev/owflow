@@ -11,7 +11,9 @@ Entry point for development tasks in **handoff mode**: initialize (or resume) th
 
 For the all-in-one loop with in-session `question` gates, use `/owflow:goal-development`.
 
-## Initialization
+Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 (adapted for dispatch mode — see its Exceptions).
+
+## Entry Gate
 
 **BEFORE deriving the handoff, complete these steps:**
 
@@ -94,9 +96,37 @@ Derive the FIRST phase not in `completed_phases`, then print the matching comman
 
 Phase 3 is SKIPPED when `has_reproducible_defect` is false — route to dev-spec. All conditional flags (`e2e_enabled`, `user_docs_enabled`) live in state and are honored by the subskills.
 
-### Handoff Message Format
+### Exit Gate (adapted for dispatch mode)
 
-Print, then STOP (never auto-invoke the subskill):
+After deriving the handoff, present the results box, ask how to proceed, then hand off accordingly (see `orchestrator-patterns.md` Section 9 — dispatcher exception). Never auto-invoke the subskill.
+
+#### Results box
+
+```
+═══════════════════════════════════════════════════════
+  DEVELOPMENT TASK READY: <task name>
+═══════════════════════════════════════════════════════
+  Task:           [description]
+  Directory:      <task-path>
+  Next phase:     [N — phase name]
+  [Resume note: completed phases / fresh task]
+
+  → /owflow:<subskill> <task-path>
+═══════════════════════════════════════════════════════
+```
+
+#### Acceptance question
+
+Use `question` — "Task ready. How would you like to proceed?" with options:
+
+- **Hand off to /owflow:<subskill>** — the user invokes the suggested command (dispatcher copies it to chat for convenience). Execution starts in a fresh context.
+- **Switch to loop mode** — illustrate with `/owflow:goal-development <task-path>` to run remaining phases in one session with gates.
+- **Adjust** — task set-up is wrong (wrong flags, wrong research reference, wrong task); re-run the affected initialization step, re-present the results box.
+- **Stop here** — print the resume command (`/owflow:development <task-path>`) and end.
+
+#### Handoff message
+
+On Accept (hand off choice), print, then STOP:
 
 ```
 ✓ Task ready at <task-path>

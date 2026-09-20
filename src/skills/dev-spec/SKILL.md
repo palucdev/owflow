@@ -9,28 +9,33 @@ user-invocable: true
 
 Work phase of the development workflow. Resolves technical decisions, gathers requirements, creates the specification via delegation, refines it with diagrams, then offers an independent specification audit.
 
-## Task Resolution
+## Entry Gate
 
-Resolve the `task-path-or-identifier` argument BEFORE anything else:
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
-- If the argument is **missing**, the path does **not exist**, or matches **no identifier** → print the selection block, then STOP (never guess or auto-pick a task):
+- If the argument is **missing**, the path does **not exist**, or matches **no identifier** → print the blocked block, then STOP (never guess or auto-pick a task):
   1. Steps that must be completed first (in order), each with its command:
      - Phases 1–2 (codebase & gap analysis) → `/owflow:dev-analyze <task-path>`
      - Phase 3 (TDD red gate) — only when a reproducible defect was detected during analysis → `/owflow:dev-tdd-red <task-path>`
   2. List available dev-task identifiers (directories under `.owflow/tasks/development/`) to resume from, if any.
   3. Hint: `Run /owflow:development <description> to start a task from scratch, or pass a task path/identifier to resume.`
 
-## Entry Check
+### Prerequisites
 
-1. Apply **Task Resolution** above to obtain the task path.
-2. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
-3. **Skip check**: if `phase-4` is in `completed_phases`, skip to Phase 5; if both `phase-4` and `phase-5` are complete, report and suggest next command.
-4. **Routing guard**: if `task_context.task_characteristics.has_reproducible_defect` is `true` AND `phase-3` is NOT in `completed_phases` → print the blocked block, then STOP:
+| Required for this skill | Where verified                                                                    | Produced by                       |
+| ----------------------- | --------------------------------------------------------------------------------- | --------------------------------- |
+| State file exists       | `<task-path>/orchestrator-state.yml`                                              | `/owflow:development <desc>`      |
+| Analysis done           | `phase-2` in `completed_phases` + `analysis/gap-analysis.md` exists               | `/owflow:dev-analyze <task-path>` |
+| TDD red gate (conditional) | `phase-3` in `completed_phases` — required only when `has_reproducible_defect: true` | `/owflow:dev-tdd-red <task-path>` |
+
+1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
+2. **Skip/resume**: if `phase-4` is in `completed_phases`, skip to Phase 5; if both `phase-4` and `phase-5` are complete, report existing results and route to the Exit Gate.
+3. **Conditional activation (routing guard)**: if `task_context.task_characteristics.has_reproducible_defect` is `true` AND `phase-3` is NOT in `completed_phases` → print the blocked block, then STOP:
    - Steps that must be completed first: Phase 3 (TDD red gate — required because a reproducible defect was detected); if analysis (Phases 1–2) is also missing, start there.
    - `Run /owflow:dev-tdd-red <task-path> first (or /owflow:dev-analyze <task-path> if analysis is also missing).`
-5. **Prerequisite**: `phase-2` in `completed_phases` and `analysis/gap-analysis.md` exists. Otherwise → print the blocked block, then STOP:
+4. **Prerequisite check**: `phase-2` in `completed_phases` and `analysis/gap-analysis.md` exists. Otherwise → print the blocked block, then STOP:
    - Steps that must be completed first: Phases 1–2 (codebase & gap analysis).
    - `Run /owflow:dev-analyze <task-path> first.`
    - If no task exists yet: `Run /owflow:development <description> to start a task from scratch.`
@@ -79,16 +84,42 @@ Apply after EVERY phase/step above:
 2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
 3. **Failures** — if the spec creation or audit fails and cannot be recovered, do NOT append to `completed_phases`; append the corresponding `phase-N` to `orchestrator.failed_phases` and increment `auto_fix_attempts["phase-N"]`.
 4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-development.yml`. Fix any reported issue immediately before proceeding.
-5. **Final check** — before the Closing Ritual, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
+5. **Final check** — before the Exit Gate, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
 
-## Closing Ritual
+## Exit Gate
 
-**Results** — executive summary from `implementation/spec.md`: title, scope boundaries (included/excluded), key requirement count, architecture approach, assumptions. Plus audit verdict if run. Artifacts written:
+Present results, get user confirmation, then hand off (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
 
-- `analysis/technical-clarifications.md` (conditional), `analysis/requirements.md`, `implementation/spec.md` (Phase 4)
-- `verification/spec-audit.md` (conditional, Phase 5)
+### Results box
 
-**Next steps**:
+```
+═══════════════════════════════════════════════════════
+  DEV SPEC COMPLETE: <spec title>
+═══════════════════════════════════════════════════════
+  Approach:        [architecture approach in 1 line]
+  Scope:           [N included / M excluded items]
+  Requirements:    [count by kind]
+  Assumptions:     [count]
+  Audit verdict:   [pass / pass-with-concerns / fail / skipped]
+
+  Artifacts:
+    - analysis/technical-clarifications.md   [conditional]
+    - analysis/requirements.md
+    - implementation/spec.md
+    - verification/spec-audit.md             [conditional]
+═══════════════════════════════════════════════════════
+```
+
+### Results-acceptance question
+
+Use `question` — "Are these results correct?" with options:
+
+- **Accept** — the specification is good; continue.
+- **Adjust** — regenerate the spec with the user's corrections (clarifications, scope boundaries, requirements), update state, re-present the results box.
+- **Discuss** — walk through a specific part of the spec (scope boundaries, architecture approach, audit findings) in more depth; then re-ask.
+- **Stop here** — print the resume command (`/owflow:dev-spec <task-path>`) and end.
+
+### Next steps (after Accept)
 
 - `→ /owflow:dev-plan <task-path>`
 

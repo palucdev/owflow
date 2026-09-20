@@ -11,6 +11,8 @@ Lightweight TDD-driven bug fix workflow with planning mode. Analyze the bug, pre
 
 For complex bugs that grow beyond a quick fix, suggests escalating to the full development workflow (`/owflow:development`).
 
+Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+
 ## Usage
 
 ```bash
@@ -18,6 +20,10 @@ For complex bugs that grow beyond a quick fix, suggests escalating to the full d
 /owflow:quick-bugfix "API returns 500 when email contains special characters"
 /owflow:quick-bugfix "Dark mode toggle doesn't persist after refresh"
 ```
+
+## Entry Gate
+
+**Prerequisites**: none — the bug description is the only input, and Step 1 resolves it (argument → recent conversation context → `question` ask). Stop only when no bug context can be obtained after asking.
 
 ## When to Use
 
@@ -295,17 +301,40 @@ If any section is missing, add it before asking for user approval.
 
 **Post-implementation: verify standards compliance using the checklist from the plan file.**
 
-### Step 9: Closing Ritual
+### Step 9: Exit Gate
 
-Present results and next steps:
+Present results, get user confirmation, then close (Exit Gate contract, `orchestrator-patterns.md` Section 9).
+
+**Results box**:
+
+```
+═══════════════════════════════════════════════════════
+  QUICK BUGFIX COMPLETE: <task name>
+═══════════════════════════════════════════════════════
+  Root cause:   [1-line root cause]
+  Fix:          [1-line fix description]
+  Files:        [count + key files]
+  Tests:        [red gate failed → green gate passed]
+  Standards:    [applied standards count]
+
+  Artifacts:
+    - summary.md
+    - analysis/findings.md
+    - task.yml            (status: completed)
+═══════════════════════════════════════════════════════
+```
+
+**Results-acceptance question** — use `question` — "Is the bug fixed correctly?" with options:
+
+- **Accept** — fix verified; print next steps below.
+- **Adjust** — re-work the fix (different approach, additional files), re-run the TDD loop, then re-present the results box.
+- **Discuss** — walk through root cause analysis and fix reasoning in more depth; then re-ask.
+- **Stop here** — end; `summary.md` and the task directory persist. Resume or escalate later via the hints below.
+
+**Next steps (after Accept)**:
 
 ```
 ✓ Bug fixed — <task-path>
-
-Results:
-  summary.md          — root cause, fix, standards applied, commit suggestion
-  analysis/findings.md — root cause analysis
-  task.yml            — status: completed
 
 Next steps:
   → Commit using the suggested message from summary.md

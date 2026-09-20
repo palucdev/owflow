@@ -181,14 +181,39 @@ Display application summary: created count, updated count, total active.
 
 ---
 
-### Phase 9: Summary Report
+### Phase 9: Summary Report → Exit Gate
 
-Display final results:
+Present final results and close (Exit Gate contract, `orchestrator-patterns.md` Section 9):
 
-- Sources analyzed (config files, code files sampled, docs parsed, PRs reviewed)
-- Standards applied (created/updated counts by category)
-- Standards skipped (low confidence, user declined)
-- Next steps (review, commit, re-run schedule)
+**Results box**:
+
+```
+═══════════════════════════════════════════════════════
+  STANDARDS DISCOVER COMPLETE
+═══════════════════════════════════════════════════════
+  Sources analyzed: [config files, code samples, docs, PRs]
+  Applied:          [created] created / [updated] updated ([total] active)
+  Skipped:          [count — low confidence / declined]
+
+  Artifacts:
+    - .owflow/docs/INDEX.md
+    - .owflow/docs/standards/<category>/<topic>.md  [per applied standard]
+═══════════════════════════════════════════════════════
+```
+
+**Results-acceptance question** — use `question` — "Are these results correct?" with options:
+
+- **Accept** — discovery and application are complete; print next steps below.
+- **Adjust** — re-review skipping findings (e.g., "show low-confidence items", "re-run a source"), apply the additional standards, then re-present the results box.
+- **Discuss** — walk through specific applied standards (evidence, confidence breakdown, sources) in more depth; then re-ask.
+- **Stop here** — end.
+
+**Next steps (after Accept)**:
+
+- Review the applied standards files in `.owflow/docs/standards/`
+- Commit the changes
+- `/owflow:standards-update "<convention>"` — document any conventions discovery missed
+- Re-run periodically: `/owflow:standards-discover --scope=quick`
 
 ---
 

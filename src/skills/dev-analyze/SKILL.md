@@ -11,22 +11,25 @@ Work phase of the development workflow. Runs codebase exploration, requirements 
 
 Related entry points: `/owflow:development` (handoff mode), `/owflow:goal-development` (loop mode). Both produce the same state; you may mix them freely.
 
-## Task Resolution
+## Entry Gate
 
-Resolve the `task-path-or-identifier` argument BEFORE anything else:
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
-- If the argument is **missing**, the path does **not exist**, or matches **no identifier** → print the selection block, then STOP (never guess or auto-pick a task):
+- If the argument is **missing**, the path does **not exist**, or matches **no identifier** → print the blocked block, then STOP (never guess or auto-pick a task):
   1. Prerequisites: none — this is the first work phase. Everything else requires it.
   2. List available dev-task identifiers (directories under `.owflow/tasks/development/`) to resume from, if any.
   3. Hint: `Run /owflow:development <description> to start a task from scratch, or pass a task path/identifier to resume.`
 
-## Entry Check
+### Prerequisites
 
-1. Apply **Task Resolution** above to obtain the task path.
-2. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
-3. **Skip completed work**: if `phase-1` is in `completed_phases`, skip that part. If `phase-2` is in `completed_phases`, the whole phase is done — print results summary and suggest the next command (see Closing Ritual).
+| Required for this skill | Where verified                                                          | Produced by                      |
+| ----------------------- | ----------------------------------------------------------------------- | -------------------------------- |
+| State file exists       | `<task-path>/orchestrator-state.yml`                                    | `/owflow:development <desc>`     |
+
+1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
+2. **Skip/resume**: if `phase-1` is in `completed_phases`, skip that part. If `phase-2` is in `completed_phases`, the whole phase is done — report existing results and route to the Exit Gate.
 
 ## Execute
 
@@ -61,16 +64,43 @@ Apply after EVERY phase/step above:
 2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
 3. **Failures** — if the step fails or its retries are abandoned, do NOT append to `completed_phases`; instead append `phase-N` to `orchestrator.failed_phases` and increment `auto_fix_attempts["phase-N"]`.
 4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-development.yml`. Fix any reported issue immediately before proceeding.
-5. **Final check** — before the Closing Ritual, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
+5. **Final check** — before the Exit Gate, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
 
-## Closing Ritual
+## Exit Gate
 
-**Results** — display executive summary: task type detected, risk level, key characteristics enabled (TDD gate, E2E, user docs), scope decisions made, artifacts written:
+Present results, get user confirmation, then hand off (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
 
-- `analysis/codebase-analysis.md`, `analysis/clarifications.md` (Phase 1)
-- `analysis/gap-analysis.md`, `analysis/scope-clarifications.md` (conditional, Phase 2)
+### Results box
 
-**Next steps** — read `task_context.task_characteristics` from state and print the suggested command:
+```
+═══════════════════════════════════════════════════════
+  DEV ANALYZE COMPLETE: <task name>
+═══════════════════════════════════════════════════════
+  Task type:     [detected type]
+  Risk level:    [risk_level from state]
+  Characteristics: [key characteristics — TDD gate, E2E, user docs]
+  Scope decisions: [decisions made / "none needed"]
+
+  Artifacts:
+    - analysis/codebase-analysis.md
+    - analysis/clarifications.md
+    - analysis/gap-analysis.md
+    - analysis/scope-clarifications.md   [conditional]
+═══════════════════════════════════════════════════════
+```
+
+### Results-acceptance question
+
+Use `question` — "Are these results correct?" with options:
+
+- **Accept** — analysis is good; continue.
+- **Adjust** — re-run only the affected part (clarifications, gap analysis, or scope decisions), update state and artifacts, re-present the results box.
+- **Discuss** — walk through a specific result (risk level rationale, characteristics, scope decisions) in more depth; then re-ask.
+- **Stop here** — print the resume command (`/owflow:dev-analyze <task-path>`) and end.
+
+### Next steps (after Accept)
+
+Read `task_context.task_characteristics` from state and print the suggested command:
 
 - `has_reproducible_defect: true` → `→ /owflow:dev-tdd-red <task-path>`
 - otherwise → `→ /owflow:dev-spec <task-path>`
@@ -80,4 +110,4 @@ Apply after EVERY phase/step above:
 - `/owflow:goal-development <task-path>` — continue remaining phases in one loop
 - `/owflow:dev-spec <task-path>` — skip TDD gate manually (not recommended for reproducible defects)
 
-Then STOP. Never auto-invoke the next skill.
+Then STOP.

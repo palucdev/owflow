@@ -227,7 +227,7 @@ Key usage rules:
 - `/owflow:development "desc" --research=<research-task-path>` (or just the research task path, auto-detected) starts development informed by completed research; research context flows through ALL phases without skipping any, artifacts copied to `analysis/research-context/`.
 - Development has two modes sharing one state file: `/owflow:goal-development` runs all dev-* subskills in one session with `question` gates; `/owflow:development` hands off one subskill per invocation. Mix both modes on a single task freely.
 - Every dev-* subskill is standalone and can be invoked at any time. Each resolves its task from a full path or an identifier (directory name under `.owflow/tasks/development/`), never auto-picking a task. If the prerequisite phases are not complete (or no argument resolves to a task), it STOPs and prints the ordered prerequisite steps with the exact commands to run each, plus a hint to start fresh via `/owflow:development <description>`.
-- Every dev-* subskill ends with a closing ritual: results (artifacts written) + suggested next command. Subskills SUGGEST the next command and stop — never auto-chain.
+- Every dev-* subskill ends with an **Exit Gate** (see `skills/orchestrator-framework/references/orchestrator-patterns.md` Section 9): results box + results-acceptance question (Accept / Adjust / Discuss / Stop), then — only after Accept — the suggested next command. Subskills never auto-chain.
 
 ## Available Subagents
 

@@ -9,7 +9,13 @@ user-invocable: true
 
 Initialize `.owflow/docs/` with intelligent project analysis and meaningful documentation generation based on actual codebase inspection.
 
+Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+
 **NOTE**: This skill invokes other skills and subagents at specific phases. Use the **Task tool with `docs-operator` subagent** (subagent_type: `docs-operator`) for all docs-manager operations, and **Task tool** for project-analyzer. Use the **Skill tool** only for standards-discover (Phase 8, last phase). The Task tool returns control to this skill after completion; the Skill tool does not.
+
+## Entry Gate
+
+PHASE 1 (Pre-flight Checks) below IS the entry gate of this skill. It validates the `--standards-from=PATH` argument (resolve it; abort with an informative message if the referenced project lacks `.owflow/docs/standards/`) and detects the pre-existing state of `.owflow/` — routing to backup, update, or cancel accordingly. Complete it before any other phase.
 
 ## Phase Configuration
 
@@ -163,7 +169,7 @@ Write each file to `.owflow/docs/project/`.
 
 ---
 
-## PHASE 7: Validate
+## PHASE 7: Validate → Exit Gate
 
 **Step 1**: Invoke `docs-operator` subagent via Task tool (subagent_type: `docs-operator`) with prompt:
 
@@ -179,17 +185,34 @@ Wait for docs-operator to complete, then immediately continue with Step 2.
 - Verify selected standards directories exist
 - Verify AGENTS.md integration
 
-**Step 3**: Display comprehensive summary:
+**Step 3: Results box** — present the summary as:
 
-- Project analysis results (type, language, framework, architecture)
-- Structure created (tree with check marks for created items)
-- Documentation status (which docs generated, which standards initialized)
-- Key findings (strengths, opportunities)
-- Next steps:
-  1. Review generated documentation
-  2. Customize for your team
-  3. Start development with `/owflow:work`
-  4. Keep documentation current
+```
+═══════════════════════════════════════════════════════
+  FLOW INIT COMPLETE: <project name>
+═══════════════════════════════════════════════════════
+  Project type:  [type, language, framework, architecture]
+  Structure:     [tree with check marks for created items]
+  Docs:          [which docs generated, which standards initialized]
+  Standards:     [discovered count, applied]
+  Key findings:  [strengths, opportunities]
+
+  → .owflow/docs/INDEX.md
+═══════════════════════════════════════════════════════
+```
+
+**Step 4: Results-acceptance question** — use `question` — "Are these results correct?" with options:
+
+- **Accept** — initialization is complete; print next steps below.
+- **Adjust** — regenerate the affected artifact (analysis, doc, standards) with the user's corrections, then re-present the results box.
+- **Discuss** — walk through the generated structure and findings in more depth; then re-ask.
+- **Stop here** — end; everything is already written to `.owflow/docs/`.
+
+**Next steps (after Accept)**:
+
+1. Review and customize the generated documentation and standards for your team
+2. Start development with `/owflow:development "<task description>"` (or project work)
+3. Keep documentation current via `/owflow:standards-update "<convention>"`
 
 ---
 

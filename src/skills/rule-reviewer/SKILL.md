@@ -11,6 +11,12 @@ Score an AI rules file on five axes and return concrete fixes. The file under re
 
 The skill never edits the file. It produces a scorecard. The user decides what to act on.
 
+Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 (confirm-or-revise exception — see "Output format").
+
+## Entry Gate
+
+The input resolution below IS this skill's entry gate.
+
 ## Input resolution
 
 **Get the path to the rules file:**
@@ -47,7 +53,7 @@ If the file does not exist, stop and report the path. Do not invent content.
 2. Compute Checks 1–4.
 3. Run Check 5 in its own multi-step flow (5a list → 5b comment → 5c propose → 5d ask via question → 5e atomic-change reminder). The reorder edit, if any, happens here and only with explicit user approval.
 4. Print the scorecard in the exact format under "Output format". Include the reorder-proposal summary and the user's decision in the Check 5 findings.
-5. Stop. Do not propose further follow-up actions unless the user asks.
+5. Run the Exit Gate (end of "Output format"): results-acceptance question, then stop. Do not propose further follow-up actions unless the user asks.
 
 ---
 
@@ -305,6 +311,17 @@ Print exactly this, in this order. Use Polish or English matching the user's pro
 If a check is OK, still list it in the table but skip the "Findings" subsection (write `### N. <name> — OK` and one short line, nothing more).
 
 The "Top 3 actions" must be ordered by leverage, not by check number. Pick from across all five checks.
+
+### Exit Gate (confirm-or-revise form)
+
+Per the shared contract's exception for no-follow-up skills, after printing the scorecard use `question` — "Is the scorecard correct?" with options:
+
+- **Accept** — keep it. Stop here; act on "Top 3 actions" whenever you like.
+- **Adjust** — re-run a specific check with different criteria or (Check 5) redo the reorder after re-deciding.
+- **Discuss** — justify a specific verdict or finding (evidence cited, why it matters); then re-ask.
+- **Stop here** — nothing further.
+
+If Check 5 produced a reorder proposal the user has not yet decided on, include a "Run Check 5 now" option in the question. After the user's response, stop. Do not propose further follow-ups unless the user asks.
 
 ---
 

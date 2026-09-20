@@ -9,6 +9,8 @@ user-invocable: true
 
 Turn a markdown plan/idea/RFC into a single self-contained HTML page that follows the warm editorial design system bundled in this skill.
 
+Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 — "Inputs and outputs" below IS the Entry Gate; Workflow step 7 (Verify) plus the Exit Gate block at the close.
+
 ## When to use
 
 The user gives you a markdown file (or pastes markdown) describing a plan, idea, proposal, RFC, design note, or brief, and wants a clean HTML representation they can share. Output is *always* a portable single-file `.html` with the stylesheet inlined — no external assets, no JS.
@@ -43,6 +45,19 @@ Reuse existing classes and tokens before inventing anything. If the user asks fo
    - `<body>` containing `<main class="hr-page">` wrapping the sectioned content.
 6. **Write** the file as `<basename>.html` next to the source.
 7. **Verify**: re-open the output and confirm every `class="hr-..."` you emitted exists in the inlined CSS.
+8. **Exit Gate**: present the results box, then confirm (Exit Gate contract, `orchestrator-patterns.md` Section 9):
+
+```
+═══════════════════════════════════════════════════════
+  HTML RENDER COMPLETE
+═══════════════════════════════════════════════════════
+  Source:   <source.md>
+  Output:   <basename>.html (single file, self-contained)
+  Sections: [count] · Diagrams: [count, if any]
+═══════════════════════════════════════════════════════
+```
+
+Use `question` — "Is the rendering correct?" with options: **Accept** (open the file in a browser and stop) / **Adjust** (user names layout/section issues; fix and re-present) / **Discuss** (explain a mapping or class choice) / **Stop here**. Note: visual correctness can only be confirmed by the user in a browser — offer to open it via the user's preferred `open`/`xdg-open` command.
 
 ## Markdown → HTML mapping
 

@@ -9,6 +9,8 @@ Use when creating NEW orchestrators or auditing existing ones. Not loaded during
 Before considering an orchestrator complete, verify ALL items:
 
 - [ ] **Step 0: Load Framework** — Initialization reads `orchestrator-patterns.md`
+- [ ] **Entry Gate** — Skill body opens with the Entry Gate contract (argument resolution, prerequisite table, blocked output, skip/resume semantics — see `orchestrator-patterns.md` Section 9)
+- [ ] **Exit Gate** — Skill body closes with the Exit Gate contract (results box, results-acceptance question, next-step hint on Accept, STOP — see `orchestrator-patterns.md` Section 9)
 - [ ] **State file creation** — Explicit step to CREATE `orchestrator-state.yml`
 - [ ] **State verification** — Explicit step to use `verify_template` to check YAML validity after creation
 - [ ] **Phase structure** — Each phase has: Purpose, Execute, Output, State, Transition (`→ Pause` / `→ AUTO-CONTINUE` / `→ Conditional`)
@@ -39,6 +41,7 @@ Before considering an orchestrator complete, verify ALL items:
 | Stopping at AUTO-CONTINUE transitions   | Brief summary is fine, but must proceed immediately |
 | Missing standards references            | INDEX.md must be referenced in relevant phases      |
 | Auto-accepting subagent decisions       | User must consent via question                      |
+| Ending without results-acceptance       | Exit Gate question MUST fire before next-step hint  |
 
 ---
 

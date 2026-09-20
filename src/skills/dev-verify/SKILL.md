@@ -9,13 +9,13 @@ user-invocable: true
 
 Work phase of the development workflow. Lets the user pick which verification checks run, then delegates comprehensive verification with a fix-then-reverify loop.
 
-## Task Resolution
+## Entry Gate
 
-Resolve the `task-path-or-identifier` argument BEFORE anything else:
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
-- If the argument is **missing**, the path does **not exist**, or matches **no identifier** → print the selection block, then STOP (never guess or auto-pick a task):
+- If the argument is **missing**, the path does **not exist**, or matches **no identifier** → print the blocked block, then STOP (never guess or auto-pick a task):
   1. Steps that must be completed first (in order), each with its command:
      - Phases 1–2 (codebase & gap analysis) → `/owflow:dev-analyze <task-path>`
      - Phase 3 (TDD red gate) — only when a reproducible defect was detected → `/owflow:dev-tdd-red <task-path>`
@@ -25,15 +25,19 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else:
   2. List available dev-task identifiers (directories under `.owflow/tasks/development/`) to resume from, if any.
   3. Hint: `Run /owflow:development <description> to start a task from scratch, or pass a task path/identifier to resume.`
 
-## Entry Check
+### Prerequisites
 
-1. Apply **Task Resolution** above to obtain the task path.
-2. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
-3. **Prerequisite**: `phase-7` in `completed_phases` (implementation done). If missing → print the blocked block, then STOP:
+| Required for this skill | Where verified                                   | Produced by                          |
+| ----------------------- | ------------------------------------------------ | ------------------------------------ |
+| State file exists       | `<task-path>/orchestrator-state.yml`             | `/owflow:development <desc>`         |
+| Implementation done     | `phase-7` in `completed_phases`                  | `/owflow:dev-implement <task-path>`  |
+
+1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
+2. **Prerequisite check**: `phase-7` in `completed_phases` (implementation done). If missing → print the blocked block, then STOP:
    - Steps that must be completed first: Phases 1–2 (analysis) → Phase 3 (TDD red gate, only when a reproducible defect was detected) → Phases 4–5 (specification) → Phase 6 (implementation planning) → Phases 7–8 (implementation).
    - `Run /owflow:dev-implement <task-path> first` (or the command for the earliest missing earlier step: `/owflow:dev-analyze`, `/owflow:dev-tdd-red`, `/owflow:dev-spec`, or `/owflow:dev-plan`).
    - If no task exists yet: `Run /owflow:development <description> to start a task from scratch.`
-4. **Re-verification**: if `phase-9` and `phase-10` are already complete and re-running after fixes, confirm scope via `question` (full re-run vs only failed checks).
+3. **Re-verification**: if `phase-9` and `phase-10` are already complete and re-running after fixes, confirm scope via `question` (full re-run vs only failed checks).
 
 ## Execute
 
@@ -109,13 +113,42 @@ Apply after EVERY phase/step above:
 4. **Phase 10 completion** — append `phase-10` to `completed_phases` only at phase exit: status `passed`, or user-approved proceed with issues logged. Bump `orchestrator.updated` on every write.
 5. **Failures** — if `implementation-verifier` itself fails or the workflow stops with unresolved critical issues, do NOT append `phase-10` to `completed_phases`; append it to `orchestrator.failed_phases` and increment `auto_fix_attempts["phase-10"]`.
 6. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-development.yml`. Fix any reported issue immediately before proceeding.
-7. **Final check** — before the Closing Ritual, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
+7. **Final check** — before the Exit Gate, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
 
-## Closing Ritual
+## Exit Gate
 
-**Results** — executive summary: total issues found, fixed, remaining by severity. Artifacts written: `verification/implementation-verification.md`, optional code-review/pragmatic/reality reports, updated `implementation/work-log.md`.
+Present results, get user confirmation, then hand off (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
 
-**Next steps**:
+### Results box
+
+```
+═══════════════════════════════════════════════════════
+  DEV VERIFY COMPLETE: <task name>
+═══════════════════════════════════════════════════════
+  Overall status: [passed / passed_with_issues / failed]
+  Issues found:   [total] ([critical] C / [warning] W / [info] I)
+  Fixed:          [count]
+  Remaining:      [by severity]
+
+  Artifacts:
+    - verification/implementation-verification.md
+    - verification/code-review-report.md        [if run]
+    - verification/pragmatic-review.md          [if run]
+    - verification/reality-check.md             [if run]
+    - verification/production-readiness-report.md [if run]
+═══════════════════════════════════════════════════════
+```
+
+### Results-acceptance question
+
+Use `question` — "Are these results correct?" with options:
+
+- **Accept** — verification outcome is good (including approved proceed-with-issues); continue.
+- **Adjust** — run additional fixes and/or another verification round (within the fix-loop limits), then re-present the results box.
+- **Discuss** — walk through specific findings (issue details, fixability assessment, recommendations) in more depth; then re-ask.
+- **Stop here** — print the resume command (`/owflow:dev-verify <task-path>`) and end.
+
+### Next steps (after Accept)
 
 - `→ /owflow:dev-finalize <task-path>`
 
