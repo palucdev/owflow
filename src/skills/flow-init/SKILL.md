@@ -187,18 +187,16 @@ Wait for docs-operator to complete, then immediately continue with Step 2.
 
 **Step 3: Results box** — present the summary as:
 
-```
-═══════════════════════════════════════════════════════
-  FLOW INIT COMPLETE: <project name>
-═══════════════════════════════════════════════════════
-  Project type:  [type, language, framework, architecture]
-  Structure:     [tree with check marks for created items]
-  Docs:          [which docs generated, which standards initialized]
-  Standards:     [discovered count, applied]
-  Key findings:  [strengths, opportunities]
+```markdown
+## ✅ FLOW INIT COMPLETE — <project name>
 
-  → .owflow/docs/INDEX.md
-═══════════════════════════════════════════════════════
+**Project type** — [type, language, framework, architecture]
+**Structure** — [tree with check marks for created items]
+**Docs** — [which docs generated, which standards initialized]
+**Standards** — [discovered count, applied]
+**Key findings** — [strengths, opportunities]
+
+**Created** — `.owflow/docs/INDEX.md`
 ```
 
 **Step 4: Results-acceptance question** — use `question` — "Are these results correct?" with options:

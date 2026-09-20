@@ -279,9 +279,9 @@ If prerequisites missing, use question: "Start from Phase 1", "Specify different
 
 Orchestrators MAY delegate phase bodies to user-invocable **subskills** instead of executing them inline. Two loop modes share one state file and one set of subskills:
 
-| Mode              | Entry point             | Behavior                                                                                               |
-| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| Orchestrated mode | wrapper skill/command   | Invokes subskills back-to-back via Skill tool in sequence; pauses at `question` gates between subskills |
+| Mode              | Entry point              | Behavior                                                                                                |
+| ----------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Orchestrated mode | wrapper skill/command    | Invokes subskills back-to-back via Skill tool in sequence; pauses at `question` gates between subskills |
 | Handoff mode      | dispatcher skill/command | Derives next phase from state, prints the suggested command, and **STOPS**; user invokes each subskill  |
 
 ### Rules
@@ -312,17 +312,18 @@ Every **user-invocable** skill (orchestrators, subskills, dispatchers, utility c
 The Entry Gate runs BEFORE any phase work. It validates that this skill is allowed to run and routes to what is missing instead of guessing.
 
 1. **Argument resolution** — resolve the argument in priority order: full path → identifier (directory name under the workflow's task type) → fresh description. If missing, ambiguous, or unmatched:
-   - Print a structured ask: the exact inputs accepted, with format examples (10x-style "Initial Response" block), then WAIT.
+   - Print a structured ask: the exact inputs accepted, with format examples, then WAIT.
    - NEVER guess, auto-pick a task, or proceed with a resolved-by-hope path.
 2. **Prerequisite check** — verify each required upstream artifact, expressed as a table the skill keeps at the top of its body:
 
-   | Required for this skill        | Where verified                          | Produced by                      |
-   | ------------------------------ | --------------------------------------- | -------------------------------- |
-   | State file exists              | `<task-path>/orchestrator-state.yml`    | `/owflow:development <desc>`     |
-   | Analysis done                 | `phase-2` in `completed_phases` + `analysis/gap-analysis.md` exists | `/owflow:dev-analyze` |
-   | Spec approved                 | `implementation/spec.md` exists         | `/owflow:dev-spec`               |
+   | Required for this skill | Where verified                                                      | Produced by                  |
+   | ----------------------- | ------------------------------------------------------------------- | ---------------------------- |
+   | State file exists       | `<task-path>/orchestrator-state.yml`                                | `/owflow:development <desc>` |
+   | Analysis done           | `phase-2` in `completed_phases` + `analysis/gap-analysis.md` exists | `/owflow:dev-analyze`        |
+   | Spec approved           | `implementation/spec.md` exists                                     | `/owflow:dev-spec`           |
 
    Verify **presence and, where cheap, content** (state field values like `has_reproducible_defect`, marker artifacts like `implementation/tdd-red-gate.md`), not just file existence.
+
 3. **Blocked output** — when a prerequisite is unmet, print the blocked block and STOP:
    1. Numbered "Steps that must be completed first (in order)", each with its exact prefixed command (`/owflow:dev-analyze <task-path>`).
    2. List of resumable task identifiers (directories under the workflow's task type), if any exist.
@@ -334,17 +335,24 @@ The Entry Gate runs BEFORE any phase work. It validates that this skill is allow
 
 The Exit Gate runs after all phase work and state updates are final. It presents results, asks the user to confirm them, and only then hands off.
 
-1. **Results box** — one-screen summary in a fenced block (10x-style):
+1. **Results box** — one-screen markdown summary (no ASCII borders, markdown headings/bold carry the emphasis):
 
+   ```markdown
+   ## ✅ <SKILL> COMPLETE — <task name>
+
+   **<Field 1>** — [key outcome]
+   **<Field 2>** — [key outcome]
+
+   **Artifacts**
+
+   - `relative/path/to/artifact.md`
+
+   **Next ▸** `/owflow:<next-skill> <task-path>`
    ```
-   ═══════════════════════════════════════════════
-     <SKILL> COMPLETE: <task name>
-   ═══════════════════════════════════════════════
-     <2-4 key outcome lines: verdicts, counts, levels>
-     Artifacts:
-       - <relative/path/to/artifact.md>
-   ═══════════════════════════════════════════════
-   ```
+
+   Conventions:
+   - Status glyphs follow the outcome: ✅ pass/success, ⚠ pass-with-concerns/partial, ❌ fail.
+   - Set the **Next ▸** line to the suggested next command for this skill; omit it when the next-step hint depends on the Accept response (the handoff block is printed after Accept anyway).
 
 2. **Results-acceptance question** (MANDATORY, fires before any handoff hint):
 
@@ -354,7 +362,24 @@ The Exit Gate runs after all phase work and state updates are final. It presents
    - **Discuss** — walk through a specific result in more depth (evidence, reasoning, alternatives); after the discussion, re-ask.
    - **Stop here** — artifacts persist; print the resume command (`/owflow:<this-skill> <task-path>` or the next phase command) and end.
 
-3. **Next-step hint** — only after Accept: print the suggested next command derived from state (e.g., `→ /owflow:dev-spec <task-path>`) plus an "Other options" block of alternative valid commands. Then STOP. Never auto-invoke the next skill.
+3. **Next-step hint** — only after Accept: print the suggested next command derived from state, plus an "Other options" block of alternative valid commands. Every suggested command is a **compact annotated entry**:
+   - **Purpose** — one line stating what the proposed skill does.
+   - **Requirement tag** — `required` (mandatory next phase) or `optional` (shortcut, standalone utility, or conditional step) with its activation condition, e.g. `optional — only when has_reproducible_defect: true`.
+   - **Remaining plan** (for optional/alternative paths) — one compact line listing the phases still ahead in execution order, marking which are optional.
+   - Standalone review/utility commands are annotated `optional — does not advance phases`.
+
+   Example shape (~5 lines):
+
+   ```
+   → /owflow:dev-verify <task-path>
+     What: runs the verification pipeline (completeness, code review, fixes) — required before commit. Remaining after: /owflow:dev-finalize (required).
+   Other options:
+   /owflow:reviews-code <task-path> — optional, does not advance phases (standalone re-run of code review)
+   /owflow:goal-development <task-path> — optional shortcut: runs all remaining phases in one loop (… → verify → finalize)
+   ```
+
+   Then STOP. Never auto-invoke the next skill.
+
 4. **Gate ordering** — per Section 2's state ordering rule: finish phase work → present results box → acceptance question → user responds → THEN the state is already consistent (per-step writes happened during Execute); the Exit Gate never mutates phase state on its own except recording the user's acceptance decision where the state schema has a field for it.
 
 ### Exceptions

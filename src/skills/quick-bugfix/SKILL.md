@@ -307,21 +307,19 @@ Present results, get user confirmation, then close (Exit Gate contract, `orchest
 
 **Results box**:
 
-```
-═══════════════════════════════════════════════════════
-  QUICK BUGFIX COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Root cause:   [1-line root cause]
-  Fix:          [1-line fix description]
-  Files:        [count + key files]
-  Tests:        [red gate failed → green gate passed]
-  Standards:    [applied standards count]
+```markdown
+## ✅ QUICK BUGFIX COMPLETE — <task name>
 
-  Artifacts:
-    - summary.md
-    - analysis/findings.md
-    - task.yml            (status: completed)
-═══════════════════════════════════════════════════════
+**Root cause** — [1-line root cause]
+**Fix** — [1-line fix description]
+**Files** — [count + key files]
+**Tests** — [red gate failed → green gate passed]
+**Standards** — [applied standards count]
+
+**Artifacts**
+- `summary.md`
+- `analysis/findings.md`
+- `task.yml` (status: completed)
 ```
 
 **Results-acceptance question** — use `question` — "Is the bug fixed correctly?" with options:

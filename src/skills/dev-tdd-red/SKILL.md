@@ -31,7 +31,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
 2. **Skip/resume**: if `phase-3` is in `completed_phases`, report the existing `implementation/tdd-red-gate.md` results and route to the Exit Gate.
-3. **Conditional activation**: read `task_context.task_characteristics.has_reproducible_defect`. If `false` → print `No reproducible defect detected — TDD red gate not required.` and suggest `→ /owflow:dev-spec <task-path>`, then STOP.
+3. **Conditional activation**: read `task_context.task_characteristics.has_reproducible_defect`. If `false` → print `No reproducible defect detected — TDD red gate not required.` and suggest `→ /owflow:dev-spec <task-path>` (required next phase: turns analysis into a user-approved specification; remaining plan plan → implement → verify → finalize), then STOP.
 4. **Prerequisite check**: `phase-2` must be in `completed_phases`. If not → print the blocked block, then STOP:
    - Steps that must be completed first: Phases 1–2 (codebase & gap analysis).
    - Run `/owflow:dev-analyze <task-path> first.`
@@ -63,17 +63,15 @@ Present results, get user confirmation, then hand off (see `orchestrator-pattern
 
 ### Results box
 
-```
-═══════════════════════════════════════════════════════
-  TDD RED GATE COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Test:      <test name> (<test file path>)
-  Result:    FAILED as expected — defect reproduced
-  Failure:   <1-line key failure output proving the defect>
+```markdown
+## ✅ TDD RED GATE COMPLETE — <task name>
 
-  Artifacts:
-    - implementation/tdd-red-gate.md
-═══════════════════════════════════════════════════════
+**Test** — <test name> (`<test file path>`)
+**Result** — ❌ FAILED as expected — defect reproduced
+**Failure** — <1-line key failure output proving the defect>
+
+**Artifacts**
+- `implementation/tdd-red-gate.md`
 ```
 
 ### Results-acceptance question
@@ -87,10 +85,10 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-- `→ /owflow:dev-spec <task-path>` — the spec will incorporate this test as the acceptance criterion for the fix
+- `→ /owflow:dev-spec <task-path>` — `required` next: turns analysis plus this red test into a user-approved specification (the test becomes the acceptance criterion for the fix). Remaining after: plan → implement → verify → finalize.
 
 **Other options**:
 
-- `/owflow:goal-development <task-path>` — continue remaining phases in one loop
+- `/owflow:goal-development <task-path>` — `optional` shortcut: runs all remaining phases in one loop (spec → plan → implement → verify → finalize)
 
 Then STOP.

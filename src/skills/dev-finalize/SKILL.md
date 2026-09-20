@@ -83,20 +83,18 @@ Present results, get user confirmation, then close the workflow (see `orchestrat
 
 ### Results box
 
-```
-═══════════════════════════════════════════════════════
-  DEVELOPMENT WORKFLOW COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Built:          [1-2 line summary of what was built]
-  Phases:         [executed phases, e.g. 1-2, 4-13]
-  Verification:   [final verification outcome]
-  E2E verdict:    [if run] / skipped
-  User guide:     [path] / not generated
+```markdown
+## ✅ DEVELOPMENT WORKFLOW COMPLETE — <task name>
 
-  Artifacts:
-    - verification/e2e-verification-report.md   [conditional]
-    - documentation/user-guide.md               [conditional]
-═══════════════════════════════════════════════════════
+**Built** — [1-2 line summary of what was built]
+**Phases** — [executed phases, e.g. 1-2, 4-13]
+**Verification** — [final verification outcome]
+**E2E verdict** — [if run] / skipped
+**User guide** — [path] / not generated
+
+**Artifacts**
+- `verification/e2e-verification-report.md` [conditional]
+- `documentation/user-guide.md` [conditional]
 ```
 
 ### Results-acceptance question
@@ -110,11 +108,11 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-Workflow is finished; no further owflow phase command is required. Suggested follow-ups:
+Workflow is finished; no further owflow phase command is required. All follow-ups are `optional` (post-completion quality work, none advance phases):
 
-- `/owflow:reviews-pragmatic <task-path>` — post-completion over-engineering check
-- `/owflow:standards-update "<lesson learned>"` — capture any new patterns as standards
+- `/owflow:reviews-pragmatic <task-path>` — `optional` — post-completion over-engineering / pragmatism check; does not advance phases
+- `/owflow:standards-update "<lesson learned>"` — `optional` — captures any new patterns as project standards; does not advance phases
 
-**Other options**: commit the changes using the provided message template; open a PR.
+**Other options**: commit the changes using the provided message template; open a PR. (Manual steps outside owflow.)
 
 Then STOP.

@@ -102,17 +102,15 @@ After deriving the handoff, present the results box, ask how to proceed, then ha
 
 #### Results box
 
-```
-═══════════════════════════════════════════════════════
-  DEVELOPMENT TASK READY: <task name>
-═══════════════════════════════════════════════════════
-  Task:           [description]
-  Directory:      <task-path>
-  Next phase:     [N — phase name]
-  [Resume note: completed phases / fresh task]
+```markdown
+## ✅ DEVELOPMENT TASK READY — <task name>
 
-  → /owflow:<subskill> <task-path>
-═══════════════════════════════════════════════════════
+**Task** — [description]
+**Directory** — `<task-path>`
+**Next phase** — [N — phase name]
+[Resume note: completed phases / fresh task]
+
+**Next ▸** `/owflow:<subskill> <task-path>`
 ```
 
 #### Acceptance question

@@ -59,18 +59,16 @@ Present results, get user confirmation, then hand off (see `orchestrator-pattern
 
 ### Results box
 
-```
-═══════════════════════════════════════════════════════
-  DEV PLAN COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Task groups:   [N]
-  Total steps:   [M]
-  Dependencies:  [key ordering constraints, 1-2 lines]
-  Complexity:    [estimated complexity]
+```markdown
+## ✅ DEV PLAN COMPLETE — <task name>
 
-  Artifacts:
-    - implementation/implementation-plan.md
-═══════════════════════════════════════════════════════
+**Task groups** — [N]
+**Total steps** — [M]
+**Dependencies** — [key ordering constraints, 1-2 lines]
+**Complexity** — [estimated complexity]
+
+**Artifacts**
+- `implementation/implementation-plan.md`
 ```
 
 ### Results-acceptance question
@@ -84,10 +82,10 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-- `→ /owflow:dev-implement <task-path>`
+- `→ /owflow:dev-implement <task-path>` — `required` next: executes the plan task group by task group via subagents (includes the TDD green gate when a red gate exists). Remaining after: verify → finalize.
 
 **Other options**:
 
-- `/owflow:goal-development <task-path>` — continue remaining phases in one loop
+- `/owflow:goal-development <task-path>` — `optional` shortcut: runs all remaining phases in one loop (implement → verify → finalize)
 
 Then STOP.

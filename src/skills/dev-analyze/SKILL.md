@@ -72,21 +72,19 @@ Present results, get user confirmation, then hand off (see `orchestrator-pattern
 
 ### Results box
 
-```
-═══════════════════════════════════════════════════════
-  DEV ANALYZE COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Task type:     [detected type]
-  Risk level:    [risk_level from state]
-  Characteristics: [key characteristics — TDD gate, E2E, user docs]
-  Scope decisions: [decisions made / "none needed"]
+```markdown
+## ✅ DEV ANALYZE COMPLETE — <task name>
 
-  Artifacts:
-    - analysis/codebase-analysis.md
-    - analysis/clarifications.md
-    - analysis/gap-analysis.md
-    - analysis/scope-clarifications.md   [conditional]
-═══════════════════════════════════════════════════════
+**Task type** — [detected type]
+**Risk level** — [risk_level from state]
+**Characteristics** — [key characteristics — TDD gate, E2E, user docs]
+**Scope decisions** — [decisions made / "none needed"]
+
+**Artifacts**
+- `analysis/codebase-analysis.md`
+- `analysis/clarifications.md`
+- `analysis/gap-analysis.md`
+- `analysis/scope-clarifications.md` [conditional]
 ```
 
 ### Results-acceptance question
@@ -100,14 +98,16 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-Read `task_context.task_characteristics` from state and print the suggested command:
+Read `task_context.task_characteristics` from state and print the suggested command with annotations (see `orchestrator-patterns.md` Section 9):
 
 - `has_reproducible_defect: true` → `→ /owflow:dev-tdd-red <task-path>`
+  What: writes a failing test that reproduces the defect — `required` before the spec when a reproducible defect exists; the test becomes the spec's acceptance criterion.
 - otherwise → `→ /owflow:dev-spec <task-path>`
+  What: turns the analysis into a user-approved specification — `required` next phase. There is no shorter alternative path: spec → plan → implement → verify → finalize.
 
 **Other options**:
 
-- `/owflow:goal-development <task-path>` — continue remaining phases in one loop
-- `/owflow:dev-spec <task-path>` — skip TDD gate manually (not recommended for reproducible defects)
+- `/owflow:goal-development <task-path>` — `optional` shortcut: runs all remaining phases in one loop (red gate if flagged → spec → plan → implement → verify → finalize)
+- `/owflow:dev-spec <task-path>` — `optional` — skips the TDD gate manually (not recommended for reproducible defects; remaining plan unchanged: plan → implement → verify → finalize)
 
 Then STOP.

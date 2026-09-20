@@ -315,24 +315,22 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 **Results box** (present regardless of whether docs ran):
 
-```
-═══════════════════════════════════════════════════════
-  MIGRATION COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Migration type:  [code / data / architecture]
-  Strategy:        [incremental / big-bang / dual-run / phased]
-  Verification:    [final verdict]
-  Rollback plan:   [path / status]
-  Migration guide: [path] / not generated
+```markdown
+## ✅ MIGRATION COMPLETE — <task name>
 
-  Artifacts:
-    - analysis/current-state-analysis.md
-    - analysis/target-state-plan.md
-    - analysis/rollback-plan.md
-    - implementation/work-log.md
-    - verification/implementation-verification.md
-    - documentation/migration-guide.md   [conditional]
-═══════════════════════════════════════════════════════
+**Migration type** — [code / data / architecture]
+**Strategy** — [incremental / big-bang / dual-run / phased]
+**Verification** — [final verdict]
+**Rollback plan** — [path / status]
+**Migration guide** — [path] / not generated
+
+**Artifacts**
+- `analysis/current-state-analysis.md`
+- `analysis/target-state-plan.md`
+- `analysis/rollback-plan.md`
+- `implementation/work-log.md`
+- `verification/implementation-verification.md`
+- `documentation/migration-guide.md` [conditional]
 ```
 
 **Results-acceptance question** — use `question` — "Are these results correct?" with options:

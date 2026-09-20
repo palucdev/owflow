@@ -187,18 +187,16 @@ Present final results and close (Exit Gate contract, `orchestrator-patterns.md` 
 
 **Results box**:
 
-```
-═══════════════════════════════════════════════════════
-  STANDARDS DISCOVER COMPLETE
-═══════════════════════════════════════════════════════
-  Sources analyzed: [config files, code samples, docs, PRs]
-  Applied:          [created] created / [updated] updated ([total] active)
-  Skipped:          [count — low confidence / declined]
+```markdown
+## ✅ STANDARDS DISCOVER COMPLETE
 
-  Artifacts:
-    - .owflow/docs/INDEX.md
-    - .owflow/docs/standards/<category>/<topic>.md  [per applied standard]
-═══════════════════════════════════════════════════════
+**Sources analyzed** — [config files, code samples, docs, PRs]
+**Applied** — [created] created / [updated] updated ([total] active)
+**Skipped** — [count — low confidence / declined]
+
+**Artifacts**
+- `.owflow/docs/INDEX.md`
+- `.owflow/docs/standards/<category>/<topic>.md` [per applied standard]
 ```
 
 **Results-acceptance question** — use `question` — "Are these results correct?" with options:

@@ -75,21 +75,19 @@ Present results, get user confirmation, then hand off (see `orchestrator-pattern
 
 ### Results box
 
-```
-═══════════════════════════════════════════════════════
-  DEV IMPLEMENT COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Task groups:    [completed groups / total]
-  Files changed:  [count + key files, 1-3 lines]
-  Tests:          [incremental test results]
-  Green gate:     [PASSED / not required (no red gate)]
-  Known issues:   [deferred items / "none"]
+```markdown
+## ✅ DEV IMPLEMENT COMPLETE — <task name>
 
-  Artifacts:
-    - implemented code
-    - implementation/work-log.md
-    - implementation/tdd-green-gate.md   [conditional]
-═══════════════════════════════════════════════════════
+**Task groups** — [completed groups / total]
+**Files changed** — [count + key files, 1-3 lines]
+**Tests** — [incremental test results]
+**Green gate** — [✅ PASSED / not required (no red gate)]
+**Known issues** — [deferred items / "none"]
+
+**Artifacts**
+- implemented code
+- `implementation/work-log.md`
+- `implementation/tdd-green-gate.md` [conditional]
 ```
 
 ### Results-acceptance question
@@ -103,10 +101,10 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-- `→ /owflow:dev-verify <task-path>`
+- `→ /owflow:dev-verify <task-path>` — `required` before commit: runs the verification pipeline (completeness, code review with a bounded fix loop) and must pass before finalization. Remaining after: finalize.
 
 **Other options**:
 
-- `/owflow:goal-development <task-path>` — continue remaining phases in one loop
+- `/owflow:goal-development <task-path>` — `optional` shortcut: runs all remaining phases in one loop (verify → finalize)
 
 Then STOP.

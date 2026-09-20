@@ -47,14 +47,12 @@ Reuse existing classes and tokens before inventing anything. If the user asks fo
 7. **Verify**: re-open the output and confirm every `class="hr-..."` you emitted exists in the inlined CSS.
 8. **Exit Gate**: present the results box, then confirm (Exit Gate contract, `orchestrator-patterns.md` Section 9):
 
-```
-═══════════════════════════════════════════════════════
-  HTML RENDER COMPLETE
-═══════════════════════════════════════════════════════
-  Source:   <source.md>
-  Output:   <basename>.html (single file, self-contained)
-  Sections: [count] · Diagrams: [count, if any]
-═══════════════════════════════════════════════════════
+```markdown
+## ✅ HTML RENDER COMPLETE
+
+**Source** — `<source.md>`
+**Output** — `<basename>.html` (single file, self-contained)
+**Sections** — [count] · **Diagrams** — [count, if any]
 ```
 
 Use `question` — "Is the rendering correct?" with options: **Accept** (open the file in a browser and stop) / **Adjust** (user names layout/section issues; fix and re-present) / **Discuss** (explain a mapping or class choice) / **Stop here**. Note: visual correctness can only be confirmed by the user in a browser — offer to open it via the user's preferred `open`/`xdg-open` command.

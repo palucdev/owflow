@@ -65,15 +65,13 @@ When dev-finalize completes (`task.status: completed`):
 1. Mark the final task item completed via `TaskUpdate`.
 2. Present the workflow results box:
 
-```
-═══════════════════════════════════════════════════════
-  DEVELOPMENT WORKFLOW COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Phases:         [executed phase ranges]
-  Verification:   [final verification outcome]
-  Artifacts:      [task directory artifact summary]
-  Commit message: [template]
-═══════════════════════════════════════════════════════
+```markdown
+## ✅ DEVELOPMENT WORKFLOW COMPLETE — <task name>
+
+**Phases** — [executed phase ranges]
+**Verification** — [final verification outcome]
+**Artifacts** — [task directory artifact summary]
+**Commit message** — [template]
 ```
 
 3. Use `question` — "Are these results correct?" with options: **Accept** (print follow-up suggestions: `/owflow:reviews-pragmatic <task-path>`, `/owflow:standards-update "<lesson>"`, commit/PR, then end) / **Adjust** (re-open the relevant `/owflow:dev-*` skill) / **Discuss** (walk through the summary) / **Stop here** (print the resume command and end).

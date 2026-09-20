@@ -121,22 +121,20 @@ Present results, get user confirmation, then hand off (see `orchestrator-pattern
 
 ### Results box
 
-```
-═══════════════════════════════════════════════════════
-  DEV VERIFY COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Overall status: [passed / passed_with_issues / failed]
-  Issues found:   [total] ([critical] C / [warning] W / [info] I)
-  Fixed:          [count]
-  Remaining:      [by severity]
+```markdown
+## ✅ DEV VERIFY COMPLETE — <task name>
 
-  Artifacts:
-    - verification/implementation-verification.md
-    - verification/code-review-report.md        [if run]
-    - verification/pragmatic-review.md          [if run]
-    - verification/reality-check.md             [if run]
-    - verification/production-readiness-report.md [if run]
-═══════════════════════════════════════════════════════
+**Overall status** — [✅ passed / ⚠ passed_with_issues / ❌ failed]
+**Issues found** — [total] ([critical] C / [warning] W / [info] I)
+**Fixed** — [count]
+**Remaining** — [by severity]
+
+**Artifacts**
+- `verification/implementation-verification.md`
+- `verification/code-review-report.md` [if run]
+- `verification/pragmatic-review.md` [if run]
+- `verification/reality-check.md` [if run]
+- `verification/production-readiness-report.md` [if run]
 ```
 
 ### Results-acceptance question
@@ -150,11 +148,11 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-- `→ /owflow:dev-finalize <task-path>`
+- `→ /owflow:dev-finalize <task-path>` — `required` to close the workflow: conditional E2E verification, optional user documentation, and commit guidance (whether E2E/docs run is decided inside based on task characteristics). Remaining after: none — workflow ends.
 
 **Other options**:
 
-- `/owflow:reviews-code <task-path>` / `/owflow:reviews-pragmatic <task-path>` — standalone re-runs of individual reviews
-- `/owflow:goal-development <task-path>` — finish remaining phases in one loop
+- `/owflow:reviews-code <task-path>` / `/owflow:reviews-pragmatic <task-path>` — `optional` — standalone re-runs of individual reviews; do not advance phases
+- `/owflow:goal-development <task-path>` — `optional` shortcut: finishes the remaining phases in one loop (finalize)
 
 Then STOP.

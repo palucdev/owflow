@@ -353,20 +353,18 @@ question - Display executive summary: total issues found, issues fixed, issues r
 2. Update task status to "completed"
 3. **Results box**:
 
-```
-═══════════════════════════════════════════════════════
-  PERFORMANCE WORKFLOW COMPLETE: <task name>
-═══════════════════════════════════════════════════════
-  Bottlenecks found:      [count by severity]
-  Optimizations applied:  [count + key ones]
-  Verification:           [final verdict]
-  Estimated improvement:  [range from analysis]
+```markdown
+## ✅ PERFORMANCE WORKFLOW COMPLETE — <task name>
 
-  Artifacts:
-    - analysis/performance-analysis.md
-    - implementation/work-log.md
-    - verification/implementation-verification.md
-═══════════════════════════════════════════════════════
+**Bottlenecks found** — [count by severity]
+**Optimizations applied** — [count + key ones]
+**Verification** — [final verdict]
+**Estimated improvement** — [range from analysis]
+
+**Artifacts**
+- `analysis/performance-analysis.md`
+- `implementation/work-log.md`
+- `verification/implementation-verification.md`
 ```
 
 4. **Results-acceptance question** — use `question` — "Are these results correct?" with options:

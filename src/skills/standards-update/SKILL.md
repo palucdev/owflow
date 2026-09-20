@@ -65,19 +65,17 @@ Wait for docs-operator to complete, then immediately proceed to SYNC STEP 5.
 
 Present results and close (Exit Gate contract, `orchestrator-patterns.md` Section 9):
 
-```
-═══════════════════════════════════════════════════════
-  STANDARDS SYNC COMPLETE
-═══════════════════════════════════════════════════════
-  Added:     [added count]
-  Updated:   [updated count]
-  Skipped:   [skipped count]
-  Total:     [total]
+```markdown
+## ✅ STANDARDS SYNC COMPLETE
 
-  Artifacts:
-    - .owflow/docs/standards/<category>/<file>.md  [per synced standard]
-    - .owflow/docs/INDEX.md
-═══════════════════════════════════════════════════════
+**Added** — [added count]
+**Updated** — [updated count]
+**Skipped** — [skipped count]
+**Total** — [total]
+
+**Artifacts**
+- `.owflow/docs/standards/<category>/<file>.md` [per synced standard]
+- `.owflow/docs/INDEX.md`
 ```
 
 Use `question` — "Are these results correct?" with options:
@@ -178,18 +176,16 @@ Wait for docs-operator to complete, then immediately proceed to Phase 5.
 
 **Results box**:
 
-```
-═══════════════════════════════════════════════════════
-  STANDARDS UPDATE COMPLETE
-═══════════════════════════════════════════════════════
-  Action:         [created / updated] standards/<category>/<name>.md
-  Practices:      [count added/changed]
-  INDEX/AGENTS:   [integration status]
+```markdown
+## ✅ STANDARDS UPDATE COMPLETE
 
-  Artifacts:
-    - .owflow/docs/standards/<category>/<name>.md
-    - .owflow/docs/INDEX.md
-═══════════════════════════════════════════════════════
+**Action** — [created / updated] `standards/<category>/<name>.md`
+**Practices** — [count added/changed]
+**INDEX/AGENTS** — [integration status]
+
+**Artifacts**
+- `.owflow/docs/standards/<category>/<name>.md`
+- `.owflow/docs/INDEX.md`
 ```
 
 **Results-acceptance question** — use `question` — "Are these results correct?" with options:

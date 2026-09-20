@@ -92,22 +92,17 @@ Present results, get user confirmation, then hand off (see `orchestrator-pattern
 
 ### Results box
 
-```
-═══════════════════════════════════════════════════════
-  DEV SPEC COMPLETE: <spec title>
-═══════════════════════════════════════════════════════
-  Approach:        [architecture approach in 1 line]
-  Scope:           [N included / M excluded items]
-  Requirements:    [count by kind]
-  Assumptions:     [count]
-  Audit verdict:   [pass / pass-with-concerns / fail / skipped]
+```markdown
+## ✅ DEV SPEC COMPLETE — <spec title>
 
-  Artifacts:
-    - analysis/technical-clarifications.md   [conditional]
-    - analysis/requirements.md
-    - implementation/spec.md
-    - verification/spec-audit.md             [conditional]
-═══════════════════════════════════════════════════════
+**Approach** — [architecture approach in 1 line]
+**Scope** — [N included / M excluded]
+**Audit** — [✅ pass / ⚠ pass-with-concerns / ❌ fail / skipped]: [0 critical / N major / N minor]
+
+**Artifacts**
+- `analysis/requirements.md`
+- `implementation/spec.md`
+- `verification/spec-audit.md` [conditional]
 ```
 
 ### Results-acceptance question
@@ -121,11 +116,11 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-- `→ /owflow:dev-plan <task-path>`
+- `→ /owflow:dev-plan <task-path>` — `required` next: breaks the approved spec into grouped, dependency-ordered task groups with test-driven steps. Remaining after: implement → verify → finalize.
 
 **Other options**:
 
-- `/owflow:reviews-spec-audit <task-path>` — standalone re-audit of the spec
-- `/owflow:goal-development <task-path>` — continue remaining phases in one loop
+- `/owflow:reviews-spec-audit <task-path>` — `optional` — standalone spec re-audit; does not advance phases (verify results, then re-run `/owflow:dev-spec` adjustments if needed)
+- `/owflow:goal-development <task-path>` — `optional` shortcut: runs all remaining phases in one loop (plan → implement → verify → finalize)
 
 Then STOP.

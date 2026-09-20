@@ -186,16 +186,14 @@ Per the shared contract's exception for no-follow-up skills, present the results
 
 **Results box**:
 
-```
-═══════════════════════════════════════════════════════
-  AGENTS.MD COMPLETE: <path>
-═══════════════════════════════════════════════════════
-  Scope:     [repo-level / directory-level]
-  Words:     [<word count> body words]
-  Sections:  [<1-line section order summary>]
+```markdown
+## ✅ AGENTS.MD COMPLETE — <path>
 
-  → <path written>
-═══════════════════════════════════════════════════════
+**Scope** — [repo-level / directory-level]
+**Words** — [<word count> body words]
+**Sections** — [<1-line section order summary>]
+
+**Written** — `<path>`
 ```
 
 Report to the user:

@@ -366,22 +366,20 @@ question - "Design complete. Continue to output generation?"
 1. Inventory all generated outputs: `outputs/research-report.md` (always), plus conditional: `solution-exploration.md`, `high-level-design.md`, `decision-log.md`
 2. **Results box**:
 
-```
-═══════════════════════════════════════════════════════
-  RESEARCH COMPLETE: <research question>
-═══════════════════════════════════════════════════════
-  Type:           [research type]
-  Confidence:     [confidence level]
-  Phases run:     [e.g. 1, 3-4 brainstorm, 5 design]
-  Key findings:   [2-3 one-line highlights]
-  Decisions:      [count of ADRs, if design ran]
+```markdown
+## ✅ RESEARCH COMPLETE — <research question>
 
-  Artifacts:
-    - outputs/research-report.md
-    - outputs/solution-exploration.md   [conditional]
-    - outputs/high-level-design.md      [conditional]
-    - outputs/decision-log.md           [conditional]
-═══════════════════════════════════════════════════════
+**Type** — [research type]
+**Confidence** — [confidence level]
+**Phases run** — [e.g. 1, 3-4 brainstorm, 5 design]
+**Key findings** — [2-3 one-line highlights]
+**Decisions** — [count of ADRs, if design ran]
+
+**Artifacts**
+- `outputs/research-report.md`
+- `outputs/solution-exploration.md` [conditional]
+- `outputs/high-level-design.md` [conditional]
+- `outputs/decision-log.md` [conditional]
 ```
 
 3. **Results-acceptance question** — use `question` — "Are these results correct?" with options:
