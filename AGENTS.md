@@ -4,7 +4,7 @@ This plugin provides AI-powered Software Development Lifecycle (SDLC) capabiliti
 
 ## Platform: OpenCode
 
-This is the OpenCode variant of owflow. Key differences from Claude Code:
+This is the OpenCode plugin. Key platform conventions:
 
 - **Project instructions file**: `AGENTS.md` (this file).
 - **Skill invocation rule**: When a skill command is invoked (e.g., `/development`, `/flow-init`), you MUST
@@ -79,7 +79,7 @@ This plugin supports 4 workflow types that route to specialized orchestrators:
 
 ### Project Documentation Structure
 
-The plugin splits reference documentation (`.owflow/docs/`, stable) from development tasks (`.owflow/tasks/`, organized by workflow type: `development/`, `performance/`, `migrations/`, `research/`, plus quick-* dirs). See `.owflow/docs/INDEX.md` for the full layout, and `.owflow/tasks/` for the actual structure.
+The plugin splits reference documentation (`.owflow/docs/`, stable) from development tasks (`.owflow/tasks/`, organized by workflow type: `development/`, `performance/`, `migrations/`, `research/`, plus quick-\* dirs). See `.owflow/docs/INDEX.md` for the full layout, and `.owflow/tasks/` for the actual structure.
 
 **Core Principle**:
 
@@ -240,4 +240,3 @@ All orchestrators use `TaskCreate`/`TaskUpdate` for progress visibility (tool me
 - State file (`orchestrator-state.yml`) is source of truth for resume logic; the task system mirrors it for UX
 - Markdown checkboxes in `implementation-plan.md` remain the step-level source of truth
 - See individual orchestrator `skill.md` files for phase-specific task tables
-
