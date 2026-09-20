@@ -151,6 +151,17 @@ For smaller tasks that don't need a full workflow:
 
 All quick commands create lightweight task directories under `.owflow/tasks/quick-{type}/` with a `task.yml` for traceability.
 
+### Fine-Grained Control: Development Subskills
+
+The full `/development` workflow consists of standalone subskills — `/dev-analyze`, `/dev-tdd-red`, `/dev-spec`, `/dev-plan`, `/dev-implement`, `/dev-verify`, `/dev-finalize` — which you can also invoke individually. Each accepts a task path, or just a task-directory identifier:
+
+```bash
+/dev-spec 2026-01-12-my-feature
+/dev-verify .owflow/tasks/development/2026-01-12-my-feature
+```
+
+If a subskill is invoked too early in the workflow (prerequisite phases not yet complete), it stops and tells you exactly which steps to run first, in order. If the workflow state doesn't exist yet, use `/development <description>` to start from scratch.
+
 ## Standards-Aware Development
 
 This is the key differentiator. Owflow doesn't just run workflows - it learns your project's conventions and enforces them:
@@ -176,7 +187,7 @@ TBD
 
 **Start workflows in a fresh session.** This is especially useful when chaining workflows (e.g., research → development). Research artifacts already contain all the context needed, so a clean session avoids noise from prior conversation.
 
-**Chain workflows by passing a task folder.** If you've completed a research workflow and want to build on those results, pass the task folder directly:
+**Chain workflows by passing a task folder.** If you've completed a research workflow and want to build on those results, pass the task folder directly — by path, or just by its directory identifier if the name is unique:
 
 ```bash
 /development .owflow/tasks/research/2026-01-12-oauth-research

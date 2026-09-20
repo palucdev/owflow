@@ -9,25 +9,25 @@ user-invocable: true
 
 Lightweight TDD-driven bug fix workflow with planning mode. Analyze the bug, present a fix plan for approval, then reproduce with a failing test, fix, and verify. No orchestrator state, no subagents. Creates lightweight task directory for artifact anchoring.
 
-For complex bugs that grow beyond a quick fix, suggests escalating to the full development workflow (`/development`).
+For complex bugs that grow beyond a quick fix, suggests escalating to the full development workflow (`/owflow:development`).
 
 ## Usage
 
 ```bash
-/quick-bugfix "Login form submits twice on slow connections"
-/quick-bugfix "API returns 500 when email contains special characters"
-/quick-bugfix "Dark mode toggle doesn't persist after refresh"
+/owflow:quick-bugfix "Login form submits twice on slow connections"
+/owflow:quick-bugfix "API returns 500 when email contains special characters"
+/owflow:quick-bugfix "Dark mode toggle doesn't persist after refresh"
 ```
 
 ## When to Use
 
-**Use `/quick-bugfix` when:**
+**Use `/owflow:quick-bugfix` when:**
 
 - Bug is reasonably scoped and reproducible
 - You have a clear description of expected vs actual behavior
 - Fix likely touches a small number of files
 
-**Use `/development` instead when:**
+**Use `/owflow:development` instead when:**
 
 - Bug requires architectural changes
 - Multiple subsystems are involved
@@ -80,7 +80,7 @@ For complex bugs that grow beyond a quick fix, suggests escalating to the full d
 **If not exists:**
 
 - Note that no standards are available
-- Suggest running `/flow-init` in completion message
+- Suggest running `/owflow:flow-init` in completion message
 
 ### Standards Reading Enforcement (MANDATORY)
 
@@ -129,12 +129,15 @@ Assess whether this bug exceeds quick-fix scope. If **2 or more** of these signa
 # Bug Analysis
 
 ## Root Cause
+
 [Root cause hypothesis with evidence — file paths, code references]
 
 ## Affected Files
+
 - `path/to/file` — reason
 
 ## Complexity Assessment
+
 - [ ] Changes span 5+ files across multiple modules
 - [ ] Requires database schema changes
 - [ ] Multiple valid fix approaches with architectural trade-offs
@@ -144,9 +147,11 @@ Assess whether this bug exceeds quick-fix scope. If **2 or more** of these signa
 Signals detected: X of 5
 
 ## Test Strategy
+
 [How the bug will be reproduced with a failing test]
 
 ## Standards Referenced
+
 - [standard file]: [key guideline applied]
 ```
 
@@ -161,7 +166,7 @@ Use question:
 
 1. Ensure `analysis/findings.md` is written (above)
 2. Update `task.yml`: set `status: escalated`, `escalation_reason: "[signals detected]"`, `updated: [now]`
-3. Tell the user: "Run `/development .owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name` to continue with full workflow."
+3. Tell the user: "Run `/owflow:development .owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name` to continue with full workflow."
 4. Do NOT set `escalated_to` — the development orchestrator will set it
 5. `summary.md` is NOT written on escalation
 
@@ -194,7 +199,7 @@ Standards context from Step 3 and analysis from Step 4 MUST inform the plan.
 ## Applicable Standards
 
 [List each standard file read, with key guidelines extracted from each.
-If no standards exist: "No AI SDLC standards found. Consider running `/flow-init`."]
+If no standards exist: "No AI SDLC standards found. Consider running `/owflow:flow-init`."]
 
 ## Standards Compliance Checklist
 
@@ -252,7 +257,7 @@ If any section is missing, add it before asking for user approval.
 **If still failing after 3 attempts:**
 
 - Stop and present findings to the user
-- Suggest escalating to `/development` for a more thorough approach
+- Suggest escalating to `/owflow:development` for a more thorough approach
 
 ### Step 8: Summary
 
@@ -266,24 +271,52 @@ If any section is missing, add it before asking for user approval.
 **Status**: completed
 
 ## What Was Done
+
 [Root cause and fix description]
 
 ## Files Modified
+
 - `path/to/file`
 
 ## Standards Applied
+
 - [standard]: [guideline]
 
 ## Tests
+
 - [test file] — [result]
 
 ## Commit Suggestion
+
 [conventional commit message]
 ```
 
 **Update `task.yml`**: set `status: completed`, `updated: [now]`.
 
 **Post-implementation: verify standards compliance using the checklist from the plan file.**
+
+### Step 9: Closing Ritual
+
+Present results and next steps:
+
+```
+✓ Bug fixed — <task-path>
+
+Results:
+  summary.md          — root cause, fix, standards applied, commit suggestion
+  analysis/findings.md — root cause analysis
+  task.yml            — status: completed
+
+Next steps:
+  → Commit using the suggested message from summary.md
+
+Other options:
+  /owflow:quick-plan   — plan the next task
+  /owflow:development  — full workflow for a bigger follow-up feature
+  /owflow:reviews-code <task-path> — deeper review of the fix
+```
+
+Then STOP.
 
 ---
 
@@ -306,6 +339,6 @@ If any section is missing, add it before asking for user approval.
 Proceed with the bug fix normally, then note:
 
 ```
-"No AI SDLC standards found. Consider running `/flow-init` to initialize
+"No AI SDLC standards found. Consider running `/owflow:flow-init` to initialize
 project documentation and coding standards for better consistency."
 ```

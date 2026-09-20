@@ -1,5 +1,5 @@
 ---
-name: flow-init
+name: owflow:flow-init
 description: Initialize AI SDLC framework with intelligent project analysis and documentation generation
 argument-hint: [--standards-from=PATH]
 ---
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /flow-init.
+WHY: The user explicitly chose this workflow by using /owflow:flow-init.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

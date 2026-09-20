@@ -1,5 +1,5 @@
 ---
-name: quick-dev
+name: owflow:quick-dev
 description: Implement task directly with AI SDLC standards awareness (no planning mode)
 ---
 
@@ -10,29 +10,29 @@ Implement a task directly without entering planning mode, while still applying p
 ## Usage
 
 ```bash
-/quick-dev [task description]
+/owflow:quick-dev [task description]
 ```
 
 ## Examples
 
 ```bash
-/quick-dev "Add a logout button to the navbar"
-/quick-dev "Fix the typo in the error message"
-/quick-dev "Update the API endpoint to accept JSON"
+/owflow:quick-dev "Add a logout button to the navbar"
+/owflow:quick-dev "Fix the typo in the error message"
+/owflow:quick-dev "Update the API endpoint to accept JSON"
 ```
 
 ---
 
 ## When to Use
 
-**Use `/quick-dev` when:**
+**Use `/owflow:quick-dev` when:**
 
 - Task is clear and well-defined
 - You know what needs to be done
 - No architectural decisions needed
 - Quick fixes, small features, or straightforward changes
 
-**Use `/quick-plan` instead when:**
+**Use `/owflow:quick-plan` instead when:**
 
 - Task scope is uncertain
 - Multiple implementation approaches possible
@@ -82,7 +82,7 @@ Implement a task directly without entering planning mode, while still applying p
 **If not exists:**
 
 - Note that no standards are available
-- Suggest running `/flow-init` in completion message
+- Suggest running `/owflow:flow-init` in completion message
 
 ### Standards Reading Enforcement (MANDATORY)
 
@@ -177,6 +177,6 @@ Implement a task directly without entering planning mode, while still applying p
 Proceed with implementation normally, then note:
 
 ```
-"No AI SDLC standards found. Consider running `/flow-init` to initialize
+"No AI SDLC standards found. Consider running `/owflow:flow-init` to initialize
 project documentation and coding standards for better consistency."
 ```

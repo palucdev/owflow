@@ -1,5 +1,5 @@
 ---
-name: research
+name: owflow:research
 description: Orchestrates comprehensive research workflows from question definition through findings documentation. Handles technical, requirements, literature, and mixed research types with adaptive methodology, multi-source gathering, pattern synthesis, and evidence-based reporting. Supports standalone research tasks and embedded research phase in other workflows.
 argument-hint: [task description]
 ---
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /research.
+WHY: The user explicitly chose this workflow by using /owflow:research.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

@@ -7,7 +7,7 @@ This plugin provides AI-powered Software Development Lifecycle (SDLC) capabiliti
 This is the OpenCode plugin. Key platform conventions:
 
 - **Project instructions file**: `AGENTS.md` (this file).
-- **Skill invocation rule**: When a skill command is invoked (e.g., `/development`, `/flow-init`), you MUST
+- **Skill invocation rule**: When a skill command is invoked (e.g., `/owflow:development`, `/owflow:flow-init`), you MUST
   invoke it via the `skill` tool as your FIRST action. No exceptions. Do not
   analyze the task first, do not decide it's "straightforward", do not substitute
   your own approach. The user chose this workflow intentionally.
@@ -219,12 +219,15 @@ Skills live in `src/skills/<name>/SKILL.md` — read the frontmatter `descriptio
 
 ## Available Commands
 
-Slash commands are thin wrappers over skills; full usage lives in `commands/` and `skills/*/SKILL.md`. Documented commands: `/development`, `/performance`, `/migration`, `/research` (workflow), `/flow-init`, `/standards-update`, `/standards-discover` (setup/standards), `/reviews-*` (review & audit), `/quick-plan`, `/quick-dev`, `/quick-bugfix` (quick), plus content & visualization commands. Auto-generated OpenCode commands are built from `user-invocable: true` skill frontmatter; the `work`, `quick-*`, and `reviews-*` commands are manually maintained — edit the source command files, not this list.
+Slash commands are thin wrappers over skills; full usage lives in `commands/` and `skills/*/SKILL.md`. All slash commands are namespaced `owflow:<name>` (frontmatter `name: owflow:<name>` in `src/commands/*.md`; skill `name:` fields stay UNPREFIXED — Skill-tool invocations always use bare skill names). Documented commands: `/owflow:goal-development`, `/owflow:development`, `/owflow:performance`, `/owflow:migration`, `/owflow:research` (workflow), `/owflow:dev-*` (development subskills: dev-analyze, dev-tdd-red, dev-spec, dev-plan, dev-implement, dev-verify, dev-finalize), `/owflow:flow-init`, `/owflow:standards-update`, `/owflow:standards-discover` (setup/standards), `/owflow:reviews-*` (review & audit), `/owflow:quick-plan`, `/owflow:quick-dev`, `/owflow:quick-bugfix` (quick), plus content & visualization commands. Auto-generated OpenCode commands are built from `user-invocable: true` skill frontmatter; the `work`, `quick-*`, `reviews-*`, and `dev-*` commands are manually maintained — edit the source command files, not this list.
 
 Key usage rules:
 
-- All orchestrators support `--from=phase` (resume point); pass a task description to start new or a task path to resume.
-- `/development "desc" --research=<research-task-path>` (or just the research task path, auto-detected) starts development informed by completed research; research context flows through ALL phases without skipping any, artifacts copied to `analysis/research-context/`.
+- All orchestrators support `--from=phase` (resume point); pass a task description to start new or a task path/identifier (directory name under `.owflow/tasks/<type>/`) to resume.
+- `/owflow:development "desc" --research=<research-task-path>` (or just the research task path, auto-detected) starts development informed by completed research; research context flows through ALL phases without skipping any, artifacts copied to `analysis/research-context/`.
+- Development has two modes sharing one state file: `/owflow:goal-development` runs all dev-* subskills in one session with `question` gates; `/owflow:development` hands off one subskill per invocation. Mix both modes on a single task freely.
+- Every dev-* subskill is standalone and can be invoked at any time. Each resolves its task from a full path or an identifier (directory name under `.owflow/tasks/development/`), never auto-picking a task. If the prerequisite phases are not complete (or no argument resolves to a task), it STOPs and prints the ordered prerequisite steps with the exact commands to run each, plus a hint to start fresh via `/owflow:development <description>`.
+- Every dev-* subskill ends with a closing ritual: results (artifacts written) + suggested next command. Subskills SUGGEST the next command and stop — never auto-chain.
 
 ## Available Subagents
 

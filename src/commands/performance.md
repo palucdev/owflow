@@ -1,5 +1,5 @@
 ---
-name: performance
+name: owflow:performance
 description: Orchestrates performance optimization workflows using static code analysis to identify bottlenecks (N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, memory leaks). Accepts optional user-provided profiling data. Reuses standard specification, planning, implementation, and verification phases.
 argument-hint: [task description]
 ---
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /performance.
+WHY: The user explicitly chose this workflow by using /owflow:performance.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

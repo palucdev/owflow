@@ -1,5 +1,5 @@
 ---
-name: work
+name: owflow:work
 description: Unified entry point — auto-classifies tasks and routes to appropriate workflow. ALWAYS execute when invoked via slash command.
 ---
 
@@ -12,7 +12,7 @@ Auto-classifies tasks and routes to the appropriate workflow orchestrator. Suppo
 ## Usage
 
 ```bash
-/work [task description | task folder path | issue identifier]
+/owflow:work [task description | task folder path | issue identifier]
 ```
 
 ### Input Types
@@ -31,18 +31,18 @@ Auto-classifies tasks and routes to the appropriate workflow orchestrator. Suppo
 
 ```bash
 # Resume existing task
-/work ".owflow/tasks/development/2025-10-23-login-timeout"
-/work "2025-10-26-user-auth"
+/owflow:work ".owflow/tasks/development/2025-10-23-login-timeout"
+/owflow:work "2025-10-26-user-auth"
 
 # New task (auto-classifies)
-/work "Fix login timeout error on mobile devices"
-/work "Add user authentication with email/password"
-/work "Improve dashboard loading performance"
+/owflow:work "Fix login timeout error on mobile devices"
+/owflow:work "Add user authentication with email/password"
+/owflow:work "Improve dashboard loading performance"
 
 # From issue tracker
-/work "#456"
-/work "PROJ-123"
-/work "AB#789"
+/owflow:work "#456"
+/owflow:work "PROJ-123"
+/owflow:work "AB#789"
 ```
 
 ## How It Works
@@ -224,9 +224,9 @@ Then route to selected workflow using Skill tool.
 ```
 Display:
 "Task cancelled. You can:
-- Run /work again when ready
+- Run /owflow:work again when ready
 - Use specific workflow commands directly:
-  /development, /performance, etc."
+  /owflow:development, /owflow:performance, etc."
 ```
 
 ---
@@ -246,7 +246,7 @@ Display:
 
 ### With Task Classifier
 
-The `/work` command delegates classification to the task-classifier subagent via Task tool, which:
+The `/owflow:work` command delegates classification to the task-classifier subagent via Task tool, which:
 
 - Fetches issue details from GitHub/Jira/Azure DevOps (via MCP, CLI tools, or WebFetch)
 - Analyzes codebase context for better classification

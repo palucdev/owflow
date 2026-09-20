@@ -268,7 +268,7 @@ issue_counts:
 
 ## Integration
 
-**Invoked by**: implementation-verifier (Phase 3), performance orchestrator (Phase 4), standalone via `/reviews-production-readiness` command
+**Invoked by**: implementation-verifier (Phase 3), performance orchestrator (Phase 4), standalone via `/owflow:reviews-production-readiness` command
 
 **Prerequisites**:
 

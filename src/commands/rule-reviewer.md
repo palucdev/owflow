@@ -1,5 +1,5 @@
 ---
-name: rule-reviewer
+name: owflow:rule-reviewer
 description: Score an AI rules file on 5 axes and produce concrete actionable fixes
 ---
 
@@ -15,7 +15,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /rule-reviewer.
+WHY: The user explicitly chose this workflow by using /owflow:rule-reviewer.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---
@@ -30,9 +30,9 @@ The only edit it may apply is a section reorder, and only with explicit user app
 ## Examples
 
 ```
-/rule-reviewer AGENTS.md
-/rule-reviewer .cursor/rules/api.mdc
-/rule-reviewer src/api/AGENTS.md
+/owflow:rule-reviewer AGENTS.md
+/owflow:rule-reviewer .cursor/rules/api.mdc
+/owflow:rule-reviewer src/api/AGENTS.md
 ```
 
 See `skills/rule-reviewer/SKILL.md` for complete workflow documentation.

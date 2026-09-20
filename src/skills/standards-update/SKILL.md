@@ -12,9 +12,9 @@ Update or create standards in `.owflow/docs/standards/` based on conversation co
 ## Usage
 
 ```bash
-/standards-update                                    # Detect from conversation
-/standards-update "always use React.memo for lists"  # From description
-/standards-update --from=/path/to/other-project      # Sync from another project
+/owflow:standards-update                                    # Detect from conversation
+/owflow:standards-update "always use React.memo for lists"  # From description
+/owflow:standards-update --from=/path/to/other-project      # Sync from another project
 ```
 
 ---
@@ -27,7 +27,7 @@ When `--from=PATH` is provided, the skill switches to **sync mode** — importin
 
 1. Resolve the path (absolute or relative to cwd)
 2. Check `PATH/.owflow/docs/standards/` exists. If not, inform the user and stop.
-3. Check `.owflow/docs/standards/` exists in the current project. If not, offer to run `/flow-init` first.
+3. Check `.owflow/docs/standards/` exists in the current project. If not, offer to run `/owflow:flow-init` first.
 
 ### SYNC STEP 2: Analyze Differences
 
@@ -156,4 +156,4 @@ Wait for docs-operator to complete, then immediately proceed to Phase 5.
 
 ## Prerequisites
 
-If `.owflow/docs/` doesn't exist, offer to run `/flow-init` first.
+If `.owflow/docs/` doesn't exist, offer to run `/owflow:flow-init` first.

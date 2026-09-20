@@ -118,7 +118,7 @@ Use this when a project doesn't have `.owflow/docs/` or needs documentation for 
      _Not initialized for this project. If you need frontend standards, you can:_
 
      - _Add them manually using the docs-manager skill_
-     - _Run `/standards-discover --scope=frontend` to auto-discover_
+     - _Run `/owflow:standards-discover --scope=frontend` to auto-discover_
      ```
 
 6. **MANDATORY - Update AGENTS.md:**
@@ -144,7 +144,7 @@ Use this when a project doesn't have `.owflow/docs/` or needs documentation for 
 **Note on Skipped Standards**: If standard categories are skipped during initialization, teams can add them later using:
 
 - "Add Documentation File" operation to add specific standards
-- `/standards-discover` command to auto-discover standards from codebase
+- `/owflow:standards-discover` command to auto-discover standards from codebase
 
 ---
 

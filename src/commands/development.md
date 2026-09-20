@@ -1,6 +1,6 @@
 ---
-name: development
-description: Unified orchestrator for all development tasks. ALWAYS execute when invoked — never skip for 'straightforward' tasks. Phases adapt based on detected task characteristics rather than predetermined types. Use for any development work that modifies code.
+name: owflow:development
+description: Development workflow dispatcher — initializes/resumes tasks, derives the next phase from state, and hands off to /owflow:dev-* subskills. Use /owflow:goal-development to run all phases in one loop.
 argument-hint: [task description]
 ---
 
@@ -17,20 +17,20 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /development.
+WHY: The user explicitly chose this workflow by using /owflow:development.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---
 
 ## About This Workflow
 
-Unified orchestrator for all development tasks. ALWAYS execute when invoked — never skip for 'straightforward' tasks. Phases adapt based on detected task characteristics rather than predetermined types. Use for any development work that modifies code.
+Development workflow **dispatcher** (handoff mode). The skill handles:
 
-The skill handles:
+- Task initialization/resume and state management (`orchestrator-state.yml`)
+- Research/quick-* context intake and flag handling
+- Deriving the next pending phase from state
+- Handing off to the matching `/owflow:dev-*` subskill, then stopping
 
-- Task directory creation and state management
-- Phase execution with interactive gates
-- Subagent delegation for specialized work
-- Pause/resume capability
+Run `/owflow:goal-development` instead for loop mode (all subskills in one session with gates).
 
-See `skills/development/SKILL.md` for complete workflow documentation.
+See `skills/development/SKILL.md` for the routing table and `skills/dev-*/SKILL.md` for phase documentation.

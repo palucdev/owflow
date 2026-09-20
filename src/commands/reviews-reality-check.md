@@ -1,5 +1,5 @@
 ---
-name: reviews-reality-check
+name: owflow:reviews-reality-check
 description: Comprehensive reality assessment of completed work to verify it actually works and is production-ready
 ---
 
@@ -68,19 +68,19 @@ The reality-assessor agent will:
 **Example 1**: Reality check before deployment
 
 ```
-User: /reviews-reality-check .owflow/tasks/development/2025-11-17-payment-processing/
+User: /owflow:reviews-reality-check .owflow/tasks/development/2025-11-17-payment-processing/
 ```
 
 **Example 2**: Verify claimed completion
 
 ```
-User: /reviews-reality-check .owflow/tasks/development/2025-11-17-login-timeout/
+User: /owflow:reviews-reality-check .owflow/tasks/development/2025-11-17-login-timeout/
 ```
 
 **Example 3**: Production readiness check
 
 ```
-User: /reviews-reality-check .owflow/tasks/development/2025-11-17-user-dashboard/ --production
+User: /owflow:reviews-reality-check .owflow/tasks/development/2025-11-17-user-dashboard/ --production
 ```
 
 ## What to Expect

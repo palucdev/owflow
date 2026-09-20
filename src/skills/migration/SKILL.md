@@ -355,7 +355,7 @@ Refer to the template [src/templates/orchestrator-state-migration.yml](../../tem
 
 Invoked via:
 
-- `/migration [description] [--type=TYPE]` (new)
-- `/migration [task-path] [--from=PHASE]` (resume)
+- `/owflow:migration [description] [--type=TYPE]` (new)
+- `/owflow:migration [task-path] [--from=PHASE]` (resume)
 
 Task directory: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`

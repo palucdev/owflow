@@ -1,5 +1,5 @@
 ---
-name: quick-plan
+name: owflow:quick-plan
 description: Enter planning mode with AI SDLC standards awareness
 ---
 
@@ -10,15 +10,15 @@ Enter OpenCode's planning mode for a task, with automatic discovery of project s
 ## Usage
 
 ```bash
-/quick-plan [task description]
+/owflow:quick-plan [task description]
 ```
 
 ## Examples
 
 ```bash
-/quick-plan "Add user authentication with email/password"
-/quick-plan "Refactor the payment processing module"
-/quick-plan
+/owflow:quick-plan "Add user authentication with email/password"
+/owflow:quick-plan "Refactor the payment processing module"
+/owflow:quick-plan
 ```
 
 ---
@@ -107,7 +107,7 @@ The planning mode will:
 
 **BLOCKING: Do NOT call ask user for approval until the plan file contains these sections:**
 
-1. **"## Applicable Standards"** — list each standard file that was read, with key guidelines extracted from each. If no standards exist, state: "No AI SDLC standards found. Consider running `/flow-init`."
+1. **"## Applicable Standards"** — list each standard file that was read, with key guidelines extracted from each. If no standards exist, state: "No AI SDLC standards found. Consider running `/owflow:flow-init`."
 
 2. **"## Standards Compliance Checklist"** — checkboxes for each applicable standard guideline that implementation must follow. Example:
    ```markdown
@@ -125,7 +125,7 @@ If these sections are missing from the plan file, add them before asking user fo
 Continue with planning mode normally. The "Applicable Standards" section in the plan should note:
 
 ```
-No AI SDLC standards found. Consider running `/flow-init` to initialize
+No AI SDLC standards found. Consider running `/owflow:flow-init` to initialize
 project documentation and coding standards for better consistency.
 ```
 

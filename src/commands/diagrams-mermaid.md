@@ -1,5 +1,5 @@
 ---
-name: diagrams-mermaid
+name: owflow:diagrams-mermaid
 description: Generate Mermaid diagrams from natural language descriptions. Creates diagrams in markdown format with mermaid code fences. Supports flowcharts, sequence diagrams, class diagrams, state diagrams, ER diagrams, user journeys, Gantt charts, pie charts, and C4 diagrams.
 argument-hint: [diagram description]
 ---
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /diagrams-mermaid.
+WHY: The user explicitly chose this workflow by using /owflow:diagrams-mermaid.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

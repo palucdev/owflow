@@ -370,12 +370,12 @@ Use question with relevant options
 
 ## Integration Points
 
-**With /work Command**:
+**With /owflow:work Command**:
 
-1. `/work` parses arguments and task description
+1. `/owflow:work` parses arguments and task description
 2. Invokes this agent directly via Task tool
 3. Agent performs classification and returns result
-4. `/work` routes to appropriate orchestrator
+4. `/owflow:work` routes to appropriate orchestrator
 
 **Classification Routes**:
 

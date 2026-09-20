@@ -1,5 +1,5 @@
 ---
-name: standards-update
+name: owflow:standards-update
 description: Update or create project standards from conversation context or explicit description
 argument-hint: "[description of standard/convention] [--from=PATH]"
 ---
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /standards-update.
+WHY: The user explicitly chose this workflow by using /owflow:standards-update.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

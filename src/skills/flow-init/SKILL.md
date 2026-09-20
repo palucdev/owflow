@@ -188,7 +188,7 @@ Wait for docs-operator to complete, then immediately continue with Step 2.
 - Next steps:
   1. Review generated documentation
   2. Customize for your team
-  3. Start development with `/work`
+  3. Start development with `/owflow:work`
   4. Keep documentation current
 
 ---

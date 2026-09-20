@@ -396,7 +396,7 @@ Refer to the template [src/templates/orchestrator-state-performance.yml](../../t
 
 Invoked via:
 
-- `/performance [description]` (new)
-- `/performance [task-path] [--from=PHASE]` (resume)
+- `/owflow:performance [description]` (new)
+- `/owflow:performance [task-path] [--from=PHASE]` (resume)
 
 Task directory: `.owflow/tasks/performance/YYYY-MM-DD-task-name/`

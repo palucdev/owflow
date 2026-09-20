@@ -272,3 +272,34 @@ If prerequisites missing, use question: "Start from Phase 1", "Specify different
 | User chooses "Proceed with known issues" | Proceed with warning logged                        |
 | Max iterations (3) reached               | Ask user how to proceed                            |
 | Critical issues remain unresolved        | **MUST NOT proceed** — require user approval first |
+
+---
+
+## 7. Dispatcher & Handoff Pattern (Subskill Loop)
+
+Orchestrators MAY delegate phase bodies to user-invocable **subskills** instead of executing them inline. Two loop modes share one state file and one set of subskills:
+
+| Mode              | Entry point             | Behavior                                                                                               |
+| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| Orchestrated mode | wrapper skill/command   | Invokes subskills back-to-back via Skill tool in sequence; pauses at `question` gates between subskills |
+| Handoff mode      | dispatcher skill/command | Derives next phase from state, prints the suggested command, and **STOPS**; user invokes each subskill  |
+
+### Rules
+
+1. **State file is canonical.** `orchestrator-state.yml` remains the single source of truth. Subskills read it on entry and write phase results on exit. `completed_phases` values and phase numbering MUST stay stable so both modes intermix freely on the same task.
+2. **Subskills are self-contained.** Each has: an entry check (validate state + prerequisite artifacts), an execute section (delegation via Skill/Task tools per Section 1), and an exit (state update + closing ritual). **State updates are per-step**: a subskill writes `orchestrator-state.yml` immediately after each of its phases completes — appending only the `phase-N` entry actually performed, bumping `orchestrator.updated`, recording failures in `failed_phases`/`auto_fix_attempts`, and validating with `verify_template` — never as a single end-of-skill write.
+3. **Closing ritual (handoff).** Every subskill ends with:
+   - **Results** — artifacts written, with paths, plus a 1-2 line executive summary
+   - **Next steps** — the suggested next command, derived from state (e.g., `has_reproducible_defect` → TDD red gate command)
+   - **Other options** — alternative commands valid at this point
+4. **Entry checks replace phase gates in handoff mode.** A subskill invoked directly must validate the same prerequisites a phase gate would (e.g., spec exists before audit) and route to the prerequisite's command if missing.
+5. **Never chain automatically.** The orchestrated wrapper invokes; subskills only SUGGEST the next command and stop. Auto-chaining from a subskill skips user review.
+6. **Handoff mode is the gate.** In handoff mode, the user explicitly invoking the next command IS the phase gate — no additional `question` confirmation before a subskill starts.
+
+---
+
+## 8. Command Namespacing
+
+- Slash commands registered from `src/commands/*.md` use `name: owflow:<command>` in frontmatter; users invoke `/owflow:<command>`.
+- **Skill `name:` fields stay UNPREFIXED.** Skill-tool invocations (`skill: "development"`, `skills:` frontmatter preloads, work.md routing) always reference unprefixed skill names.
+- Handoff messages, docs, and cross-references always display the prefixed slash command — never the bare skill name — in user-facing text.

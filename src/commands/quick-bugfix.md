@@ -1,5 +1,5 @@
 ---
-name: quick-bugfix
+name: owflow:quick-bugfix
 description: Quick bug fix with TDD red/green gates and complexity escalation
 argument-hint: "[bug description]"
 ---
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /quick-bugfix.
+WHY: The user explicitly chose this workflow by using /owflow:quick-bugfix.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---
