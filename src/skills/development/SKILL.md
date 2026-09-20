@@ -1,5 +1,5 @@
 ---
-name: development
+name: owflow:development
 description: Development workflow dispatcher. Initializes/resumes development tasks, derives the next phase from state, and hands off to the matching /owflow:dev-* subskill. Use /owflow:goal-development to run all phases in one loop.
 argument-hint: "[task description | task-path] [--from=PHASE] [--research=PATH] [--e2e] [--user-docs]"
 user-invocable: true

@@ -1,10 +1,10 @@
 ---
 name: owflow:dev-tdd-red
-description: Development — TDD Red Gate: write a failing test reproducing the defect
+description: "Development — TDD Red Gate: write a failing test reproducing the defect"
 argument-hint: "[task-path-or-identifier]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the dev-tdd-red skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-tdd-red skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "dev-tdd-red"

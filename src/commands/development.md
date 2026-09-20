@@ -4,7 +4,7 @@ description: Development workflow dispatcher — initializes/resumes tasks, deri
 argument-hint: [task description]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the development skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:development skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "development"

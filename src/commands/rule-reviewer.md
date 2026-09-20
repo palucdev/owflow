@@ -3,7 +3,7 @@ name: owflow:rule-reviewer
 description: Score an AI rules file on 5 axes and produce concrete actionable fixes
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the rule-reviewer skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:rule-reviewer skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "rule-reviewer"

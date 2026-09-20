@@ -1,5 +1,5 @@
 ---
-name: dev-plan
+name: owflow:dev-plan
 description: Development — break the approved specification into a grouped, dependency-ordered implementation plan.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true

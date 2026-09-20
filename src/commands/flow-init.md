@@ -4,7 +4,7 @@ description: Initialize AI SDLC framework with intelligent project analysis and 
 argument-hint: [--standards-from=PATH]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the flow-init skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:flow-init skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "flow-init"

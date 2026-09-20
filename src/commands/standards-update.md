@@ -4,7 +4,7 @@ description: Update or create project standards from conversation context or exp
 argument-hint: "[description of standard/convention] [--from=PATH]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the standards-update skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:standards-update skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "standards-update"

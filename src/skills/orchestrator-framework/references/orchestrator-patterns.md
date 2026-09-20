@@ -298,7 +298,7 @@ Orchestrators MAY delegate phase bodies to user-invocable **subskills** instead 
 ## 8. Command Namespacing
 
 - Slash commands registered from `src/commands/*.md` use `name: owflow:<command>` in frontmatter; users invoke `/owflow:<command>`.
-- **Skill `name:` fields stay UNPREFIXED.** Skill-tool invocations (`skill: "development"`, `skills:` frontmatter preloads, work.md routing) always reference unprefixed skill names.
+- **Skill `name:` fields are prefixed too.** Skill-tool invocations (`skill: "owflow:development"`, `skills:` frontmatter preloads, work.md routing) always reference `owflow:`-prefixed skill names.
 - Handoff messages, docs, and cross-references always display the prefixed slash command — never the bare skill name — in user-facing text.
 
 ---

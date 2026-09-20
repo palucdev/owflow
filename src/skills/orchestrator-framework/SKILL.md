@@ -1,5 +1,5 @@
 ---
-name: orchestrator-framework
+name: owflow:orchestrator-framework
 description: Shared orchestration patterns for all workflow orchestrators. NOT an executable skill - provides reference documentation for phase execution, state management, interactive mode, and initialization. All orchestrators reference these patterns.
 user-invocable: false
 ---

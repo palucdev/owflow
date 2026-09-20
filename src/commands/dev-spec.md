@@ -4,7 +4,7 @@ description: Development — requirements gathering, specification creation & au
 argument-hint: "[task-path-or-identifier]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the dev-spec skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-spec skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "dev-spec"

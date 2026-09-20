@@ -1,5 +1,5 @@
 ---
-name: dev-analyze
+name: owflow:dev-analyze
 description: Development — codebase analysis with clarifications, then gap analysis with scope decisions. First work phase of the development workflow.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true

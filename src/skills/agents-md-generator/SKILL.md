@@ -1,5 +1,5 @@
 ---
-name: agents-md-generator
+name: owflow:agents-md-generator
 description: >
   Generate an AGENTS.md onboarding document for AI coding agents working in
   this repository. Inspects the repo (package manifest, README, scripts,

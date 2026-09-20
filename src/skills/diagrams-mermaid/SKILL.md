@@ -1,5 +1,5 @@
 ---
-name: diagrams-mermaid
+name: owflow:diagrams-mermaid
 description: Creates Mermaid diagrams for planning flows, component communication, and architecture views with adaptive detail selection (including C4 levels). This skill should be used when the user asks for a workflow, interaction, or architecture visualization from provided task context.
 user-invocable: true
 ---

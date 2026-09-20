@@ -4,7 +4,7 @@ description: Orchestrates performance optimization workflows using static code a
 argument-hint: [task description]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the performance skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:performance skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "performance"

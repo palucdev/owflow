@@ -4,7 +4,7 @@ description: Discover coding standards from project configuration files, code pa
 argument-hint: [task description]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the standards-discover skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:standards-discover skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "standards-discover"

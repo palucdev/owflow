@@ -1,5 +1,5 @@
 ---
-name: html-renderer
+name: owflow:html-renderer
 description: Render a markdown plan, idea, RFC, or design note into a self-contained, share-ready HTML file using the warm editorial visual system bundled under `references/`. Use this skill whenever the user asks to "render", "convert", "turn into HTML", "make a nice HTML version", "share this as a page", or "make this look good" for a markdown file containing a plan, proposal, idea, brief, RFC, design note, or pitch — even if they don't explicitly say "HTML". The output is a single .html file with all CSS inlined, written next to the source .md, that visually matches the reference layout in `references/index.html` and uses tokens from `references/tokens.json`.
 disable-model-invocation: true
 user-invocable: true

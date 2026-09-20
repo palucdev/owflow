@@ -4,7 +4,7 @@ description: Full orchestrated development wrapper — runs ALL development phas
 argument-hint: "[task description | task-path]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the goal-development skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:goal-development skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "goal-development"

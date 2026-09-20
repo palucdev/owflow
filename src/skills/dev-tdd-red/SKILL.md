@@ -1,5 +1,5 @@
 ---
-name: dev-tdd-red
+name: owflow:dev-tdd-red
 description: Development — TDD Red Gate. Write a failing test that reproduces the defect before any implementation work.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true

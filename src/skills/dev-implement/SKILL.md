@@ -1,5 +1,5 @@
 ---
-name: dev-implement
+name: owflow:dev-implement
 description: Development — execute the implementation plan via delegation, then the TDD Green Gate when a red gate exists.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true

@@ -1,5 +1,5 @@
 ---
-name: quick-bugfix
+name: owflow:quick-bugfix
 description: Quick bug fix with TDD red/green gates and complexity escalation
 argument-hint: "[bug description]"
 user-invocable: true

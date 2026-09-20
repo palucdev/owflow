@@ -1,5 +1,5 @@
 ---
-name: goal-development
+name: owflow:goal-development
 description: Full orchestrated development wrapper — runs ALL development phases in one session by invoking every dev-* subskill in sequence with question gates between them. Equivalent to the classic unified orchestrator.
 argument-hint: "[task description | task-path] [--from=PHASE] [--research=PATH] [--e2e] [--user-docs]"
 user-invocable: true

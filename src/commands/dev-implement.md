@@ -4,7 +4,7 @@ description: Development — execute implementation plan & TDD Green Gate
 argument-hint: "[task-path-or-identifier]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the dev-implement skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-implement skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "dev-implement"

@@ -1,5 +1,5 @@
 ---
-name: dev-spec
+name: owflow:dev-spec
 description: Development — technical approach, requirements gathering, specification creation, and optional specification audit.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true

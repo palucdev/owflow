@@ -1,5 +1,5 @@
 ---
-name: dev-finalize
+name: owflow:dev-finalize
 description: Development — conditional E2E testing, user documentation, and workflow finalization with commit guidance.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true

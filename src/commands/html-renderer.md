@@ -4,7 +4,7 @@ description: Render a markdown plan, idea, RFC, or design note into a self-conta
 argument-hint: [path to markdown file]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the html-renderer skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:html-renderer skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "html-renderer"

@@ -4,7 +4,7 @@ description: Development — E2E testing, user documentation & finalization
 argument-hint: "[task-path-or-identifier]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the dev-finalize skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-finalize skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "dev-finalize"

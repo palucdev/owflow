@@ -1,5 +1,5 @@
 ---
-name: rule-reviewer
+name: owflow:rule-reviewer
 description: Score an AI rules file on 5 axes and return concrete actionable fixes
 argument-hint: "[path/to/rules.md]"
 user-invocable: true

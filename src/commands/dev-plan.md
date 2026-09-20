@@ -4,7 +4,7 @@ description: Development — break the specification into a grouped implementati
 argument-hint: "[task-path-or-identifier]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the dev-plan skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-plan skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "dev-plan"

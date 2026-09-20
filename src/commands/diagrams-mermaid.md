@@ -4,7 +4,7 @@ description: Generate Mermaid diagrams from natural language descriptions. Creat
 argument-hint: [diagram description]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the diagrams-mermaid skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:diagrams-mermaid skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "diagrams-mermaid"

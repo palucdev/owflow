@@ -4,7 +4,7 @@ description: Orchestrates the complete migration workflow from current state ana
 argument-hint: [task description]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the migration skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:migration skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "migration"

@@ -4,7 +4,7 @@ description: Development — codebase analysis, clarifications, gap analysis & s
 argument-hint: "[task-path-or-identifier]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the dev-analyze skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-analyze skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "dev-analyze"

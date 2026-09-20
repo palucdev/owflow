@@ -1,5 +1,5 @@
 ---
-name: dev-verify
+name: owflow:dev-verify
 description: Development — verification options prompt, comprehensive implementation verification, and user-driven fix loop.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true

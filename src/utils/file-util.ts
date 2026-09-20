@@ -7,15 +7,23 @@ export const loadMarkdownDir = (
   dirPath: string,
 ): matter.GrayMatterFile<string>[] => {
   const fullPath = path.join(PLUGIN_ROOT, dirPath);
+  let files: string[];
   try {
-    return fs
-      .readdirSync(fullPath)
-      .filter((f) => f.endsWith(".md"))
-      .map((f) => {
-        const raw = fs.readFileSync(path.join(fullPath, f), "utf8");
-        return matter(raw);
-      });
+    files = fs.readdirSync(fullPath).filter((f) => f.endsWith(".md"));
   } catch {
     return [];
   }
+  const parsed: matter.GrayMatterFile<string>[] = [];
+  for (const f of files) {
+    try {
+      const raw = fs.readFileSync(path.join(fullPath, f), "utf8");
+      parsed.push(matter(raw));
+    } catch (e) {
+      console.warn(
+        `[owflow] Skipping unparseable markdown file ${f} in ${dirPath}:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  return parsed;
 };

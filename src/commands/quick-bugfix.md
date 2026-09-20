@@ -4,7 +4,7 @@ description: Quick bug fix with TDD red/green gates and complexity escalation
 argument-hint: "[bug description]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the quick-bugfix skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:quick-bugfix skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "quick-bugfix"

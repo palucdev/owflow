@@ -4,7 +4,7 @@ description: Orchestrates comprehensive research workflows from question definit
 argument-hint: [task description]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the research skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:research skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "research"
