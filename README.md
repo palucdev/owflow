@@ -145,13 +145,31 @@ Task type (feature/bug/enhancement) is auto-detected from context. Override with
 
 For smaller tasks that don't need a full workflow:
 
-| Command               | Use When                                                    | Artifacts                                             |
-| --------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
-| `/owflow:dev-bugfix`  | Quick TDD-driven bug fix — write failing test, fix, verify  | `orchestrator-state.yml`, `findings.md`, `summary.md` |
+| Command                          | Use When                                                    | Artifacts                                                                                                                               |
+| -------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `/owflow:dev-bugfix`             | Quick TDD-driven bug fix — write failing test, fix, verify  | `orchestrator-state.yml`, `analysis/findings.md`, `summary.md`                                                                            |
+| `/owflow:dev-implement --quick`  | Task is clear, no architectural decisions needed            | `orchestrator-state.yml`, `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`, `work-log.md` |
+| `/owflow:dev-plan --quick`       | Standards-aware, resumable plan before coding — plan only   | `orchestrator-state.yml`, `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`                |
 
 `/owflow:dev-bugfix` creates a standard development task under `.owflow/tasks/development/` (full `orchestrator-state.yml`, entry point `dev-bugfix`) and runs a condensed bug fix slice (analyze + approve plan → TDD red → fix → TDD green). Pass a task path to fix a newly emerging problem on an existing development task; the task remains continuable by any dev-* subskill (`/owflow:dev-verify`, `/owflow:development <task-path>`, …).
 
 Quick development uses the standard pipeline instead: `/owflow:dev-implement --quick "<description>"` bootstraps a regular development task (`orchestrator-state.yml`, condensed spec + plan), implements it, and stops — continue later with `/owflow:dev-verify` or stop there if the results are enough. Plan-only tasks work the same way: `/owflow:dev-plan --quick "<description>"` bootstraps a regular development task and stops after the plan — continue with `/owflow:dev-implement` or stop there if the plan is enough.
+
+**The `--quick` flag is optional.** You can start from a bare prompt — the skill bootstraps the task and then asks whether to run the condensed quick lane or escalate to the full pipeline. Pass `--quick` to skip that question and go straight to the quick lane. Invoked with no argument at all, the skill prompts you for a task description, task path, or identifier. Bug-shaped descriptions route to `/owflow:dev-bugfix` instead (you can insist on proceeding if you prefer).
+
+```bash
+# Quick lane, no questions asked
+/owflow:dev-implement --quick "Add a logout button to the navbar"
+/owflow:dev-plan --quick "Add server-side pagination to the users list"
+
+# Bare prompt — the skill asks: quick lane or full pipeline?
+/owflow:dev-implement "Add CSV export to the invoices table"
+/owflow:dev-plan "Add rate limiting to the public API"
+
+# No argument — prompts for a description, task path, or identifier
+/owflow:dev-implement
+/owflow:dev-plan
+```
 
 ### Fine-Grained Control: Development Subskills
 
