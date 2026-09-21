@@ -16,7 +16,8 @@ This is the OpenCode plugin. Key platform conventions:
 - **Compaction**: After context compaction, re-read `orchestrator-state.yml` in
   the active task directory to verify `completed_phases` and determine the next
   phase. Use the `question` tool at Phase Gates.
-- **MCP**: The Playwright MCP server is declared in `opencode.json`.
+- **MCP**: The Playwright MCP server is expected from the host project (used by
+  the `e2e-test-verifier` and `user-docs-generator` agents).
 
 ## Critical Principle: User-Confirmed Rollback
 
@@ -50,7 +51,10 @@ All workflows in this plugin follow this pattern when failures occur:
 
 ## Hooks
 
-The plugin implements OpenCode hooks in `.opencode/plugins/hooks.js`.
+The plugin registers OpenCode lifecycle hooks from its entry point (`src/index.ts`), implemented in `src/hooks/` and shipped in `dist/hooks/`:
+
+- `src/hooks/before-tool.ts` — `tool.execute.before`
+- `src/hooks/session-compaction.ts` — `experimental.session.compacting`
 
 ### Destructive Command Protection (`tool.execute.before`)
 
@@ -212,9 +216,9 @@ When creating or auditing orchestrators, follow the patterns established in exis
 
 ## Available Skills
 
-Skills live in `src/skills/<name>/SKILL.md` — read the frontmatter `description` there for the canonical list and purpose of every skill (workflow orchestrators, setup/standards, quick commands, content & visualization). Never rest skill purposes here; they change independently of this file. Two non-obvious operational facts:
+Skills live in `src/skills/<name>/SKILL.md` — read the frontmatter `description` there for the canonical list and purpose of every skill (workflow orchestrators, setup/standards, quick commands, content & visualization). Never rest skill purposes here; they change independently of this file. Non-obvious operational facts:
 
-- `docs-manager` is an internal engine, not user-invocable — it is only executed mid-workflow by the `docs-operator` agent (Task tool) for init, standards-update, and standards-discover.
+- `docs-manager`, `codebase-analyzer`, `implementation-plan-executor`, `implementation-verifier`, and `orchestrator-framework` carry `user-invocable: false` — they are internal engines or shared frameworks, not user-facing commands.
 - Every orchestrator reads `skills/orchestrator-framework/references/orchestrator-patterns.md` (delegation rules, state schema, context passing) at initialization; the authoring checklist is `orchestrator-creation-checklist.md`.
 - Skill `name:` frontmatter fields intentionally use the `owflow:` prefix (e.g. `name: owflow:dev-analyze`): OpenCode never auto-namespaces plugin skills, so the prefix is what makes skills appear as `owflow:<name>` in the Skill tool. OpenCode does not enforce Agent Skills name validation, so do NOT "fix" these names to match their folder names — VS Code's SKILL.md validation errors about the prefix (lowercase/hyphens/folder-match) are expected noise, not a defect.
 
@@ -235,7 +239,6 @@ Key usage rules:
 Subagents are specialized AI agents invoked by skills and orchestrators. All agents are read-only unless specified. Individual `agents/*.md` files are the source of truth — read the relevant agent file before invoking; never rest agent purposes here. Non-obvious operational facts:
 
 - `docs-operator` is a companion-agent special case: docs-manager does NOT spawn subagents (file operations only), so docs-manager operations must run via the `docs-operator` agent. Do not copy this pattern for skills that spawn subagents.
-- `existing-feature-analyzer` is deprecated → replaced by the `codebase-analyzer` skill (adaptive parallel Explore subagents).
 
 ## Progress Tracking with Task System
 

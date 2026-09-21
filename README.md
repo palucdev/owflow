@@ -38,6 +38,8 @@ owflow/
     └── index.ts            # Main plugin entry point
 ```
 
+All `src/` markdown assets (skills, agents, commands, templates) are copied into `dist/` at build time - edit the sources, never `dist/`.
+
 ### Prerequisites
 
 - [Opencode](https://opencode.ai/) CLI installed and configured
@@ -76,7 +78,7 @@ In `opencode.json`:
 Initialize your project to auto-detect coding standards and generate project documentation:
 
 ```bash
-/flow-init
+/owflow:flow-init
 ```
 
 This scans your codebase and creates `.owflow/` with standards, docs, and task folders. May take a few minutes on larger projects.
@@ -84,28 +86,28 @@ This scans your codebase and creates `.owflow/` with standards, docs, and task f
 If you have another project already using Owflow, you can reuse its standards as a starting point:
 
 ```bash
-/flow-init --standards-from=/path/to/other-project
+/owflow:flow-init --standards-from=/path/to/other-project
 ```
 
 ### First Workflow
 
 ```bash
-/development Add user profile page with avatar upload
+/owflow:development Add user profile page with avatar upload
 ```
 
 Or just discuss your task with Agent and then run:
 
 ```bash
-/development
+/owflow:development
 ```
 
-The plugin picks up context from your conversation - no arguments needed.
+The plugin picks up context from your conversation - no arguments needed. Prefer everything in one session? Use `/owflow:goal-development` (loop mode) instead - it runs the same pipeline without handoffs between phases.
 
 ## How It Works
 
 1. You describe a task - either as an argument or just in conversation
 2. The plugin classifies it (feature, bug, enhancement, etc.) and proposes a workflow
-3. You confirm, and it guides you through phases: **requirements → spec → plan → implement → verify**
+3. You confirm, and it guides you through the pipeline of development subskills: **analysis → spec → plan → implement → verify → finalize**
 4. At each phase, it asks for your input and decisions
 5. You get tested, verified code with a detailed work log
 
@@ -117,12 +119,12 @@ Every workflow command works without arguments. The plugin reads your current co
 
 ```
 You: "The login page throws a 500 error when the session expires"
-You: /development
+You: /owflow:development
 → Auto-detects: bug fix, extracts description from conversation
 ```
 
 ```
-You: /standards-update
+You: /owflow:standards-update
 → Scans conversation for patterns like "we always use..." or "prefer X over Y"
 ```
 
@@ -130,46 +132,46 @@ You can always be explicit when you prefer - arguments and flags simply override
 
 ## Supported Workflows
 
-| Command        | Use When                                    |
-| -------------- | ------------------------------------------- |
-| `/development` | Features, bug fixes, enhancements           |
-| `/research`    | Research with synthesis and solution design |
-| `/performance` | Optimizing speed or resource usage          |
-| `/migration`   | Changing technologies or patterns           |
+| Command                | Use When                                    |
+| ---------------------- | ------------------------------------------- |
+| `/owflow:development`  | Features, bug fixes, enhancements           |
+| `/owflow:research`     | Research with synthesis and solution design |
+| `/owflow:performance`  | Optimizing speed or resource usage          |
+| `/owflow:migration`    | Changing technologies or patterns           |
 
-Task type (feature/bug/enhancement) is auto-detected from context. Override with `--type=feature|bug|enhancement` if needed. Or use `/work` as a single entry point that routes to the right workflow.
+Task type (feature/bug/enhancement) is auto-detected from context. Override with `--type=feature|bug|enhancement` if needed. Or use `/owflow:work` as a single entry point that routes to the right workflow.
 
 ### Quick Commands
 
 For smaller tasks that don't need a full workflow:
 
-| Command         | Use When                                                    | Artifacts                               |
-| --------------- | ----------------------------------------------------------- | --------------------------------------- |
-| `/dev-bugfix` | Quick TDD-driven bug fix — write failing test, fix, verify  | `orchestrator-state.yml`, `findings.md`, `summary.md` |
+| Command               | Use When                                                    | Artifacts                                             |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| `/owflow:dev-bugfix`  | Quick TDD-driven bug fix — write failing test, fix, verify  | `orchestrator-state.yml`, `findings.md`, `summary.md` |
 
-`/dev-bugfix` creates a standard development task under `.owflow/tasks/development/` (full `orchestrator-state.yml`, entry point `dev-bugfix`) and runs a condensed bug fix slice (analyze + approve plan → TDD red → fix → TDD green). Pass a task path to fix a newly emerging problem on an existing development task; the task remains continuable by any dev-* subskill (`/dev-verify`, `/development <task-path>`, …).
+`/owflow:dev-bugfix` creates a standard development task under `.owflow/tasks/development/` (full `orchestrator-state.yml`, entry point `dev-bugfix`) and runs a condensed bug fix slice (analyze + approve plan → TDD red → fix → TDD green). Pass a task path to fix a newly emerging problem on an existing development task; the task remains continuable by any dev-* subskill (`/owflow:dev-verify`, `/owflow:development <task-path>`, …).
 
-Quick development uses the standard pipeline instead: `/dev-implement --quick "<description>"` bootstraps a regular development task (`orchestrator-state.yml`, condensed spec + plan), implements it, and stops — continue later with `/dev-verify` or stop there if the results are enough. Plan-only tasks work the same way: `/dev-plan --quick "<description>"` bootstraps a regular development task and stops after the plan — continue with `/dev-implement` or stop there if the plan is enough.
+Quick development uses the standard pipeline instead: `/owflow:dev-implement --quick "<description>"` bootstraps a regular development task (`orchestrator-state.yml`, condensed spec + plan), implements it, and stops — continue later with `/owflow:dev-verify` or stop there if the results are enough. Plan-only tasks work the same way: `/owflow:dev-plan --quick "<description>"` bootstraps a regular development task and stops after the plan — continue with `/owflow:dev-implement` or stop there if the plan is enough.
 
 ### Fine-Grained Control: Development Subskills
 
-The full `/development` workflow consists of standalone subskills — `/dev-analyze`, `/dev-tdd-red`, `/dev-spec`, `/dev-plan`, `/dev-implement`, `/dev-verify`, `/dev-finalize` — which you can also invoke individually. Each accepts a task path, or just a task-directory identifier:
+The full `/owflow:development` workflow consists of standalone subskills — `/owflow:dev-analyze`, `/owflow:dev-tdd-red`, `/owflow:dev-spec`, `/owflow:dev-plan`, `/owflow:dev-implement`, `/owflow:dev-verify`, `/owflow:dev-finalize` — which you can also invoke individually. Each accepts a task path, or just a task-directory identifier:
 
 ```bash
-/dev-spec 2026-01-12-my-feature
-/dev-verify .owflow/tasks/development/2026-01-12-my-feature
+/owflow:dev-spec 2026-01-12-my-feature
+/owflow:dev-verify .owflow/tasks/development/2026-01-12-my-feature
 ```
 
-If a subskill is invoked too early in the workflow (prerequisite phases not yet complete), it stops and tells you exactly which steps to run first, in order. If the workflow state doesn't exist yet, use `/development <description>` to start from scratch.
+If a subskill is invoked too early in the workflow (prerequisite phases not yet complete), it stops and tells you exactly which steps to run first, in order. If the workflow state doesn't exist yet, use `/owflow:development <description>` to start from scratch.
 
 ## Standards-Aware Development
 
 This is the key differentiator. Owflow doesn't just run workflows - it learns your project's conventions and enforces them:
 
-- **`flow-init`** scans config files, source code, and documentation to auto-detect your coding standards
+- **`/owflow:flow-init`** scans config files, source code, and documentation to auto-detect your coding standards
 - **Continuous checking** - standards are consulted before specification, during planning, and while coding (not just at the start)
-- **`/standards-discover`** refreshes standards from your evolving codebase
-- **`/standards-update`** lets you add or refine standards manually, or sync from another project with `--from=PATH`
+- **`/owflow:standards-discover`** refreshes standards from your evolving codebase
+- **`/owflow:standards-update`** lets you add or refine standards manually, or sync from another project with `--from=PATH`
 
 Standards live in `.owflow/docs/standards/` and are indexed in `.owflow/docs/INDEX.md`.
 
@@ -190,13 +192,13 @@ TBD
 **Chain workflows by passing a task folder.** If you've completed a research workflow and want to build on those results, pass the task folder directly — by path, or just by its directory identifier if the name is unique:
 
 ```bash
-/development .owflow/tasks/research/2026-01-12-oauth-research
+/owflow:development .owflow/tasks/research/2026-01-12-oauth-research
 ```
 
 You can also append additional instructions to narrow scope or guide the workflow:
 
 ```bash
-/development .owflow/tasks/research/2026-01-12-oauth-research Implement only phase 1
+/owflow:development .owflow/tasks/research/2026-01-12-oauth-research Implement only phase 1
 ```
 
 ## Known Issues
@@ -204,7 +206,7 @@ You can also append additional instructions to narrow scope or guide the workflo
 **Orchestrator may stall after long phases.** After context compaction (which typically happens after lengthy phases like implementation), the main agent may stop progressing automatically. If you notice it's idle, just type something like "continue" or "proceed" — it will pick up where it left off. You can also re-invoke the workflow in resume mode to reload the orchestrator state:
 
 ```bash
-/development .owflow/tasks/development/2026-03-24-my-feature
+/owflow:development .owflow/tasks/development/2026-03-24-my-feature
 ```
 
 ## Learn More
