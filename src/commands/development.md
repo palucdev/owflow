@@ -27,7 +27,7 @@ Invoke the skill now and let it orchestrate the complete workflow.
 Development workflow **dispatcher** (handoff mode). The skill handles:
 
 - Task initialization/resume and state management (`orchestrator-state.yml`)
-- Research/quick-* context intake and flag handling
+- Research context intake, dev-bugfix/quick-lane entry_points, and flag handling
 - Deriving the next pending phase from state
 - Handing off to the matching `/owflow:dev-*` subskill, then stopping
 

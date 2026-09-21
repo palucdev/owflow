@@ -138,6 +138,7 @@ Use `question` — "Are these results correct?" with options:
 ### Next steps (after Accept)
 
 - `→ /owflow:dev-implement <task-path>` — `required` next: executes the plan task group by task group via subagents (includes the TDD green gate when a red gate exists). Remaining after: verify → finalize. If the plan alone was the goal, stop here — the task stays resumable.
+- `/owflow:dev-implement --quick <task-path>` — `optional` condensed alternative: implements the plan directly in the main agent with standards instead of delegating to subagents.
 
 **Other options**:
 

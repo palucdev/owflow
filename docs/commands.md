@@ -199,11 +199,16 @@ The plan-only quick lane — a condensed subset of the development pipeline, run
 
 After planning it stops at the dev-plan exit gate — continue the pipeline with `/dev-implement` (or `/development <task-path>`), or stop there if the plan is enough.
 
-### `/quick-bugfix [bug description]`
+### `/dev-bugfix [bug description | task-path]`
 
-Lightweight TDD-driven bug fix without a full orchestrator workflow. Analyzes the bug, writes a failing test, implements the fix, and verifies the test passes.
+Quick TDD-driven bug fix — an alternative entry point into the dev-* workflow with a standard `orchestrator-state.yml`. Analyzes the bug, presents a fix plan for approval, writes a failing test, implements the fix, and verifies the test passes.
 
 **When to use**: Simple, isolated bugs where you can quickly identify the root cause. If the bug is too complex (multiple files, unclear root cause, architectural impact), the skill suggests escalating to `/development`.
 
-**Task directory**: `.owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name/`
-**Artifacts**: `task.yml`, `analysis/findings.md`, `summary.md`
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure, `entry_point: "dev-bugfix"`)
+**Artifacts**: `analysis/findings.md`, `implementation/fix-plan.md`, `implementation/tdd-red-gate.md`, `implementation/tdd-green-gate.md`, `implementation/work-log.md`, `summary.md`
+
+**Two invocation modes**:
+
+- **Standalone** — bug description (or nothing: reads the conversation or prompts) bootstraps a fresh standard development task. After the fix, continue with `/dev-verify <task-path>` or commit.
+- **Consecutive run** — a task path/identifier under `.owflow/tasks/development/` fixes a newly emerging problem on an existing development task (after implementation or verification); the fix is appended to the task and downstream verification slugs are reset so the pipeline re-runs `/dev-verify`.

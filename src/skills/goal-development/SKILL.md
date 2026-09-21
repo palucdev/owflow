@@ -16,7 +16,7 @@ Gates follow the shared contract in `../orchestrator-framework/references/orches
 Identical to the dispatcher — complete ALL of its entry-gate steps first:
 
 1. Read `../orchestrator-framework/references/orchestrator-patterns.md` Section 7 (Dispatcher & Handoff Pattern) and Section 1 (Delegation Rules).
-2. Detect prior work context: research folder path, `--research=<path>` flag, or quick-\* task path (same detection and state setup as the development dispatcher — see `../development/SKILL.md` Entry Gate).
+2. Detect prior work context: research folder path or `--research=<path>` flag (same detection and state setup as the development dispatcher — see `../development/SKILL.md` Entry Gate). Dev-bugfix tasks (`.owflow/tasks/development/` entries with `entry_point: "dev-bugfix"`) need no special handling — they are standard development tasks; route from the first missing slug.
 3. Initialize (new task) or resume (task path): create task directory + `orchestrator-state.yml` with `verify_template` validation, discover `.owflow/docs/INDEX.md` project docs, write command flags to `options.*`. On resume, find the first step slug NOT in `completed_phases` (validate artifacts; `--from=<step-slug>` overrides).
 4. Create ONE task item via `TaskCreate` per subskill in the upcoming loop (subject: `"<step names>: <subskill>"`, e.g. `"Analysis: dev-analyze"`); update statuses as the loop progresses.
 

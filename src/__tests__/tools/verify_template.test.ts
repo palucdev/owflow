@@ -418,40 +418,4 @@ research_outputs: {}
     });
   });
 
-  describe("template: quick-bugfix-task.yml", () => {
-    const templateName = "quick-bugfix-task.yml";
-
-    test("successful verification: valid instance matching quick-bugfix-task", async () => {
-      const result = await verify_template.execute(
-        { filePath: templateName, templateName },
-        { directory: templatesDir } as any,
-      );
-      expect((result as any).output).toBe(
-        "File exists and follows the correct YAML structure.",
-      );
-    });
-
-    test("faulty verification: missing required field 'escalated_to'", async () => {
-      const filePath = "faulty-bugfix-missing-field.yml";
-      fs.writeFileSync(
-        path.join(testDir, filePath),
-        `
-command: quick-bugfix
-title: "Fix crash"
-description: "App crashes on launch"
-status: in_progress
-created: "2026-01-01"
-updated: "2026-01-01"
-task_path: .owflow/tasks/quick-bugfix/task
-`,
-      );
-
-      const result = await verify_template.execute(
-        { filePath, templateName },
-        { directory: testDir } as any,
-      );
-      expect((result as any).output).toContain("YAML Structure Validation Failed");
-      expect((result as any).output).toContain("- Missing key: escalated_to");
-    });
-  });
 });

@@ -32,6 +32,8 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 | State file exists       | `<task-path>/orchestrator-state.yml`             | `/owflow:development <desc>`         |
 | Implementation done     | `implementation-done` in `completed_phases`      | `/owflow:dev-implement <task-path>`  |
 
+**Dev-bugfix tasks are verified here too**: a task produced or resumed by `/owflow:dev-bugfix` reaches this skill with `implementation-done` complete but no spec/plan — that is valid; verification does NOT require them. A consecutive dev-bugfix run on a verified task resets the downstream slugs, so the user is routed here for re-verification.
+
 1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
 2. **Prerequisite check**: `implementation-done` in `completed_phases` (implementation done). If missing → print the blocked block, then STOP:
    - Steps that must be completed first: analysis (`codebase-analysed`, `gap-analysed`) → TDD red gate (`tdd-red-proven`, only when a reproducible defect was detected) → specification (`spec-written`) → implementation planning (`plan-created`) → implementation (`implementation-done`).

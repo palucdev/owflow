@@ -38,14 +38,14 @@ Gates follow the shared contract in `../orchestrator-framework/references/orches
 - Read research artifacts from specified path, copy to `analysis/research-context/`
 - Set `research_reference` in state
 
-**If argument is a quick-\* task folder path** (matches `.owflow/tasks/quick-*/`):
+**If the task's state shows `orchestrator.entry_point: "dev-bugfix"`** (task created or last run by the quick bug fix skill):
 
-1. Read `task.yml` — extract `command`, `description`, `standards_applied`, `escalation_reason`
-2. Read `analysis/findings.md` — root cause, affected files, complexity assessment, test strategy
-3. Use `description` as the task description; set `quick_reference` in orchestrator state (see template)
-4. Update the quick-\* `task.yml`: set `escalated_to` to the new development task path
+1. No special intake needed — it is a standard development task using the standard state file and artifacts. Its dev-bugfix run already recorded condensed analysis and TDD slugs in `completed_phases`.
+2. Route by the FIRST step slug NOT in `completed_phases`, per the Routing Table — with one exception: if `implementation-done` is already complete (typical for a completed dev-bugfix run), route to `/owflow:dev-verify <task-path>`; verification does NOT require spec/plan. If the task's status is `escalated`, route normally from the first missing slug (usually `spec-written`).
 
-**How quick-\* context informs subskills**: dev-analyze receives affected files/root cause as search guidance; dev-spec receives complexity assessment and test strategy; gap analysis uses the complexity assessment for risk level.
+The dispatcher hands off to subskills from analysis onward — spec, plan, verify, finalize steps are unchanged; research context flows through all of them.
+
+**How dev-bugfix context informs subskills**: dev-spec receives `phase_summaries.quick_analysis` (root cause, affected files, test strategy) as condensed analysis input; dev-verify receives the fix summary.
 
 ### Step 3: Initialize or Resume
 
@@ -76,7 +76,7 @@ Next step: [step name]
 
 ## When to Use
 
-Use for **all development tasks**: bug fixes, enhancements, new features, and any work that modifies code.
+Use for **all development tasks**: bug fixes, enhancements, new features, and any work that modifies code. Bug-shaped work has a lighter entry point: `/owflow:dev-bugfix "<description>"` (or with a task path, to fix a bug that emerged on an existing task) — it produces the same standard state and is resumable by this dispatcher.
 
 **DO NOT use for**: Performance optimization, security remediation, migrations, documentation-only, pure refactoring (use the specialized orchestrators).
 
@@ -93,10 +93,14 @@ Derive the FIRST step slug not in `completed_phases`, then print the matching co
 | Specification (`spec-written`, `spec-audited`)                | `gap-analysed` completed (and `tdd-red-proven` if required)| `/owflow:dev-spec <task-path>`        | `implementation/spec.md`, `verification/spec-audit.md` |
 | Planning (`plan-created`)                                     | `implementation/spec.md` exists                            | `/owflow:dev-plan <task-path>`        | `implementation/implementation-plan.md`            |
 | Implementation (`implementation-done`, `tdd-green-proven`)    | Spec + plan exist                                          | `/owflow:dev-implement <task-path>`   | implemented code, `work-log.md`                    |
-| Verification (`options-chosen`, `verification-done`)          | `implementation-done` completed                            | `/owflow:dev-verify <task-path>`      | `verification/implementation-verification.md`      |
+| Verification (`options-chosen`, `verification-done`)          | `implementation-done` completed (also dev-bugfix tasks — see entry gate note; spec/plan NOT required)                                                                 | `/owflow:dev-verify <task-path>`      | `verification/implementation-verification.md`      |
 | Finalization (`e2e-run`, `docs-generated`, `task-completed`)  | `verification-done` completed                              | `/owflow:dev-finalize <task-path>`    | `documentation/`, completed task                   |
 
 The TDD red gate is SKIPPED when `has_reproducible_defect` is false — route to dev-spec. All conditional flags (`e2e_enabled`, `user_docs_enabled`) live in state and are honored by the subskills.
+
+**Dev-bugfix tasks**: tasks whose `completed_phases` holds the quick slice (`codebase-analysed`, `gap-analysed`, `tdd-red-proven`, `implementation-done`, `tdd-green-proven` — no `spec-written`/`plan-created`) are valid dev tasks. The FIRST-missing-slug rule would route them to `dev-spec`; instead, when `implementation-done` is complete, prefer `/owflow:dev-verify`. Escalated (`task.status: escalated`) dev-bugfix tasks route normally from the first missing slug — the full pipeline fills in specification and planning.
+
+**Alternative entry points for bugs**: `/owflow:dev-bugfix "<description>"` — standalone bug fix creating the same state from scratch; `/owflow:dev-bugfix <task-path>` — fix a newly emerging problem on an existing dev task (resets downstream verification slugs after the fix, so this router re-routes to dev-verify).
 
 ### Exit Gate (adapted for dispatch mode)
 
@@ -158,9 +162,11 @@ Other options:
 ├── implementation/
 │   ├── spec.md                     # dev-spec
 │   ├── implementation-plan.md      # dev-plan
-│   ├── work-log.md                 # dev-implement
-│   ├── tdd-red-gate.md             # dev-tdd-red (conditional)
-│   └── tdd-green-gate.md           # dev-implement (conditional)
+│   ├── fix-plan.md                 # dev-bugfix (condensed approval-gated fix plan)
+│   ├── work-log.md                 # dev-implement / dev-bugfix
+│   ├── tdd-red-gate.md             # dev-tdd-red / dev-bugfix (conditional)
+│   └── tdd-green-gate.md           # dev-implement / dev-bugfix (conditional)
+├── summary.md                      # dev-bugfix (per fix run)
 ├── verification/
 │   ├── spec-audit.md               # dev-spec (recommended)
 │   ├── implementation-verification.md  # dev-verify

@@ -18,7 +18,7 @@ describe("configureCommands", () => {
 
     expect(config.command["owflow:development"]).toBeDefined();
     expect(config.command["owflow:development"]!.template).toBeDefined();
-    expect(config.command["owflow:quick-bugfix"]).toBeDefined();
+    expect(config.command["owflow:dev-bugfix"]).toBeDefined();
   });
 
   test("should not overwrite existing command definitions configured by user", () => {
@@ -35,7 +35,7 @@ describe("configureCommands", () => {
     configureCommands(config);
 
     expect(config.command["owflow:development"]).toEqual(customCommand);
-    expect(config.command["owflow:quick-bugfix"]).toBeDefined();
+    expect(config.command["owflow:dev-bugfix"]).toBeDefined();
   });
 
   test("should correctly parse frontmatter attributes including description, agent, model, and subtask boolean", () => {
