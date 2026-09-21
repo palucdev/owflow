@@ -188,14 +188,16 @@ The quick development lane — a condensed subset of the development pipeline, r
 
 After implementation it stops at the dev-implement exit gate — continue the pipeline with `/dev-verify` (or `/development <task-path>`), or stop there if the results are enough.
 
-### `/quick-plan [task description]`
+### `/dev-plan --quick ["task description"]`
 
-Enter OpenCode's planning mode with standards awareness. Discovers and reads applicable standards _before_ entering plan mode, so your plan is informed by project conventions.
+The plan-only quick lane — a condensed subset of the development pipeline, run inside `/dev-plan`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-plan --quick"`), discovers and reads applicable standards, writes a brief analysis and a condensed spec, then writes the implementation plan directly on the fly — no `implementation-planner` subagent (that delegation stays reserved for the full pipeline). The on-the-fly plan stays lean and grounded: key discoveries with `file:line` references, an explicit out-of-scope list, intent + contract per step, automated vs manual acceptance criteria, and no open questions. Adding an execution diagram is optional and gated by a question.
 
-Standards compliance checklist is required in the plan file before exiting plan mode.
+**When to use**: You want a standards-aware, resumable plan before coding — but the plan alone is enough for now.
 
-**Task directory**: `.owflow/tasks/quick-plan/YYYY-MM-DD-task-name/`
-**Artifacts**: `task.yml` (+ `plan_path`), `analysis/findings.md`
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
+**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`
+
+After planning it stops at the dev-plan exit gate — continue the pipeline with `/dev-implement` (or `/development <task-path>`), or stop there if the plan is enough.
 
 ### `/quick-bugfix [bug description]`
 

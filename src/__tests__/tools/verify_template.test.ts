@@ -454,44 +454,4 @@ task_path: .owflow/tasks/quick-bugfix/task
       expect((result as any).output).toContain("- Missing key: escalated_to");
     });
   });
-
-  describe("template: quick-plan-task.yml", () => {
-    const templateName = "quick-plan-task.yml";
-
-    test("successful verification: valid instance matching quick-plan-task", async () => {
-      const result = await verify_template.execute(
-        { filePath: templateName, templateName },
-        { directory: templatesDir } as any,
-      );
-      expect((result as any).output).toBe(
-        "File exists and follows the correct YAML structure.",
-      );
-    });
-
-    test("faulty verification: missing required field 'plan_path'", async () => {
-      const filePath = "faulty-plan-missing-path.yml";
-      fs.writeFileSync(
-        path.join(testDir, filePath),
-        `
-command: quick-plan
-title: "Plan architecture"
-description: "Plan for v2"
-status: in_progress
-created: "2026-01-01"
-updated: "2026-01-01"
-task_path: .owflow/tasks/quick-plan/task
-escalated_to: null
-escalation_reason: null
-standards_applied: []
-`,
-      );
-
-      const result = await verify_template.execute(
-        { filePath, templateName },
-        { directory: testDir } as any,
-      );
-      expect((result as any).output).toContain("YAML Structure Validation Failed");
-      expect((result as any).output).toContain("- Missing key: plan_path");
-    });
-  });
 });

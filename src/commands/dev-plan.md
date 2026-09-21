@@ -1,7 +1,7 @@
 ---
 name: owflow:dev-plan
-description: Development — break the specification into a grouped implementation plan
-argument-hint: "[task-path-or-identifier]"
+description: Development — break the specification into a grouped implementation plan. --quick bootstraps a condensed plan-only task when no state file exists.
+argument-hint: "[task-path-or-identifier | \"description\"] [--quick]"
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-plan skill immediately as your FIRST action.
@@ -31,3 +31,7 @@ Entry points:
 
 - `/owflow:development <description>` — start a new development task (handoff mode)
 - `/owflow:goal-development <description>` — run all phases in one loop (orchestrated mode)
+
+Quick lane:
+
+- `/owflow:dev-plan --quick "<description>"` — condensed plan-only task: bootstraps a standard development task (state + condensed spec), writes the implementation plan directly on the fly (no planner subagent; diagram is optional and gated by a question), then stops — continuable with `/owflow:dev-implement` or any dev-* subskill

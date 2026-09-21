@@ -338,7 +338,7 @@ Next steps:
   → Commit using the suggested message from summary.md
 
 Other options:
-  /owflow:quick-plan   — plan the next task
+  /owflow:dev-plan --quick   — plan the next task
   /owflow:development  — full workflow for a bigger follow-up feature
   /owflow:reviews-code <task-path> — deeper review of the fix
 ```

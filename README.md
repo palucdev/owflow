@@ -145,12 +145,11 @@ For smaller tasks that don't need a full workflow:
 
 | Command         | Use When                                                    | Artifacts                               |
 | --------------- | ----------------------------------------------------------- | --------------------------------------- |
-| `/quick-plan`   | You want a plan with standards awareness before coding      | `task.yml`, `findings.md`               |
 | `/quick-bugfix` | Quick TDD-driven bug fix — write failing test, fix, verify  | `task.yml`, `findings.md`, `summary.md` |
 
-All quick commands create lightweight task directories under `.owflow/tasks/quick-{type}/` with a `task.yml` for traceability.
+`/quick-bugfix` creates a lightweight task directory under `.owflow/tasks/quick-bugfix/` with a `task.yml` for traceability.
 
-Quick development uses the standard pipeline instead: `/dev-implement --quick "<description>"` bootstraps a regular development task (`orchestrator-state.yml`, condensed spec + plan), implements it, and stops — continue later with `/dev-verify` or stop there if the results are enough.
+Quick development uses the standard pipeline instead: `/dev-implement --quick "<description>"` bootstraps a regular development task (`orchestrator-state.yml`, condensed spec + plan), implements it, and stops — continue later with `/dev-verify` or stop there if the results are enough. Plan-only tasks work the same way: `/dev-plan --quick "<description>"` bootstraps a regular development task and stops after the plan — continue with `/dev-implement` or stop there if the plan is enough.
 
 ### Fine-Grained Control: Development Subskills
 
