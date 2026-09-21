@@ -286,8 +286,9 @@ Orchestrators MAY delegate phase bodies to user-invocable **subskills** instead 
 
 ### Rules
 
-1. **State file is canonical.** `orchestrator-state.yml` remains the single source of truth. Subskills read it on entry and write phase results on exit. `completed_phases` values and phase numbering MUST stay stable so both modes intermix freely on the same task.
-2. **Subskills are self-contained.** Each has: an entry check (validate state + prerequisite artifacts), an execute section (delegation via Skill/Task tools per Section 1), and an exit (state update + closing ritual). **State updates are per-step**: a subskill writes `orchestrator-state.yml` immediately after each of its phases completes — appending only the `phase-N` entry actually performed, bumping `orchestrator.updated`, recording failures in `failed_phases`/`auto_fix_attempts`, and validating with `verify_template` — never as a single end-of-skill write.
+1. **State file is canonical.** `orchestrator-state.yml` remains the single source of truth. Subskills read it on entry and write step results on exit. `completed_phases` values MUST stay stable so both modes intermix freely on the same task.
+   - **Value convention**: `completed_phases` / `failed_phases` / `auto_fix_attempts` keys are **descriptive step slugs**, not `phase-N` numbers. The development workflow defines the canonical slugs (`codebase-analysed`, `gap-analysed`, `tdd-red-proven`, `spec-written`, `spec-audited`, `plan-created`, `implementation-done`, `tdd-green-proven`, `options-chosen`, `verification-done`, `e2e-run`, `docs-generated`, `task-completed` — see `skills/development/SKILL.md` routing table and `templates/orchestrator-state-development.yml`). New orchestrators SHOULD use descriptive step slugs too; older orchestrators (performance, migration, research) still use `phase-N` and MUST be kept internally consistent.
+2. **Subskills are self-contained.** Each has: an entry check (validate state + prerequisite artifacts), an execute section (delegation via Skill/Task tools per Section 1), and an exit (state update + closing ritual). **State updates are per-step**: a subskill writes `orchestrator-state.yml` immediately after each of its steps completes — appending only the step slug actually performed, bumping `orchestrator.updated`, recording failures in `failed_phases`/`auto_fix_attempts`, and validating with `verify_template` — never as a single end-of-skill write.
 3. **Closing ritual (handoff) → Exit Gate.** Every subskill ends with the **Exit Gate** contract defined in Section 9 (results box → results-acceptance question → next-step hint on accept → STOP).
 4. **Entry checks replace phase gates in handoff mode.** A subskill invoked directly must validate the same prerequisites a phase gate would (e.g., spec exists before audit) and route to the prerequisite's command if missing — via its **Entry Gate** (Section 9).
 5. **Never chain automatically.** The orchestrated wrapper invokes; subskills only SUGGEST the next command and stop. Auto-chaining from a subskill skips user review.
@@ -319,7 +320,7 @@ The Entry Gate runs BEFORE any phase work. It validates that this skill is allow
    | Required for this skill | Where verified                                                      | Produced by                  |
    | ----------------------- | ------------------------------------------------------------------- | ---------------------------- |
    | State file exists       | `<task-path>/orchestrator-state.yml`                                | `/owflow:development <desc>` |
-   | Analysis done           | `phase-2` in `completed_phases` + `analysis/gap-analysis.md` exists | `/owflow:dev-analyze`        |
+   | Analysis done           | `gap-analysed` in `completed_phases` + `analysis/gap-analysis.md` exists | `/owflow:dev-analyze`        |
    | Spec approved           | `implementation/spec.md` exists                                     | `/owflow:dev-spec`           |
 
    Verify **presence and, where cheap, content** (state field values like `has_reproducible_defect`, marker artifacts like `implementation/tdd-red-gate.md`), not just file existence.
@@ -328,7 +329,7 @@ The Entry Gate runs BEFORE any phase work. It validates that this skill is allow
    1. Numbered "Steps that must be completed first (in order)", each with its exact prefixed command (`/owflow:dev-analyze <task-path>`).
    2. List of resumable task identifiers (directories under the workflow's task type), if any exist.
    3. Fresh-start hint: `Run /owflow:<entry-command> <description> to start a task from scratch.`
-4. **Skip/resume semantics** — when the skill's phases are already in `completed_phases` (validate artifacts before trusting state): report the existing results briefly and route to the Exit Gate instead of re-executing.
+4. **Skip/resume semantics** — when the skill's steps are already in `completed_phases` (validate artifacts before trusting state): report the existing results briefly and route to the Exit Gate instead of re-executing.
 5. **Conditional activation** — skills that only apply under a state condition (e.g., TDD red gate requires `has_reproducible_defect: true`) check it as part of the Entry Gate and route to the correct alternative command when inactive.
 
 ### Exit Gate

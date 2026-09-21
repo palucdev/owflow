@@ -1,13 +1,15 @@
 ---
 name: owflow:development
 description: Development workflow dispatcher. Initializes/resumes development tasks, derives the next phase from state, and hands off to the matching /owflow:dev-* subskill. Use /owflow:goal-development to run all phases in one loop.
-argument-hint: "[task description | task-path] [--from=PHASE] [--research=PATH] [--e2e] [--user-docs]"
+argument-hint: "[task description | task-path] [--from=<step-slug>] [--research=PATH] [--e2e] [--user-docs]"
 user-invocable: true
 ---
 
 # Development Dispatcher
 
-Entry point for development tasks in **handoff mode**: initialize (or resume) the task, derive the next pending phase from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:dev-*` subskill runs its phases with fresh context — the explicit invocation IS the phase gate.
+Entry point for development tasks in **handoff mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:dev-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
+
+Development state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `codebase-analysed`, `gap-analysed`, `tdd-red-proven`, `spec-written`, `spec-audited`, `plan-created`, `implementation-done`, `tdd-green-proven`, `options-chosen`, `verification-done`, `e2e-run`, `docs-generated`, `task-completed`. The routing table below maps slugs to subskills.
 
 For the all-in-one loop with in-session `question` gates, use `/owflow:goal-development`.
 
@@ -58,7 +60,7 @@ Gates follow the shared contract in `../orchestrator-framework/references/orches
 **Resume** (task-path argument):
 
 1. Read `orchestrator-state.yml`; validate expected artifacts for `completed_phases` (remove entries with missing artifacts)
-2. Find resume point: first phase NOT in `completed_phases`; `--from=PHASE` overrides (validate prerequisites exist, else use `question`)
+2. Find resume point: first step slug NOT in `completed_phases`; `--from=<step-slug>` overrides (validate prerequisites exist, else use `question`)
 
 **Output**:
 
@@ -67,7 +69,7 @@ Gates follow the shared contract in `../orchestrator-framework/references/orches
 
 Task: [description]
 Directory: [task-path]
-Next phase: [N — phase name]
+Next step: [step name]
 ```
 
 ---
@@ -82,19 +84,19 @@ Use for **all development tasks**: bug fixes, enhancements, new features, and an
 
 ## Routing Table (completed_phases → next subskill)
 
-Derive the FIRST phase not in `completed_phases`, then print the matching command:
+Derive the FIRST step slug not in `completed_phases`, then print the matching command:
 
-| Next phase    | Condition (from state)                                     | Handoff command                       | Produces                                          |
-| ------------- | ---------------------------------------------------------- | ------------------------------------- | ------------------------------------------------- |
-| 1–2           | Always (new task or partial analysis)                      | `/owflow:dev-analyze <task-path>`     | `analysis/codebase-analysis.md`, `gap-analysis.md` |
-| 3             | `task_characteristics.has_reproducible_defect: true`       | `/owflow:dev-tdd-red <task-path>`     | `implementation/tdd-red-gate.md`                   |
-| 4–5           | Analysis complete (and red gate done if required)          | `/owflow:dev-spec <task-path>`        | `implementation/spec.md`, `verification/spec-audit.md` |
-| 6             | `implementation/spec.md` exists                            | `/owflow:dev-plan <task-path>`        | `implementation/implementation-plan.md`            |
-| 7–8           | Spec + plan exist                                          | `/owflow:dev-implement <task-path>`   | implemented code, `work-log.md`                    |
-| 9–10          | `phase-7` completed                                        | `/owflow:dev-verify <task-path>`      | `verification/implementation-verification.md`      |
-| 11–13         | `phase-10` completed                                       | `/owflow:dev-finalize <task-path>`    | `documentation/`, completed task                   |
+| Next step (slug)                                              | Condition (from state)                                     | Handoff command                       | Produces                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------- | ------------------------------------------------- |
+| Analysis (`codebase-analysed`, `gap-analysed`)                | Always (new task or partial analysis)                      | `/owflow:dev-analyze <task-path>`     | `analysis/codebase-analysis.md`, `gap-analysis.md` |
+| TDD red gate (`tdd-red-proven`)                               | `task_characteristics.has_reproducible_defect: true`       | `/owflow:dev-tdd-red <task-path>`     | `implementation/tdd-red-gate.md`                   |
+| Specification (`spec-written`, `spec-audited`)                | `gap-analysed` completed (and `tdd-red-proven` if required)| `/owflow:dev-spec <task-path>`        | `implementation/spec.md`, `verification/spec-audit.md` |
+| Planning (`plan-created`)                                     | `implementation/spec.md` exists                            | `/owflow:dev-plan <task-path>`        | `implementation/implementation-plan.md`            |
+| Implementation (`implementation-done`, `tdd-green-proven`)    | Spec + plan exist                                          | `/owflow:dev-implement <task-path>`   | implemented code, `work-log.md`                    |
+| Verification (`options-chosen`, `verification-done`)          | `implementation-done` completed                            | `/owflow:dev-verify <task-path>`      | `verification/implementation-verification.md`      |
+| Finalization (`e2e-run`, `docs-generated`, `task-completed`)  | `verification-done` completed                              | `/owflow:dev-finalize <task-path>`    | `documentation/`, completed task                   |
 
-Phase 3 is SKIPPED when `has_reproducible_defect` is false — route to dev-spec. All conditional flags (`e2e_enabled`, `user_docs_enabled`) live in state and are honored by the subskills.
+The TDD red gate is SKIPPED when `has_reproducible_defect` is false — route to dev-spec. All conditional flags (`e2e_enabled`, `user_docs_enabled`) live in state and are honored by the subskills.
 
 ### Exit Gate (adapted for dispatch mode)
 
@@ -107,8 +109,8 @@ After deriving the handoff, present the results box, ask how to proceed, then ha
 
 **Task** — [description]
 **Directory** — `<task-path>`
-**Next phase** — [N — phase name]
-[Resume note: completed phases / fresh task]
+**Next step** — [step name]
+[Resume note: completed steps / fresh task]
 
 **Next ▸** `/owflow:<subskill> <task-path>`
 ```
@@ -134,7 +136,7 @@ Next step:
 
 Other options:
   /owflow:goal-development <task-path>   — run remaining phases in one loop
-  /owflow:development --from=PHASE <task-path>   — jump to a specific phase
+  /owflow:development --from=<step-slug> <task-path>   — jump to a specific step
 ```
 
 ---
@@ -189,7 +191,7 @@ Retries are owned by each subskill (max attempts per phase):
 
 | Flag                             | Effect                          |
 | -------------------------------- | ------------------------------- |
-| `--from=PHASE`                   | Hand off from specific phase    |
+| `--from=<step-slug>`             | Hand off from a specific step   |
 | `--research=PATH`                | Link to completed research task |
 | `--audit` / `--no-audit`         | Force/skip specification audit  |
 | `--e2e` / `--no-e2e`             | Force/skip E2E testing          |
@@ -240,7 +242,7 @@ When starting from a completed research task, the dispatcher loads research cont
 Invoked via:
 
 - `/owflow:development [description] [--e2e] [--user-docs] [--research=PATH]` (new)
-- `/owflow:development [task-path] [--from=PHASE] [--reset-attempts]` (resume)
+- `/owflow:development [task-path] [--from=<step-slug>] [--reset-attempts]` (resume)
 
 Alternative: `/owflow:goal-development` — same task lifecycle, all subskills invoked in one session with `question` gates.
 

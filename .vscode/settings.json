@@ -1,0 +1,9 @@
+{
+	// owflow is an OpenCode plugin: its SKILL.md files intentionally use the
+	// "owflow:" name prefix, which VS Code's skill validator flags as an error.
+	// OpenCode does not enforce Agent Skills naming, so remap these files to
+	// plain markdown to opt them out of VS Code's skill validation entirely.
+	"files.associations": {
+		"**/SKILL.md": "markdown"
+	}
+}

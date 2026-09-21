@@ -3,19 +3,19 @@ orchestrator:
   completed_phases: []
   failed_phases: []
   auto_fix_attempts:
-    phase-1: 0
-    phase-2: 0
-    phase-3: 0
-    phase-4: 0
-    phase-5: 0
-    phase-6: 0
-    phase-7: 0
-    phase-8: 0
-    phase-9: 0
-    phase-10: 0
-    phase-11: 0
-    phase-12: 0
-    phase-13: 0
+    codebase-analysed: 0
+    gap-analysed: 0
+    tdd-red-proven: 0
+    spec-written: 0
+    spec-audited: 0
+    plan-created: 0
+    implementation-done: 0
+    tdd-green-proven: 0
+    options-chosen: 0
+    verification-done: 0
+    e2e-run: 0
+    docs-generated: 0
+    task-completed: 0
   options:
     spec_audit_enabled: true
     skip_test_suite: true

@@ -5,7 +5,7 @@ argument-hint: "[task-path-or-identifier]"
 user-invocable: true
 ---
 
-# Dev Analyze — Phases 1–2 (Codebase & Gap Analysis)
+# Dev Analyze — Codebase & Gap Analysis (codebase-analysed, gap-analysed)
 
 Work phase of the development workflow. Runs codebase exploration, requirements clarification, gap analysis, and scope decisions for an existing development task. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
@@ -24,24 +24,24 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 
 ### Prerequisites
 
-| Required for this skill | Where verified                                                          | Produced by                      |
-| ----------------------- | ----------------------------------------------------------------------- | -------------------------------- |
-| State file exists       | `<task-path>/orchestrator-state.yml`                                    | `/owflow:development <desc>`     |
+| Required for this skill | Where verified                       | Produced by                  |
+| ----------------------- | ------------------------------------ | ---------------------------- |
+| State file exists       | `<task-path>/orchestrator-state.yml` | `/owflow:development <desc>` |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
-2. **Skip/resume**: if `phase-1` is in `completed_phases`, skip that part. If `phase-2` is in `completed_phases`, the whole phase is done — report existing results and route to the Exit Gate.
+2. **Skip/resume**: if `codebase-analysed` is in `completed_phases`, skip that part. If `gap-analysed` is in `completed_phases`, the whole skill is done — report existing results and route to the Exit Gate.
 
 ## Execute
 
 **Read first**: Section 1 (Delegation Rules) and Section 7 (Dispatcher & Handoff Pattern) of `../orchestrator-framework/references/orchestrator-patterns.md`.
 
-### Part A — Codebase Analysis (Phase 1)
+### Codebase Analysis (`codebase-analysed`)
 
 1. Skill tool - `codebase-analyzer`. Pass: task description (`task.description`), task_path, risk-relevant state, `project_doc_paths` from state, research/quick-reference context if present in state.
 2. Direct - use `question` for max 5 critical clarifying questions. Save to `analysis/clarifications.md`; set `task_context.clarifications_resolved`.
-3. **State write (Phase 1)**: append `phase-1` to `completed_phases`; update `task_context.risk_level`, `task_context.clarifications_resolved`, `phase_summaries.codebase_analysis`; bump `orchestrator.updated`. On failure: append `phase-1` to `failed_phases`, increment `auto_fix_attempts["phase-1"]`. Then re-read state + run `verify_template` (see State Update Convention).
+3. **State write**: append `codebase-analysed` to `completed_phases`; update `task_context.risk_level`, `task_context.clarifications_resolved`, `phase_summaries.codebase_analysis`; bump `orchestrator.updated`. On failure: append `codebase-analysed` to `failed_phases`, increment `auto_fix_attempts["codebase-analysed"]`. Then re-read state + run `verify_template` (see State Update Convention).
 
-### Part B — Gap Analysis & Scope (Phase 2)
+### Gap Analysis & Scope (`gap-analysed`)
 
 1. Task tool - `gap-analyzer` subagent. Pass: task_path, risk level, codebase summary, key files, clarifications, `project_doc_paths`.
 2. **Extract structured data from the result** (this gates later phases — do not summarize only):
@@ -52,7 +52,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 3. **Decision gate** (mandatory): if `decisions_needed.critical` or `decisions_needed.important` is non-empty → `question` (one per critical; batch important into multi-select). If empty, note "No scope decisions needed" in state.
 4. Save scope clarifications to `analysis/scope-clarifications.md` (conditional).
 5. **Optional phase defaults**: `ui_heavy: true` → `options.e2e_enabled: true` + `options.user_docs_enabled: true`; `creates_new_entities: true` → `options.user_docs_enabled: true`. Command flags in state (`options`) already set override these.
-6. **State write (Phase 2)**: append `phase-2` to `completed_phases`; update `task_context.task_characteristics`, `task_context.risk_level`, `phase_summaries.gap_analysis`; record decision-gate outcome (or "No scope decisions needed") in `task_context.gaps`; apply option defaults to `options.*`; bump `orchestrator.updated`. On failure: append `phase-2` to `failed_phases`, increment `auto_fix_attempts["phase-2"]`. Then re-read state + run `verify_template`.
+6. **State write**: append `gap-analysed` to `completed_phases`; update `task_context.task_characteristics`, `task_context.risk_level`, `phase_summaries.gap_analysis`; record decision-gate outcome (or "No scope decisions needed") in `task_context.gaps`; apply option defaults to `options.*`; bump `orchestrator.updated`. On failure: append `gap-analysed` to `failed_phases`, increment `auto_fix_attempts["gap-analysed"]`. Then re-read state + run `verify_template`.
 
 **ANTI-PATTERN**: Do NOT override `ui_heavy` with your own complexity judgment ("no new screens needed, just..."). It is a gap-analyzer signal.
 
@@ -60,9 +60,9 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 
 Apply after EVERY phase/step above:
 
-1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the `phase-N` entry actually performed plus that step's fields. Never batch multiple phases into one end-of-skill write.
+1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed (e.g. `codebase-analysed`, `gap-analysed`) plus that step's fields. Never batch multiple steps into one end-of-skill write.
 2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
-3. **Failures** — if the step fails or its retries are abandoned, do NOT append to `completed_phases`; instead append `phase-N` to `orchestrator.failed_phases` and increment `auto_fix_attempts["phase-N"]`.
+3. **Failures** — if the step fails or its retries are abandoned, do NOT append to `completed_phases`; instead append the step's slug to `orchestrator.failed_phases` and increment `auto_fix_attempts["<slug>"]`.
 4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-development.yml`. Fix any reported issue immediately before proceeding.
 5. **Final check** — before the Exit Gate, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
 
@@ -81,6 +81,7 @@ Present results, get user confirmation, then hand off (see `orchestrator-pattern
 **Scope decisions** — [decisions made / "none needed"]
 
 **Artifacts**
+
 - `analysis/codebase-analysis.md`
 - `analysis/clarifications.md`
 - `analysis/gap-analysis.md`

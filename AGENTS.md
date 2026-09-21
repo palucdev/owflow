@@ -216,6 +216,7 @@ Skills live in `src/skills/<name>/SKILL.md` — read the frontmatter `descriptio
 
 - `docs-manager` is an internal engine, not user-invocable — it is only executed mid-workflow by the `docs-operator` agent (Task tool) for init, standards-update, and standards-discover.
 - Every orchestrator reads `skills/orchestrator-framework/references/orchestrator-patterns.md` (delegation rules, state schema, context passing) at initialization; the authoring checklist is `orchestrator-creation-checklist.md`.
+- Skill `name:` frontmatter fields intentionally use the `owflow:` prefix (e.g. `name: owflow:dev-analyze`): OpenCode never auto-namespaces plugin skills, so the prefix is what makes skills appear as `owflow:<name>` in the Skill tool. OpenCode does not enforce Agent Skills name validation, so do NOT "fix" these names to match their folder names — VS Code's SKILL.md validation errors about the prefix (lowercase/hyphens/folder-match) are expected noise, not a defect.
 
 ## Available Commands
 
