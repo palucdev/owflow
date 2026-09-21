@@ -1,5 +1,6 @@
 orchestrator:
   started_phase: null
+  entry_point: null
   completed_phases: []
   failed_phases: []
   auto_fix_attempts:

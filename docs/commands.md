@@ -176,16 +176,17 @@ Update or create standards from conversation context or explicit description. Wh
 
 ## Quick Commands
 
-Lightweight commands for small tasks that don't need a full orchestrator workflow.
+Lightweight options for small tasks that don't need a full orchestrator workflow.
 
-### `/quick-dev [task description]`
+### `/dev-implement --quick ["task description"]`
 
-Implement a task directly with standards awareness. Reads INDEX.md, loads applicable standards, then implements without planning mode.
+The quick development lane — a condensed subset of the development pipeline, run inside `/dev-implement`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-implement --quick"`), discovers and reads applicable standards, writes a condensed spec + implementation plan, and asks for approval before implementing. Execution is delegated like any other development task.
 
 **When to use**: Task is clear, no architectural decisions needed, you know what needs doing.
 
-**Task directory**: `.owflow/tasks/quick-dev/YYYY-MM-DD-task-name/`
-**Artifacts**: `task.yml`, `summary.md`
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
+
+After implementation it stops at the dev-implement exit gate — continue the pipeline with `/dev-verify` (or `/development <task-path>`), or stop there if the results are enough.
 
 ### `/quick-plan [task description]`
 

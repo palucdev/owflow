@@ -1,7 +1,7 @@
 ---
 name: owflow:dev-implement
-description: Development — execute implementation plan & TDD Green Gate
-argument-hint: "[task-path-or-identifier]"
+description: Development — execute implementation plan & TDD Green Gate. --quick bootstraps a condensed task when no state file exists.
+argument-hint: "[task-path-or-identifier | \"description\"] [--quick]"
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the owflow:dev-implement skill immediately as your FIRST action.
@@ -31,3 +31,4 @@ Entry points:
 
 - `/owflow:development <description>` — start a new development task (handoff mode)
 - `/owflow:goal-development <description>` — run all phases in one loop (orchestrated mode)
+- `/owflow:dev-implement --quick "<description>"` — condensed quick task: bootstraps a standard development task (state + condensed spec/plan) here, implements it, then stops — continuable with `/owflow:dev-verify` or any dev-* subskill

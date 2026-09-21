@@ -455,43 +455,6 @@ task_path: .owflow/tasks/quick-bugfix/task
     });
   });
 
-  describe("template: quick-dev-task.yml", () => {
-    const templateName = "quick-dev-task.yml";
-
-    test("successful verification: valid instance matching quick-dev-task", async () => {
-      const result = await verify_template.execute(
-        { filePath: templateName, templateName },
-        { directory: templatesDir } as any,
-      );
-      expect((result as any).output).toBe(
-        "File exists and follows the correct YAML structure.",
-      );
-    });
-
-    test("faulty verification: missing required field 'standards_applied'", async () => {
-      const filePath = "faulty-dev-task-missing-standards.yml";
-      fs.writeFileSync(
-        path.join(testDir, filePath),
-        `
-command: quick-dev
-title: "Add feature"
-description: "New button"
-status: in_progress
-created: "2026-01-01"
-updated: "2026-01-01"
-task_path: .owflow/tasks/quick-dev/task
-`,
-      );
-
-      const result = await verify_template.execute(
-        { filePath, templateName },
-        { directory: testDir } as any,
-      );
-      expect((result as any).output).toContain("YAML Structure Validation Failed");
-      expect((result as any).output).toContain("- Missing key: standards_applied");
-    });
-  });
-
   describe("template: quick-plan-task.yml", () => {
     const templateName = "quick-plan-task.yml";
 
