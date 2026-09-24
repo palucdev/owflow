@@ -13,7 +13,7 @@ Supports a **quick mode** (`--quick`, or any description argument with no existi
 
 ## Entry Gate
 
-Resolve the argument BEFORE anything else (see `orchestrator-patterns.md` Section 9). The argument may be:
+Resolve the argument BEFORE anything else (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). The argument may be:
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
@@ -45,7 +45,7 @@ If the path does **not exist** or matches **no identifier** → print the blocke
 | State file exists       | `<task-path>/orchestrator-state.yml`                 | `/owflow:development <desc>` or quick bootstrap |
 | Spec approved           | `implementation/spec.md` exists                      | `/owflow:dev-spec <task-path>` or quick prelude |
 
-1. **Read `orchestrator-state.yml`** from the task path. If missing → quick bootstrap (see Quick Mode) or print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch, or /owflow:dev-plan --quick "<description>" for a quick plan-only task.` and STOP.
+1. **Read `orchestrator-state.yml`** from the task path. If missing → quick bootstrap (see Quick Mode), otherwise mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `plan-created`): `question` — bootstrap a fresh standard task starting at this step, or decline → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch, or /owflow:dev-plan --quick "<description>" for a quick plan-only task.` and STOP.
 2. **Skip/resume**: if `plan-created` is in `completed_phases`, report the existing plan summary and route to the Exit Gate.
 3. **Prerequisite check**: `implementation/spec.md` exists (spec approved during `spec-written`). If missing → run the Quick prelude for the missing pieces (`--quick` or user chooses quick), otherwise print the blocked block, then STOP:
    - Steps that must be completed first: analysis (`codebase-analysed`, `gap-analysed`) → TDD red gate (`tdd-red-proven`, only when a reproducible defect was detected) → specification (`spec-written`).
@@ -85,7 +85,7 @@ Then continue with the **Post-Plan Diagram** gate below (both modes).
 
 ## Execute (full pipeline — delegated planning)
 
-**Read first**: Section 1 (Delegation Rules) of `../orchestrator-framework/references/orchestrator-patterns.md`.
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).
 
 **ANTI-PATTERN — never write implementation-plan.md yourself in the full pipeline. "This is simple enough to plan inline" is NOT a reason to skip delegation. (Quick mode is the ONLY exception — its prelude step 4 writes the plan directly and skips this section.)**
 
@@ -108,7 +108,7 @@ Task tool - `implementation-planner`. Pass: task_path, task_description, task_ch
 
 ## Exit Gate
 
-Present results, get user confirmation, then hand off (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
+Present results, get user confirmation, then hand off (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
 
 ### Results box
 

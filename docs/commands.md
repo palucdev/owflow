@@ -185,6 +185,7 @@ The quick development lane — a condensed subset of the development pipeline, r
 **When to use**: Task is clear, no architectural decisions needed, you know what needs doing.
 
 **Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
+**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`, `implementation/work-log.md`
 
 After implementation it stops at the dev-implement exit gate — continue the pipeline with `/dev-verify` (or `/development <task-path>`), or stop there if the results are enough.
 

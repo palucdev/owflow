@@ -29,6 +29,6 @@ Part of the development workflow. See `skills/dev-implement/SKILL.md` for comple
 
 Entry points:
 
-- `/owflow:development <description>` — start a new development task (handoff mode)
+- `/owflow:development <description>` — start a new development task (assisted mode)
 - `/owflow:goal-development <description>` — run all phases in one loop (orchestrated mode)
 - `/owflow:dev-implement --quick "<description>"` — condensed quick task: bootstraps a standard development task (state + condensed spec/plan) here, implements it directly with standards, then stops — continuable with `/owflow:dev-verify` or any dev-* subskill

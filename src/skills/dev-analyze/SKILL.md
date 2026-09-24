@@ -9,11 +9,11 @@ user-invocable: true
 
 Work phase of the development workflow. Runs codebase exploration, requirements clarification, gap analysis, and scope decisions for an existing development task. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
-Related entry points: `/owflow:development` (handoff mode), `/owflow:goal-development` (loop mode). Both produce the same state; you may mix them freely.
+Related entry points: `/owflow:development` (assisted mode), `/owflow:goal-development` (autonomous mode). Both produce the same state; you may mix them freely.
 
 ## Entry Gate
 
-Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
@@ -28,12 +28,12 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 | ----------------------- | ------------------------------------ | ---------------------------- |
 | State file exists       | `<task-path>/orchestrator-state.yml` | `/owflow:development <desc>` |
 
-1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
+1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `codebase-analysed`): `question` — create a fresh standard development task starting at this step, or decline → print `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
 2. **Skip/resume**: if `codebase-analysed` is in `completed_phases`, skip that part. If `gap-analysed` is in `completed_phases`, the whole skill is done — report existing results and route to the Exit Gate.
 
 ## Execute
 
-**Read first**: Section 1 (Delegation Rules) and Section 7 (Dispatcher & Handoff Pattern) of `../orchestrator-framework/references/orchestrator-patterns.md`.
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) and the [Dispatcher & Handoff Pattern](../orchestrator-framework/references/dispatcher-handoff.md).
 
 ### Codebase Analysis (`codebase-analysed`)
 
@@ -68,7 +68,7 @@ Apply after EVERY phase/step above:
 
 ## Exit Gate
 
-Present results, get user confirmation, then hand off (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
+Present results, get user confirmation, then hand off (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
 
 ### Results box
 
@@ -99,7 +99,7 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-Read `task_context.task_characteristics` from state and print the suggested command with annotations (see `orchestrator-patterns.md` Section 9):
+Read `task_context.task_characteristics` from state and print the suggested command with annotations (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 - `has_reproducible_defect: true` → `→ /owflow:dev-tdd-red <task-path>`
   What: writes a failing test that reproduces the defect — `required` before the spec when a reproducible defect exists; the test becomes the spec's acceptance criterion.

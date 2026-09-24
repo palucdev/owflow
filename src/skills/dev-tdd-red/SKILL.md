@@ -11,7 +11,7 @@ Work phase of the development workflow. Writes a failing test proving the defect
 
 ## Entry Gate
 
-Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
@@ -29,7 +29,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 | Analysis done                  | `gap-analysed` in `completed_phases`                                                                   | `/owflow:dev-analyze <task-path>`|
 | Defect is reproducible         | `task_context.task_characteristics.has_reproducible_defect: true`                                      | `/owflow:dev-analyze <task-path>`|
 
-1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
+1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `tdd-red-proven`): `question` — create a fresh standard development task starting at this step, or decline → print `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
 2. **Skip/resume**: if `tdd-red-proven` is in `completed_phases`, report the existing `implementation/tdd-red-gate.md` results and route to the Exit Gate.
 3. **Conditional activation**: read `task_context.task_characteristics.has_reproducible_defect`. If `false` → print `No reproducible defect detected — TDD red gate not required.` and suggest `→ /owflow:dev-spec <task-path>` (required next phase: turns analysis into a user-approved specification; remaining plan plan → implement → verify → finalize), then STOP.
 4. **Prerequisite check**: `gap-analysed` must be in `completed_phases`. If not → print the blocked block, then STOP:
@@ -59,7 +59,7 @@ Retry rule: on repeated failures (test framework issues, imports) retry up to 2 
 
 ## Exit Gate
 
-Present results, get user confirmation, then hand off (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
+Present results, get user confirmation, then hand off (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
 
 ### Results box
 

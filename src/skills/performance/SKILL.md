@@ -8,7 +8,7 @@ user-invocable: true
 
 Static-analysis-first performance optimization workflow. Identifies bottlenecks by reading code, then uses the standard specification/planning/implementation/verification pipeline to fix them.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
 
 ## Entry Gate
 
@@ -342,7 +342,7 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 > **Phase gate**: Requires `question` confirmation from Phase 8 before executing.
 
-**Purpose**: Present optimization results, confirm correctness with the user, and close the workflow (Exit Gate contract, `orchestrator-patterns.md` Section 9)
+**Purpose**: Present optimization results, confirm correctness with the user, and close the workflow (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md))
 **Execute**: Direct - create summary, update state, guide commit
 **Output**: Workflow summary
 **State**: Set `task.status: completed`

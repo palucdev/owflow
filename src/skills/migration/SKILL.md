@@ -8,7 +8,7 @@ user-invocable: true
 
 Systematic migration workflow from current state analysis to verified migration with rollback capabilities.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
 
 ## Entry Gate
 

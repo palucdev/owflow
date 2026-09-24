@@ -8,7 +8,7 @@ user-invocable: true
 
 Systematic research workflow from question definition to evidence-based documentation.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
 
 ## Entry Gate
 
@@ -357,7 +357,7 @@ question - "Design complete. Continue to output generation?"
 
 > **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
 
-**Purpose**: Present research results, confirm correctness with the user, and hand off (Exit Gate contract, `orchestrator-patterns.md` Section 9)
+**Purpose**: Present research results, confirm correctness with the user, and hand off (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md))
 **Execute**: Direct
 **Output**: No new files — summarizes existing outputs
 

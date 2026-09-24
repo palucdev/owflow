@@ -9,7 +9,7 @@ user-invocable: true
 
 Turn a markdown plan/idea/RFC into a single self-contained HTML page that follows the warm editorial design system bundled in this skill.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 — "Inputs and outputs" below IS the Entry Gate; Workflow step 7 (Verify) plus the Exit Gate block at the close.
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md) — "Inputs and outputs" below IS the Entry Gate; Workflow step 7 (Verify) plus the Exit Gate block at the close.
 
 ## When to use
 
@@ -45,7 +45,7 @@ Reuse existing classes and tokens before inventing anything. If the user asks fo
    - `<body>` containing `<main class="hr-page">` wrapping the sectioned content.
 6. **Write** the file as `<basename>.html` next to the source.
 7. **Verify**: re-open the output and confirm every `class="hr-..."` you emitted exists in the inlined CSS.
-8. **Exit Gate**: present the results box, then confirm (Exit Gate contract, `orchestrator-patterns.md` Section 9):
+8. **Exit Gate**: present the results box, then confirm (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 ```markdown
 ## ✅ HTML RENDER COMPLETE

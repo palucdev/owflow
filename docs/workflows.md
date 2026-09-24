@@ -6,23 +6,22 @@ Owflow provides four workflow types, each with phases tailored to its needs. All
 
 Development work runs through a pipeline of standalone **dev-\* subskills**, coordinated by a shared task state file (`orchestrator-state.yml`). Two top-level orchestrators start and route the pipeline:
 
-- **Handoff mode** — `/owflow:development` initializes/resumes the task, derives the next step from state, prints the matching subskill command, and stops. Each subskill runs in a fresh context.
-- **Loop mode** — `/owflow:goal-development` runs the same subskills back-to-back in one session, pausing at gates between them. Tasks can mix both modes freely.
+- **Assisted mode** — `/owflow:development` initializes/resumes the task, derives the next step from state, prints the matching subskill command, and stops. Each subskill runs in a fresh context.
+- **Autonomous mode** — `/owflow:goal-development` runs the same subskills back-to-back in one session, pausing at gates between them. Tasks can mix both modes freely.
 
 Both modes share one state format. Progress is tracked as descriptive step slugs in `completed_phases`: `codebase-analysed`, `gap-analysed`, `tdd-red-proven`, `spec-written`, `spec-audited`, `plan-created`, `implementation-done`, `tdd-green-proven`, `options-chosen`, `verification-done`, `e2e-run`, `docs-generated`, `task-completed`.
 
 ### Pipeline Steps
 
-| Step (slug)                           | Subskill                | Produces                                              |
-| ------------------------------------- | ----------------------- | ----------------------------------------------------- |
-| Codebase + gap analysis               | `/owflow:dev-analyze`   | `analysis/codebase-analysis.md`, `gap-analysis.md`    |
-| TDD red gate (conditional — bugs)     | `/owflow:dev-tdd-red`   | `implementation/tdd-red-gate.md` (failing test)       |
-| Requirements + specification + audit  | `/owflow:dev-spec`      | `implementation/spec.md`, `verification/spec-audit.md`|
-| Implementation planning               | `/owflow:dev-plan`      | `implementation/implementation-plan.md`               |
-| Implementation + TDD green gate       | `/owflow:dev-implement` | implemented code, `work-log.md`, `tdd-green-gate.md`  |
-|                                       |                         | (full pipeline: delegated to implementation-plan-executor) |
-| Verification + issue resolution       | `/owflow:dev-verify`    | `verification/implementation-verification.md`         |
-| E2E + user docs + finalization        | `/owflow:dev-finalize`  | `documentation/`, completed task                      |
+| Step slug(s)             | Description                    | Subskill                | Produces                                              |
+| ------------------------ | ------------------------------ | ----------------------- | ----------------------------------------------------- |
+| `codebase-analysed`      | Codebase + gap analysis        | `/owflow:dev-analyze`   | `analysis/codebase-analysis.md`, `gap-analysis.md`    |
+| `tdd-red-proven`         | TDD red gate (conditional — bugs) | `/owflow:dev-tdd-red`   | `implementation/tdd-red-gate.md` (failing test)       |
+| `spec-written`, `spec-audited` | Requirements + specification + audit | `/owflow:dev-spec`      | `implementation/spec.md`, `verification/spec-audit.md`|
+| `plan-created`           | Implementation planning        | `/owflow:dev-plan`      | `implementation/implementation-plan.md`               |
+| `implementation-done`    | Implementation + TDD green gate | `/owflow:dev-implement` | implemented code, `work-log.md`; (full pipeline delegates to implementation-plan-executor) |
+| `options-chosen`, `verification-done` | Verification + issue resolution | `/owflow:dev-verify`    | `verification/implementation-verification.md`         |
+| `e2e-run`, `docs-generated`, `task-completed` | E2E + user docs + finalization | `/owflow:dev-finalize`  | `documentation/`, completed task                      |
 
 The TDD red gate is skipped unless gap analysis detects a reproducible defect (`has_reproducible_defect: true`). The TDD green gate runs inside dev-implement only when a red gate was executed. Conditional options (`--e2e`, `--user-docs`, `--audit`) are stored in state and honored by the subskills.
 
@@ -34,7 +33,7 @@ Every entry level below ends in the same pipeline and the same state file — yo
 
 ```bash
 /owflow:development "Add two-factor authentication"
-/owflow:goal-development "Add two-factor authentication"     # loop mode
+/owflow:goal-development "Add two-factor authentication"     # autonomous mode
 ```
 
 Auto-detects the task type. The dispatcher initializes the task, then hands off step-by-step.
@@ -52,17 +51,20 @@ flowchart TD
     I --> V["dev-verify<br/>options-chosen, verification-done"]
     V --> F["dev-finalize<br/>e2e-run, docs-generated, task-completed"]
     F --> Done["Task completed<br/>commit / reviews-*"]
+    Q["Quick dev lane: --quick flag converges analysis + spec + plan into one condensed pass"] -.-> P
+    S -. quick-lane tasks skip straight to dev-implement .-> I
 ```
 
-#### 2. Handoff vs loop mode
+#### 2. Assisted vs Autonomous mode
 
 ```mermaid
 flowchart TD
-    Entry["Same task, same state file"] --> H["Handoff mode<br/>/owflow:development"]
-    Entry --> L["Loop mode<br/>/owflow:goal-development"]
-    H --> H1["Prints next subskill command,<br/>user invokes it in a fresh context"]
-    L --> L1["Invokes dev-* subskills in one session,<br/>question gates between them"]
-    H1 <--> L1
+    Entry["Same task, same state file"] --> H["Assisted mode<br/>/owflow:development"]
+    Entry --> L["Autonomous mode<br/>/owflow:goal-development"]
+    H --> H1["dev-analyze"] --> H1Q{"Results accepted?"} --> H2["dev-spec"] --> H2Q{"Results accepted?"} --> H3["dev-plan"] --> H3Q{"Results accepted?"} --> H4["dev-implement"] --> H4Q{"Results accepted?"} --> H5["dev-verify"] --> H5Q{"Results accepted?"} --> H6["dev-finalize"]
+    L --> L1["dev-analyze → dev-spec → dev-plan →<br/>dev-implement → dev-verify → dev-finalize<br/>(all in one session)"] --> LQ{"Final results accepted?"}
+    H6 --> Done["Task completed"]
+    LQ --> Done
 ```
 
 #### 3. Quick bug lane (`/owflow:dev-bugfix`)
@@ -71,41 +73,41 @@ Lightweight TDD-driven bug fix: condensed analysis → approved fix plan → TDD
 
 ```mermaid
 flowchart TD
-    B["/owflow:dev-bugfix<br/>bug description OR task-path"] --> Mode{"Argument kind"}
-    Mode -- "description" --> Stand["Standalone: bootstrap standard dev task,<br/>condensed analysis, fix-plan.md approval"]
-    Mode -- "task-path" --> Cons["Consecutive: reuse existing task,<br/>reset downstream verification slugs"]
-    Stand --> Esc{"2+ complexity signals?"}
-    Esc -- "yes" --> Escalate["task.status: escalated<br/>→ /owflow:development <task-path><br/>fills in spec + plan"]
-    Esc -- "no / user continues" --> Red["TDD red: failing test"]
-    Cons --> Red
-    Red --> Green["Fix + TDD green<br/>implementation-done, tdd-green-proven"]
-    Green --> Verify["→ /owflow:dev-verify <task-path><br/>recommended next step"]
+    B["/owflow:dev-bugfix<br/>bug description OR existing-task path"] --> Mode{"What argument was passed?"}
+    Mode -- "bug description" --> Stand["Step 1: create a new standard task<br/>Step 2: condensed bug analysis<br/>Step 3: fix plan approval"]
+    Mode -- "existing-task path" --> Cons["Step 1: reuse the existing task<br/>Step 2: reset downstream verification slugs"]
+    Stand --> Esc{"Complexity escalation check"}
+    Esc -- "simple bug" --> Red
+    Esc -- "complex bug (2+ signals)" --> Escalate["task.status: escalated<br/>continue via /owflow:development <task-path><br/>fill in spec + plan"]
+    Cons --> Red["Step: write a failing test (TDD red)"]
+    Red --> Green["Step: fix + failing test passes (TDD green)"]
+    Green --> Verify["Step: continue with /owflow:dev-verify <task-path>"]
 ```
 
 The dispatcher routes bugfix tasks straight to `/owflow:dev-verify` when `implementation-done` is complete (spec/plan are not required for verification). Escalated tasks route through the full pipeline from the first missing slug.
 
-#### 4. Quick dev lanes (`--quick`)
+#### 4. Quick dev lane (`--quick`)
 
 Condensed entries that bootstrap a standard task inline, then continue with the lane's condensed work. Use when analysis/spec phases can be done in one pass.
 
 ```mermaid
 flowchart TD
-    QI["/owflow:dev-implement --quick desc"] --> QB["Bootstrap task + condensed spec + plan"]
-    QP["/owflow:dev-plan --quick desc"] --> QB2["Bootstrap task + condensed spec,<br/>write plan directly (no planner subagent)"]
-    QB --> Impl["Direct implementation in main agent<br/>with discovered standards<br/>implementation-done"]
-    QB2 --> Plan["implementation-plan.md<br/>plan-created (lane stops)"]
+    QP["/owflow:dev-plan --quick desc"] --> QB1["Step 1: bootstrap task + condensed spec"]
+    QI["/owflow:dev-implement --quick desc"] --> QB2["Step 1: bootstrap task + condensed spec<br/>Step 2: write plan directly (no planner subagent)"]
+    QB1 --> Plan["implementation-plan.md saved<br/>plan-created (lane stops)"]
+    QB2 --> Impl["Step 3: implement directly in main agent<br/>with discovered standards<br/>implementation-done"]
     Plan --> Choice{"Continue with"}
-    Choice -- "/owflow:dev-implement" --> NImpl["Normal delegated implementation"]
+    Choice -- "/owflow:dev-implement" --> NImpl["Full delegated implementation"]
     Choice -- "/owflow:dev-implement --quick" --> Impl
     NImpl --> Next
-    Impl --> Next["→ /owflow:dev-verify <task-path><br/>or stop — task stays resumable"]
+    Impl --> Next["Step: continue with /owflow:dev-verify <task-path><br/>or stop — task stays resumable"]
 ```
 
-The `dev-implement --quick` lane implements **directly in the main agent** (applying the standards read during the condensed prelude, with continuous discovery for newly-surfaced areas) — it never routes through the implementation-plan-executor or its subagents. The same applies when `--quick` is passed to `/owflow:dev-implement` on an existing task (e.g., a quick plan). Full-pipeline runs are unaffected: without `--quick`, implementation always delegates.
+As opposed to full implementation it is not using implementation-plan-executor or other subagents: the `dev-implement --quick` lane implements **directly in the main agent** (applying the standards read during the condensed prelude, with continuous discovery for newly-surfaced areas), for the full pipeline this delegation stays reserved. The same applies when `--quick` is passed to `/owflow:dev-implement` on an existing task (e.g., a quick plan). Full-pipeline runs are unaffected: without `--quick`, implementation always delegates.
 
 #### 5. Research-based development
 
-Start development informed by a completed research workflow. Research context flows through all phases (it never skips any):
+Start interactive development workflow informed by a completed research workflow:
 
 ```bash
 /owflow:development .owflow/tasks/research/2026-01-12-oauth-research
@@ -118,7 +120,10 @@ flowchart TD
     D --> Copy["Artifacts copied to analysis/research-context/<br/>research_reference set in state"]
     Copy --> A["dev-analyze — research guides codebase/gap analysis"]
     A --> S["dev-spec — design + decisions as spec INPUT"]
-    S --> Rest["dev-plan → dev-implement → dev-verify → dev-finalize"]
+    S --> P["dev-plan<br/>plan-created"]
+    P --> I["dev-implement<br/>implementation-done, tdd-green-proven"]
+    I --> V["dev-verify<br/>options-chosen, verification-done"]
+    V --> F["dev-finalize<br/>e2e-run, docs-generated, task-completed"]
 ```
 
 #### 6. Standalone subskills
@@ -135,7 +140,7 @@ Each dev-\* subskill is standalone and can be invoked directly with a task path 
 /owflow:development [task-path] [--from=<step-slug>] [--reset-attempts]
 ```
 
-Resume derives from state: the first step slug not in `completed_phases` determines the next subskill; `--from` overrides (prerequisites are validated). Works across handoff and loop modes, including tasks started by `/owflow:dev-bugfix` or a `--quick` lane.
+Resume derives from state: the first step slug not in `completed_phases` determines the next subskill; `--from` overrides (prerequisites are validated). Works across assisted and autonomous modes, including tasks started by `/owflow:dev-bugfix` or a `--quick` lane.
 
 ### Auto-Recovery
 
@@ -279,7 +284,7 @@ All workflows create structured directories in `.owflow/tasks/`:
 ├── research/              # Research
 ```
 
-Each task folder follows the pattern `YYYY-MM-DD-task-name/`. Development tasks (shown below) carry the full pipeline artifacts — every entry point (dispatcher, loop mode, bugfix lane, quick lanes) writes into this same structure:
+Each task folder follows the pattern `YYYY-MM-DD-task-name/`. Development tasks (shown below) carry the full pipeline artifacts — every entry point (dispatcher, autonomous mode, bugfix lane, quick lanes) writes into this same structure:
 
 ```
 2026-02-17-user-auth/

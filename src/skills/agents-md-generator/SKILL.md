@@ -17,7 +17,7 @@ user-invocable: true
 
 Produce an `AGENTS.md` that serves as an onboarding document for AI coding agents in this repository. The file is short, specific to the repo, and structured so the most important rules appear first.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 (confirm-or-revise exception — see "After writing").
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md) (confirm-or-revise exception — see the [Confirm-or-Revise Exception](../orchestrator-framework/references/confirm-or-revise-exception.md)).
 
 ## Entry Gate
 

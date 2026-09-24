@@ -11,7 +11,7 @@ Score an AI rules file on five axes and return concrete fixes. The file under re
 
 The skill never edits the file. It produces a scorecard. The user decides what to act on.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 (confirm-or-revise exception — see "Output format").
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md) (confirm-or-revise exception — see the [Confirm-or-Revise Exception](../orchestrator-framework/references/confirm-or-revise-exception.md)).
 
 ## Entry Gate
 

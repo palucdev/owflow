@@ -29,7 +29,7 @@ Part of the development workflow. See `skills/dev-plan/SKILL.md` for complete ph
 
 Entry points:
 
-- `/owflow:development <description>` — start a new development task (handoff mode)
+- `/owflow:development <description>` — start a new development task (assisted mode)
 - `/owflow:goal-development <description>` — run all phases in one loop (orchestrated mode)
 
 Quick lane:

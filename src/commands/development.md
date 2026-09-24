@@ -1,6 +1,6 @@
 ---
 name: owflow:development
-description: Development workflow dispatcher — initializes/resumes tasks, derives the next phase from state, and hands off to /owflow:dev-* subskills. Use /owflow:goal-development to run all phases in one loop.
+description: Development workflow dispatcher — initializes/resumes tasks, derives the next phase from state, and hands off to /owflow:dev-* subskills.
 argument-hint: [task description]
 ---
 
@@ -24,13 +24,13 @@ Invoke the skill now and let it orchestrate the complete workflow.
 
 ## About This Workflow
 
-Development workflow **dispatcher** (handoff mode). The skill handles:
+Development workflow **dispatcher** (assisted mode). The skill handles:
 
 - Task initialization/resume and state management (`orchestrator-state.yml`)
 - Research context intake, dev-bugfix/quick-lane entry_points, and flag handling
 - Deriving the next pending phase from state
 - Handing off to the matching `/owflow:dev-*` subskill, then stopping
 
-Run `/owflow:goal-development` instead for loop mode (all subskills in one session with gates).
+Run `/owflow:goal-development` instead for autonomous mode (all subskills in one session with gates).
 
 See `skills/development/SKILL.md` for the routing table and `skills/dev-*/SKILL.md` for phase documentation.

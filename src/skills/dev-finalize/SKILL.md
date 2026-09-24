@@ -11,7 +11,7 @@ Closing phase of the development workflow. Runs optional E2E browser verificatio
 
 ## Entry Gate
 
-Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
@@ -33,7 +33,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 | State file exists       | `<task-path>/orchestrator-state.yml`      | `/owflow:development <desc>`       |
 | Verification done       | `verification-done` in `completed_phases` | `/owflow:dev-verify <task-path>`   |
 
-1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
+1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `e2e-run`): `question` — create a fresh standard development task starting at this step, or decline → print `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
 2. **Prerequisite check**: `verification-done` in `completed_phases`. If missing → print the blocked block, then STOP:
    - Steps that must be completed first: analysis (`codebase-analysed`, `gap-analysed`) → TDD red gate (`tdd-red-proven`, only when a reproducible defect was detected) → specification (`spec-written`) → implementation planning (`plan-created`) → implementation (`implementation-done`) → verification (`verification-done`).
    - `Run /owflow:dev-verify <task-path> first` (or the command for the earliest missing earlier step).
@@ -43,7 +43,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 
 ## Execute
 
-**Read first**: Section 1 (Delegation Rules) of `../orchestrator-framework/references/orchestrator-patterns.md`.
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).
 
 ### E2E Testing (`e2e-run`, conditional)
 
@@ -79,7 +79,7 @@ Apply after EVERY phase above:
 
 ## Exit Gate
 
-Present results, get user confirmation, then close the workflow (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
+Present results, get user confirmation, then close the workflow (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
 
 ### Results box
 

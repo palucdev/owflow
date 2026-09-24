@@ -63,7 +63,7 @@ Wait for docs-operator to complete, then immediately proceed to SYNC STEP 5.
 
 ### SYNC STEP 5: Exit Gate
 
-Present results and close (Exit Gate contract, `orchestrator-patterns.md` Section 9):
+Present results and close (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 ```markdown
 ## ✅ STANDARDS SYNC COMPLETE
@@ -172,7 +172,7 @@ Wait for docs-operator to complete, then immediately proceed to Phase 5.
 1. Verify standard file exists and has content
 2. Verify INDEX.md references the standard with practice-specific description (not generic)
 3. Verify AGENTS.md integration
-4. Present results (Exit Gate contract, `orchestrator-patterns.md` Section 9):
+4. Present results (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 **Results box**:
 

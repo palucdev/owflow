@@ -11,7 +11,7 @@ Work phase of the development workflow. Resolves technical decisions, gathers re
 
 ## Entry Gate
 
-Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 - **Path** (absolute or project-relative) to the task directory — use as-is.
 - **Identifier** — exact directory name inside `.owflow/tasks/development/` (e.g., `2026-01-12-my-task`); resolve to its path.
@@ -30,7 +30,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 | Analysis done              | `gap-analysed` in `completed_phases` + `analysis/gap-analysis.md` exists                    | `/owflow:dev-analyze <task-path>` |
 | TDD red gate (conditional) | `tdd-red-proven` in `completed_phases` — required only when `has_reproducible_defect: true` | `/owflow:dev-tdd-red <task-path>` |
 
-1. **Read `orchestrator-state.yml`** from the task path. If missing → print: `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
+1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `spec-written`): `question` — create a fresh standard development task starting at this step, or decline → print `No development task found at <path>. Run /owflow:development <description> to start a task from scratch.` and STOP.
 2. **Skip/resume**: if `spec-written` is in `completed_phases`, skip to the spec audit; if both `spec-written` and `spec-audited` are complete, report existing results and route to the Exit Gate.
 3. **Conditional activation (routing guard)**: if `task_context.task_characteristics.has_reproducible_defect` is `true` AND `tdd-red-proven` is NOT in `completed_phases` → print the blocked block, then STOP:
    - Steps that must be completed first: TDD red gate (`tdd-red-proven` — required because a reproducible defect was detected); if analysis (`codebase-analysed`, `gap-analysed`) is also missing, start there.
@@ -42,7 +42,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see `orches
 
 ## Execute
 
-**Read first**: Section 1 (Delegation Rules) of `../orchestrator-framework/references/orchestrator-patterns.md`.
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).
 
 ### Technical & Architecture Clarification (before `spec-written`, inline, conditional)
 
@@ -88,7 +88,7 @@ Apply after EVERY phase/step above:
 
 ## Exit Gate
 
-Present results, get user confirmation, then hand off (see `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
+Present results, get user confirmation, then hand off (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
 
 ### Results box
 

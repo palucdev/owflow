@@ -24,9 +24,9 @@ Invoke the skill now and let it sequence all dev-* subskills with gates between 
 
 ## About This Workflow
 
-Loop mode for the development workflow: initializes the task, then invokes every required
+Autonomous mode for the development workflow: initializes the task, then invokes every required
 dev-* subskill in sequence (analyze → tdd-red → spec → plan → implement → verify → finalize),
-pausing at question gates. Shares orchestrator state with handoff mode.
+pausing at question gates. Shares orchestrator state with assisted mode.
 
 See `skills/goal-development/SKILL.md` for the loop rules and
 `skills/development/SKILL.md` for the dispatcher alternative.

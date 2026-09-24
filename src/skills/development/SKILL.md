@@ -7,13 +7,13 @@ user-invocable: true
 
 # Development Dispatcher
 
-Entry point for development tasks in **handoff mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:dev-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
+Entry point for development tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:dev-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
 
 Development state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `codebase-analysed`, `gap-analysed`, `tdd-red-proven`, `spec-written`, `spec-audited`, `plan-created`, `implementation-done`, `tdd-green-proven`, `options-chosen`, `verification-done`, `e2e-run`, `docs-generated`, `task-completed`. The routing table below maps slugs to subskills.
 
 For the all-in-one loop with in-session `question` gates, use `/owflow:goal-development`.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9 (adapted for dispatch mode — see its Exceptions).
+Gates follow the shared contract in the [Gate Contract](../orchestrator-framework/references/gate-contract.md), with the [dispatcher exception](../orchestrator-framework/references/gate-contract.md).
 
 ## Entry Gate
 
@@ -23,7 +23,7 @@ Gates follow the shared contract in `../orchestrator-framework/references/orches
 
 **Read the framework reference file NOW using the Read tool:**
 
-1. `../orchestrator-framework/references/orchestrator-patterns.md` — Section 7 (Dispatcher & Handoff Pattern) and Section 8 (Command Namespacing) govern this skill.
+1. The [Dispatcher & Handoff Pattern](../orchestrator-framework/references/dispatcher-handoff.md) and [Command Namespacing](../orchestrator-framework/references/command-namespacing.md) govern this skill.
 
 ### Step 2: Detect Prior Work Context
 
@@ -104,7 +104,7 @@ The TDD red gate is SKIPPED when `has_reproducible_defect` is false — route to
 
 ### Exit Gate (adapted for dispatch mode)
 
-After deriving the handoff, present the results box, ask how to proceed, then hand off accordingly (see `orchestrator-patterns.md` Section 9 — dispatcher exception). Never auto-invoke the subskill.
+After deriving the handoff, present the results box, ask how to proceed, then hand off accordingly (see the [dispatcher exception](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the subskill.
 
 #### Results box
 
@@ -124,7 +124,7 @@ After deriving the handoff, present the results box, ask how to proceed, then ha
 Use `question` — "Task ready. How would you like to proceed?" with options:
 
 - **Hand off to /owflow:<subskill>** — the user invokes the suggested command (dispatcher copies it to chat for convenience). Execution starts in a fresh context.
-- **Switch to loop mode** — illustrate with `/owflow:goal-development <task-path>` to run remaining phases in one session with gates.
+- **Switch to autonomous mode** — illustrate with `/owflow:goal-development <task-path>` to run remaining phases in one session with gates.
 - **Adjust** — task set-up is wrong (wrong flags, wrong research reference, wrong task); re-run the affected initialization step, re-present the results box.
 - **Stop here** — print the resume command (`/owflow:development <task-path>`) and end.
 

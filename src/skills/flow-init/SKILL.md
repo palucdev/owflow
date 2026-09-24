@@ -9,7 +9,7 @@ user-invocable: true
 
 Initialize `.owflow/docs/` with intelligent project analysis and meaningful documentation generation based on actual codebase inspection.
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
 
 **NOTE**: This skill invokes other skills and subagents at specific phases. Use the **Task tool with `docs-operator` subagent** (subagent_type: `docs-operator`) for all docs-manager operations, and **Task tool** for project-analyzer. Use the **Skill tool** only for standards-discover (Phase 8, last phase). The Task tool returns control to this skill after completion; the Skill tool does not.
 

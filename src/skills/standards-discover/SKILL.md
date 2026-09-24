@@ -183,7 +183,7 @@ Display application summary: created count, updated count, total active.
 
 ### Phase 9: Summary Report → Exit Gate
 
-Present final results and close (Exit Gate contract, `orchestrator-patterns.md` Section 9):
+Present final results and close (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 **Results box**:
 

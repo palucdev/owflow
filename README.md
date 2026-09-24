@@ -38,8 +38,6 @@ owflow/
     └── index.ts            # Main plugin entry point
 ```
 
-All `src/` markdown assets (skills, agents, commands, templates) are copied into `dist/` at build time - edit the sources, never `dist/`.
-
 ### Prerequisites
 
 - [Opencode](https://opencode.ai/) CLI installed and configured
@@ -101,7 +99,7 @@ Or just discuss your task with Agent and then run:
 /owflow:development
 ```
 
-The plugin picks up context from your conversation - no arguments needed. Prefer everything in one session? Use `/owflow:goal-development` (loop mode) instead - it runs the same pipeline without handoffs between phases.
+The plugin picks up context from your conversation - no arguments needed. Prefer everything in one session? Use `/owflow:goal-development` (autonomous mode) instead - it runs the same pipeline without handoffs between phases (subskills run back-to-back in one session).
 
 ## How It Works
 

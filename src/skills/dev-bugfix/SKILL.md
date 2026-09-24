@@ -13,7 +13,7 @@ Dev-bugfix is an **alternative entry point** into the development workflow, para
 
 For complex bugs that grow beyond a quick fix, suggests escalating to the full development workflow (`/owflow:development`).
 
-Gates follow the shared contract in `../orchestrator-framework/references/orchestrator-patterns.md` Section 9.
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
 
 ## Usage
 
@@ -32,7 +32,7 @@ Two invocation modes:
 
 ## Entry Gate
 
-Resolve the argument BEFORE anything else (see `orchestrator-patterns.md` Section 9):
+Resolve the argument BEFORE anything else (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
 - **Path / identifier** of an existing task directory under `.owflow/tasks/development/` → **Consecutive-run mode** below. Never guess or auto-pick a task.
 - **Description** (quoted free text) → **Standalone mode** below.
@@ -59,7 +59,7 @@ Resolve the argument BEFORE anything else (see `orchestrator-patterns.md` Sectio
 
 Used when a bug emerges on a task that already progressed in the dev pipeline (after implementation, verification, or finalization).
 
-1. **Read `orchestrator-state.yml`** from the task path. If missing or the path matches no identifier → print `No development task found at <path>. Run /owflow:dev-bugfix "<description>" to fix a bug on a fresh task.` and STOP.
+1. **Read `orchestrator-state.yml`** from the task path. If missing or the path matches no identifier → ask via `question` to bootstrap a fresh standard bugfix task ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `codebase-analysed`), or decline → print `No development task found at <path>. Run /owflow:dev-bugfix "<description>" to fix a bug on a fresh task.` and STOP.
 2. **Read the existing state**: `completed_phases`, `phase_summaries`, affected files from prior phases. The bug fix is APPENDED to the task — existing artifacts (analysis, spec, plan, work-log) stay intact.
 3. Continue with the normal workflow below. On success, the fix slugs re-map the task back toward verification (see Downstream Reset in the State Update Convention).
 
@@ -358,7 +358,7 @@ If `completed_phases` contained any of `options-chosen`, `verification-done`, `e
 
 ### Step 8: Exit Gate
 
-Present results, get user confirmation, then close (Exit Gate contract, `orchestrator-patterns.md` Section 9). Never auto-invoke the next skill.
+Present results, get user confirmation, then close (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
 
 **Results box**:
 
