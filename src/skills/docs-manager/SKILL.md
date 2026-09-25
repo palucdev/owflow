@@ -1,5 +1,5 @@
 ---
-name: docs-manager
+name: owflow:docs-manager
 description: Internal engine for managing project documentation and technical standards in .owflow/docs/. Handles file operations, INDEX.md generation, and AGENTS.md integration. Invoked by flow-init, standards-update, and standards-discover skills.
 user-invocable: false
 ---
@@ -117,8 +117,8 @@ Use this when a project doesn't have `.owflow/docs/` or needs documentation for 
 
      _Not initialized for this project. If you need frontend standards, you can:_
 
-     - _Add them manually using the docs-manager skill_
-     - _Run `/standards-discover --scope=frontend` to auto-discover_
+     - _Add them manually using the owflow:docs-manager skill_
+     - _Run `/owflow:standards-discover --scope=frontend` to auto-discover_
      ```
 
 6. **MANDATORY - Update AGENTS.md:**
@@ -144,7 +144,7 @@ Use this when a project doesn't have `.owflow/docs/` or needs documentation for 
 **Note on Skipped Standards**: If standard categories are skipped during initialization, teams can add them later using:
 
 - "Add Documentation File" operation to add specific standards
-- `/standards-discover` command to auto-discover standards from codebase
+- `/owflow:standards-discover` command to auto-discover standards from codebase
 
 ---
 

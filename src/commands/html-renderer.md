@@ -1,10 +1,10 @@
 ---
-name: html-renderer
+name: owflow:html-renderer
 description: Render a markdown plan, idea, RFC, or design note into a self-contained, share-ready HTML file using the warm editorial visual system. Output is a single .html file with all CSS inlined, written next to the source markdown file.
 argument-hint: [path to markdown file]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the html-renderer skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:html-renderer skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "html-renderer"
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /html-renderer.
+WHY: The user explicitly chose this workflow by using /owflow:html-renderer.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

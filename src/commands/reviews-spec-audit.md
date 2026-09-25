@@ -1,5 +1,5 @@
 ---
-name: reviews-spec-audit
+name: owflow:reviews-spec-audit
 description: Independent specification audit to verify completeness and clarity before implementation
 ---
 
@@ -73,19 +73,19 @@ The spec-auditor agent will:
 **Example 1**: Pre-implementation spec audit
 
 ```
-User: /reviews-spec-audit .owflow/tasks/development/2025-11-17-user-auth/implementation/spec.md
+User: /owflow:reviews-spec-audit .owflow/tasks/development/2025-11-17-user-auth/implementation/spec.md
 ```
 
 **Example 2**: Post-implementation audit
 
 ```
-User: /reviews-spec-audit .owflow/tasks/development/2025-11-17-user-auth/ --post-implementation
+User: /owflow:reviews-spec-audit .owflow/tasks/development/2025-11-17-user-auth/ --post-implementation
 ```
 
 **Example 3**: Audit with clarification focus
 
 ```
-User: /reviews-spec-audit spec.md --focus=ambiguity
+User: /owflow:reviews-spec-audit spec.md --focus=ambiguity
 ```
 
 ## What to Expect

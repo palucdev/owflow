@@ -16,9 +16,9 @@ describe("configureCommands", () => {
     const config = {} as OpenCodeConfig;
     configureCommands(config);
 
-    expect(config.command.development).toBeDefined();
-    expect(config.command.development!.template).toBeDefined();
-    expect(config.command["quick-bugfix"]).toBeDefined();
+    expect(config.command["owflow:development"]).toBeDefined();
+    expect(config.command["owflow:development"]!.template).toBeDefined();
+    expect(config.command["owflow:dev-bugfix"]).toBeDefined();
   });
 
   test("should not overwrite existing command definitions configured by user", () => {
@@ -28,14 +28,14 @@ describe("configureCommands", () => {
     };
     const config = {
       command: {
-        development: customCommand,
+        "owflow:development": customCommand,
       },
     } as unknown as OpenCodeConfig;
 
     configureCommands(config);
 
-    expect(config.command.development).toEqual(customCommand);
-    expect(config.command["quick-bugfix"]).toBeDefined();
+    expect(config.command["owflow:development"]).toEqual(customCommand);
+    expect(config.command["owflow:dev-bugfix"]).toBeDefined();
   });
 
   test("should correctly parse frontmatter attributes including description, agent, model, and subtask boolean", () => {

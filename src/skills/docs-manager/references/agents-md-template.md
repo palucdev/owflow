@@ -21,7 +21,7 @@ When you notice recurring patterns, fixes, or conventions during implementation 
 - The same type of fix is needed across multiple files
 - A new library/pattern is adopted that should be documented
 
-When this happens, briefly suggest the standard to the user. If approved, invoke `/standards-update` with the identified pattern.
+When this happens, briefly suggest the standard to the user. If approved, invoke `/owflow:standards-update` with the identified pattern.
 
 ## owflow Workflows
 

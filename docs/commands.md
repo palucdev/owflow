@@ -176,31 +176,51 @@ Update or create standards from conversation context or explicit description. Wh
 
 ## Quick Commands
 
-Lightweight commands for small tasks that don't need a full orchestrator workflow.
+Lightweight options for small tasks that don't need a full orchestrator workflow.
 
-### `/quick-dev [task description]`
+### `/dev-spec --quick ["task description"]`
 
-Implement a task directly with standards awareness. Reads INDEX.md, loads applicable standards, then implements without planning mode.
+The spec-only quick lane — a condensed subset of the development pipeline, run inside `/dev-spec`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-spec --quick"`), discovers and reads applicable standards, runs a brief codebase analysis, gathers condensed requirements, then writes the condensed specification directly on the fly — no `specification-creator` subagent (that delegation stays reserved for the full pipeline). Diagrams are optional and gated by a question; the specification audit is skipped (Exit Gate acceptance substitutes; `/reviews-spec-audit` stays available later). Bug-shaped work (proven defect) still requires the TDD red gate — it is never bypassed by `--quick`; use `/dev-bugfix` for the quick TDD lane.
+
+**When to use**: You want a standards-aware, resumable spec before any plan — but the spec alone is enough for now.
+
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
+**Artifacts**: `analysis/requirements.md`, `analysis/quick-analysis.md`, `implementation/spec.md`
+
+After the spec it stops at the dev-spec exit gate — continue the pipeline with `/dev-plan` (or `/development <task-path>`), or stop there if the spec is enough.
+
+### `/dev-plan --quick ["task description"]`
+
+The plan-only quick lane — a condensed subset of the development pipeline, run inside `/dev-plan`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-plan --quick"`), discovers and reads applicable standards, writes a brief analysis and a condensed spec, then writes the implementation plan directly on the fly — no `implementation-planner` subagent (that delegation stays reserved for the full pipeline). The on-the-fly plan stays lean and grounded: key discoveries with `file:line` references, an explicit out-of-scope list, intent + contract per step, automated vs manual acceptance criteria, and no open questions. Adding an execution diagram is optional and gated by a question.
+
+**When to use**: You want a standards-aware, resumable plan before coding — but the plan alone is enough for now.
+
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
+**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`
+
+After planning it stops at the dev-plan exit gate — continue the pipeline with `/dev-implement` (or `/development <task-path>`), or stop there if the plan is enough.
+
+### `/dev-implement --quick ["task description"]`
+
+The quick development lane — a condensed subset of the development pipeline, run inside `/dev-implement`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-implement --quick"`), discovers and reads applicable standards, writes a condensed spec + implementation plan, and asks for approval before implementing. Execution is delegated like any other development task.
 
 **When to use**: Task is clear, no architectural decisions needed, you know what needs doing.
 
-**Task directory**: `.owflow/tasks/quick-dev/YYYY-MM-DD-task-name/`
-**Artifacts**: `task.yml`, `summary.md`
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
+**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`, `implementation/work-log.md`
 
-### `/quick-plan [task description]`
+After implementation it stops at the dev-implement exit gate — continue the pipeline with `/dev-verify` (or `/development <task-path>`), or stop there if the results are enough.
 
-Enter OpenCode's planning mode with standards awareness. Discovers and reads applicable standards _before_ entering plan mode, so your plan is informed by project conventions.
+### `/dev-bugfix [bug description | task-path]`
 
-Standards compliance checklist is required in the plan file before exiting plan mode.
-
-**Task directory**: `.owflow/tasks/quick-plan/YYYY-MM-DD-task-name/`
-**Artifacts**: `task.yml` (+ `plan_path`), `analysis/findings.md`
-
-### `/quick-bugfix [bug description]`
-
-Lightweight TDD-driven bug fix without a full orchestrator workflow. Analyzes the bug, writes a failing test, implements the fix, and verifies the test passes.
+Quick TDD-driven bug fix — an alternative entry point into the dev-* workflow with a standard `orchestrator-state.yml`. Analyzes the bug, presents a fix plan for approval, writes a failing test, implements the fix, and verifies the test passes.
 
 **When to use**: Simple, isolated bugs where you can quickly identify the root cause. If the bug is too complex (multiple files, unclear root cause, architectural impact), the skill suggests escalating to `/development`.
 
-**Task directory**: `.owflow/tasks/quick-bugfix/YYYY-MM-DD-task-name/`
-**Artifacts**: `task.yml`, `analysis/findings.md`, `summary.md`
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure, `entry_point: "dev-bugfix"`)
+**Artifacts**: `analysis/findings.md`, `implementation/fix-plan.md`, `implementation/tdd-red-gate.md`, `implementation/tdd-green-gate.md`, `implementation/work-log.md`, `summary.md`
+
+**Two invocation modes**:
+
+- **Standalone** — bug description (or nothing: reads the conversation or prompts) bootstraps a fresh standard development task. After the fix, continue with `/dev-verify <task-path>` or commit.
+- **Consecutive run** — a task path/identifier under `.owflow/tasks/development/` fixes a newly emerging problem on an existing development task (after implementation or verification); the fix is appended to the task and downstream verification slugs are reset so the pipeline re-runs `/dev-verify`.

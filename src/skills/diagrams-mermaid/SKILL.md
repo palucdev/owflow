@@ -1,5 +1,5 @@
 ---
-name: diagrams-mermaid
+name: owflow:diagrams-mermaid
 description: Creates Mermaid diagrams for planning flows, component communication, and architecture views with adaptive detail selection (including C4 levels). This skill should be used when the user asks for a workflow, interaction, or architecture visualization from provided task context.
 user-invocable: true
 ---
@@ -7,6 +7,8 @@ user-invocable: true
 # Mermaid Diagram Builder
 
 Generate Mermaid diagrams from task context. Focus on visual structure and communication flow, not domain invention.
+
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md) — the "Output Contract" below IS this skill's Exit Gate, and Step 1 (Extract Context) IS the Entry Gate: when required inputs are missing, ask targeted clarification questions (never invent them) before drawing.
 
 ## 🚨 Core Rules
 

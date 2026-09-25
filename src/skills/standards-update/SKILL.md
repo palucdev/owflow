@@ -1,5 +1,5 @@
 ---
-name: standards-update
+name: owflow:standards-update
 description: Update or create project standards from conversation context or explicit description
 argument-hint: "[description of standard/convention] [--from=PATH]"
 user-invocable: true
@@ -12,9 +12,9 @@ Update or create standards in `.owflow/docs/standards/` based on conversation co
 ## Usage
 
 ```bash
-/standards-update                                    # Detect from conversation
-/standards-update "always use React.memo for lists"  # From description
-/standards-update --from=/path/to/other-project      # Sync from another project
+/owflow:standards-update                                    # Detect from conversation
+/owflow:standards-update "always use React.memo for lists"  # From description
+/owflow:standards-update --from=/path/to/other-project      # Sync from another project
 ```
 
 ---
@@ -27,7 +27,7 @@ When `--from=PATH` is provided, the skill switches to **sync mode** — importin
 
 1. Resolve the path (absolute or relative to cwd)
 2. Check `PATH/.owflow/docs/standards/` exists. If not, inform the user and stop.
-3. Check `.owflow/docs/standards/` exists in the current project. If not, offer to run `/flow-init` first.
+3. Check `.owflow/docs/standards/` exists in the current project. If not, offer to run `/owflow:flow-init` first.
 
 ### SYNC STEP 2: Analyze Differences
 
@@ -61,9 +61,31 @@ Invoke `docs-operator` subagent via Task tool (subagent_type: `docs-operator`):
 
 Wait for docs-operator to complete, then immediately proceed to SYNC STEP 5.
 
-### SYNC STEP 5: Summarize
+### SYNC STEP 5: Exit Gate
 
-Display: standards added, standards updated, standards skipped, and total count. Suggest reviewing the imported standards and committing.
+Present results and close (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
+
+```markdown
+## ✅ STANDARDS SYNC COMPLETE
+
+**Added** — [added count]
+**Updated** — [updated count]
+**Skipped** — [skipped count]
+**Total** — [total]
+
+**Artifacts**
+- `.owflow/docs/standards/<category>/<file>.md` [per synced standard]
+- `.owflow/docs/INDEX.md`
+```
+
+Use `question` — "Are these results correct?" with options:
+
+- **Accept** — sync is complete; print next steps below.
+- **Adjust** — re-run selected imports with different merge choices, then re-present the results box.
+- **Discuss** — walk through merged/differing standards in more depth; then re-ask.
+- **Stop here** — end.
+
+Next steps (after Accept): review the imported standards, then commit.
 
 ---
 
@@ -145,15 +167,41 @@ Wait for docs-operator to complete, then immediately proceed to Phase 5.
 
 ---
 
-## PHASE 5: Validate & Summarize
+## PHASE 5: Validate & Exit Gate
 
 1. Verify standard file exists and has content
 2. Verify INDEX.md references the standard with practice-specific description (not generic)
 3. Verify AGENTS.md integration
-4. Display summary: what was updated/created, practices added, next steps (review, commit, share with team)
+4. Present results (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
+
+**Results box**:
+
+```markdown
+## ✅ STANDARDS UPDATE COMPLETE
+
+**Action** — [created / updated] `standards/<category>/<name>.md`
+**Practices** — [count added/changed]
+**INDEX/AGENTS** — [integration status]
+
+**Artifacts**
+- `.owflow/docs/standards/<category>/<name>.md`
+- `.owflow/docs/INDEX.md`
+```
+
+**Results-acceptance question** — use `question` — "Are these results correct?" with options:
+
+- **Accept** — standard is good; print next steps below.
+- **Adjust** — revise the standard (wording, more practices, better examples), via docs-operator, then re-present the results box.
+- **Discuss** — walk through what was written and why in more depth; then re-ask.
+- **Stop here** — end.
+
+**Next steps (after Accept)**:
+
+- Review the applied standard file
+- Commit the changes and share with the team
 
 ---
 
 ## Prerequisites
 
-If `.owflow/docs/` doesn't exist, offer to run `/flow-init` first.
+If `.owflow/docs/` doesn't exist, offer to run `/owflow:flow-init` first.

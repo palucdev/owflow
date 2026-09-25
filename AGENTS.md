@@ -7,7 +7,7 @@ This plugin provides AI-powered Software Development Lifecycle (SDLC) capabiliti
 This is the OpenCode plugin. Key platform conventions:
 
 - **Project instructions file**: `AGENTS.md` (this file).
-- **Skill invocation rule**: When a skill command is invoked (e.g., `/development`, `/flow-init`), you MUST
+- **Skill invocation rule**: When a skill command is invoked (e.g., `/owflow:development`, `/owflow:flow-init`), you MUST
   invoke it via the `skill` tool as your FIRST action. No exceptions. Do not
   analyze the task first, do not decide it's "straightforward", do not substitute
   your own approach. The user chose this workflow intentionally.
@@ -16,7 +16,8 @@ This is the OpenCode plugin. Key platform conventions:
 - **Compaction**: After context compaction, re-read `orchestrator-state.yml` in
   the active task directory to verify `completed_phases` and determine the next
   phase. Use the `question` tool at Phase Gates.
-- **MCP**: The Playwright MCP server is declared in `opencode.json`.
+- **MCP**: The Playwright MCP server is expected from the host project (used by
+  the `e2e-test-verifier` and `user-docs-generator` agents).
 
 ## Critical Principle: User-Confirmed Rollback
 
@@ -50,7 +51,10 @@ All workflows in this plugin follow this pattern when failures occur:
 
 ## Hooks
 
-The plugin implements OpenCode hooks in `.opencode/plugins/hooks.js`.
+The plugin registers OpenCode lifecycle hooks from its entry point (`src/index.ts`), implemented in `src/hooks/` and shipped in `dist/hooks/`:
+
+- `src/hooks/before-tool.ts` — `tool.execute.before`
+- `src/hooks/session-compaction.ts` — `experimental.session.compacting`
 
 ### Destructive Command Protection (`tool.execute.before`)
 
@@ -89,7 +93,7 @@ The plugin splits reference documentation (`.owflow/docs/`, stable) from develop
 
 ### Base Task Structure
 
-Each development task follows a common structure: `orchestrator-state.yml` (state/metadata) at the root, plus `analysis/` (requirements, research-context, visuals), `implementation/` (spec.md, implementation-plan.md, work-log.md), `verification/` (spec-audit.md, conditional), and `documentation/` (user-facing, if applicable). Quick commands (`quick-bugfix`, `quick-plan`, `quick-dev`) use a lighter structure with `task.yml`. Task types can add specialized subdirectories as needed (e.g., `analysis/bug-analysis/`, `implementation/metrics/`).
+Each development task follows a common structure: `orchestrator-state.yml` (state/metadata) at the root, plus `analysis/` (requirements, research-context, visuals), `implementation/` (spec.md, implementation-plan.md, work-log.md), `verification/` (spec-audit.md, conditional), and `documentation/` (user-facing, if applicable). Quick lanes (`dev-spec --quick`, `dev-plan --quick`, `dev-implement --quick`, `dev-bugfix`) bootstrap a standard development task (full `orchestrator-state.yml`) and stop after their phase — continuable with any dev-* subskill; `dev-bugfix` is the bug-shaped quick lane (a bug description starts a fresh task, a task path fixes a newly emerging problem on an existing dev task). Task types can add specialized subdirectories as needed (e.g., `analysis/bug-analysis/`, `implementation/metrics/`).
 
 **Note**: The `implementation/implementation-plan.md` file contains implementation steps (the detailed breakdown of actions), created by the implementation-planner subagent after the specification is approved.
 
@@ -212,26 +216,29 @@ When creating or auditing orchestrators, follow the patterns established in exis
 
 ## Available Skills
 
-Skills live in `src/skills/<name>/SKILL.md` — read the frontmatter `description` there for the canonical list and purpose of every skill (workflow orchestrators, setup/standards, quick commands, content & visualization). Never rest skill purposes here; they change independently of this file. Two non-obvious operational facts:
+Skills live in `src/skills/<name>/SKILL.md` — read the frontmatter `description` there for the canonical list and purpose of every skill (workflow orchestrators, setup/standards, quick commands, content & visualization). Never rest skill purposes here; they change independently of this file. Non-obvious operational facts:
 
-- `docs-manager` is an internal engine, not user-invocable — it is only executed mid-workflow by the `docs-operator` agent (Task tool) for init, standards-update, and standards-discover.
+- `docs-manager`, `codebase-analyzer`, `implementation-plan-executor`, `implementation-verifier`, and `orchestrator-framework` carry `user-invocable: false` — they are internal engines or shared frameworks, not user-facing commands.
 - Every orchestrator reads `skills/orchestrator-framework/references/orchestrator-patterns.md` (delegation rules, state schema, context passing) at initialization; the authoring checklist is `orchestrator-creation-checklist.md`.
+- Skill `name:` frontmatter fields intentionally use the `owflow:` prefix (e.g. `name: owflow:dev-analyze`): OpenCode never auto-namespaces plugin skills, so the prefix is what makes skills appear as `owflow:<name>` in the Skill tool. OpenCode does not enforce Agent Skills name validation, so do NOT "fix" these names to match their folder names — VS Code's SKILL.md validation errors about the prefix (lowercase/hyphens/folder-match) are expected noise, not a defect.
 
 ## Available Commands
 
-Slash commands are thin wrappers over skills; full usage lives in `commands/` and `skills/*/SKILL.md`. Documented commands: `/development`, `/performance`, `/migration`, `/research` (workflow), `/flow-init`, `/standards-update`, `/standards-discover` (setup/standards), `/reviews-*` (review & audit), `/quick-plan`, `/quick-dev`, `/quick-bugfix` (quick), plus content & visualization commands. Auto-generated OpenCode commands are built from `user-invocable: true` skill frontmatter; the `work`, `quick-*`, and `reviews-*` commands are manually maintained — edit the source command files, not this list.
+Slash commands are thin wrappers over skills; full usage lives in `commands/` and `skills/*/SKILL.md`. All slash commands are namespaced `owflow:<name>` (frontmatter `name: owflow:<name>` in `src/commands/*.md`; skill `name:` fields are also `owflow:`-prefixed — Skill-tool invocations use prefixed skill names). Documented commands: `/owflow:goal-development`, `/owflow:development`, `/owflow:performance`, `/owflow:migration`, `/owflow:research` (workflow), `/owflow:dev-*` (development subskills: dev-analyze, dev-tdd-red, dev-spec, dev-plan, dev-implement, dev-verify, dev-finalize), `/owflow:dev-bugfix` (quick bug lane; `dev-spec --quick`, `dev-plan --quick`, and `dev-implement --quick` are the quick development lanes), `/owflow:flow-init`, `/owflow:standards-update`, `/owflow:standards-discover` (setup/standards), `/owflow:reviews-*` (review & audit), plus content & visualization commands. Auto-generated OpenCode commands are built from `user-invocable: true` skill frontmatter; the `work`, `quick-*`, `reviews-*`, and `dev-*` commands are manually maintained — edit the source command files, not this list.
 
 Key usage rules:
 
-- All orchestrators support `--from=phase` (resume point); pass a task description to start new or a task path to resume.
-- `/development "desc" --research=<research-task-path>` (or just the research task path, auto-detected) starts development informed by completed research; research context flows through ALL phases without skipping any, artifacts copied to `analysis/research-context/`.
+- All orchestrators support `--from=phase` (resume point); pass a task description to start new or a task path/identifier (directory name under `.owflow/tasks/<type>/`) to resume.
+- `/owflow:development "desc" --research=<research-task-path>` (or just the research task path, auto-detected) starts development informed by completed research; research context flows through ALL phases without skipping any, artifacts copied to `analysis/research-context/`.
+- Development has two modes sharing one state file: `/owflow:goal-development` runs all dev-* subskills in one session with `question` gates; `/owflow:development` hands off one subskill per invocation. Mix both modes on a single task freely.
+- Every dev-* subskill is standalone and can be invoked at any time. Each resolves its task from a full path or an identifier (directory name under `.owflow/tasks/development/`), never auto-picking a task. If the prerequisite phases are not complete (or no argument resolves to a task), it STOPs and prints the ordered prerequisite steps with the exact commands to run each, plus a hint to start fresh via `/owflow:development <description>`.
+- Every dev-* subskill ends with an **Exit Gate** (see [Gate Contract](skills/orchestrator-framework/references/gate-contract.md)): results box + results-acceptance question (Accept / Adjust / Discuss / Stop), then — only after Accept — the suggested next command. Subskills never auto-chain.
 
 ## Available Subagents
 
 Subagents are specialized AI agents invoked by skills and orchestrators. All agents are read-only unless specified. Individual `agents/*.md` files are the source of truth — read the relevant agent file before invoking; never rest agent purposes here. Non-obvious operational facts:
 
 - `docs-operator` is a companion-agent special case: docs-manager does NOT spawn subagents (file operations only), so docs-manager operations must run via the `docs-operator` agent. Do not copy this pattern for skills that spawn subagents.
-- `existing-feature-analyzer` is deprecated → replaced by the `codebase-analyzer` skill (adaptive parallel Explore subagents).
 
 ## Progress Tracking with Task System
 

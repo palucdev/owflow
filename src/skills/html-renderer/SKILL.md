@@ -1,5 +1,5 @@
 ---
-name: html-renderer
+name: owflow:html-renderer
 description: Render a markdown plan, idea, RFC, or design note into a self-contained, share-ready HTML file using the warm editorial visual system bundled under `references/`. Use this skill whenever the user asks to "render", "convert", "turn into HTML", "make a nice HTML version", "share this as a page", or "make this look good" for a markdown file containing a plan, proposal, idea, brief, RFC, design note, or pitch — even if they don't explicitly say "HTML". The output is a single .html file with all CSS inlined, written next to the source .md, that visually matches the reference layout in `references/index.html` and uses tokens from `references/tokens.json`.
 disable-model-invocation: true
 user-invocable: true
@@ -8,6 +8,8 @@ user-invocable: true
 # HTML Renderer
 
 Turn a markdown plan/idea/RFC into a single self-contained HTML page that follows the warm editorial design system bundled in this skill.
+
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md) — "Inputs and outputs" below IS the Entry Gate; Workflow step 7 (Verify) plus the Exit Gate block at the close.
 
 ## When to use
 
@@ -43,6 +45,17 @@ Reuse existing classes and tokens before inventing anything. If the user asks fo
    - `<body>` containing `<main class="hr-page">` wrapping the sectioned content.
 6. **Write** the file as `<basename>.html` next to the source.
 7. **Verify**: re-open the output and confirm every `class="hr-..."` you emitted exists in the inlined CSS.
+8. **Exit Gate**: present the results box, then confirm (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
+
+```markdown
+## ✅ HTML RENDER COMPLETE
+
+**Source** — `<source.md>`
+**Output** — `<basename>.html` (single file, self-contained)
+**Sections** — [count] · **Diagrams** — [count, if any]
+```
+
+Use `question` — "Is the rendering correct?" with options: **Accept** (open the file in a browser and stop) / **Adjust** (user names layout/section issues; fix and re-present) / **Discuss** (explain a mapping or class choice) / **Stop here**. Note: visual correctness can only be confirmed by the user in a browser — offer to open it via the user's preferred `open`/`xdg-open` command.
 
 ## Markdown → HTML mapping
 

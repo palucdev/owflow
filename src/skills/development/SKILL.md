@@ -1,534 +1,147 @@
 ---
-name: development
-description: Unified orchestrator for all development tasks. ALWAYS execute when invoked — never skip for 'straightforward' tasks. Phases adapt based on detected task characteristics rather than predetermined types. Use for any development work that modifies code.
+name: owflow:development
+description: Development workflow dispatcher. Initializes/resumes development tasks, derives the next phase from state, and hands off to the matching /owflow:dev-* subskill. Use /owflow:goal-development to run all phases in one loop.
+argument-hint: "[task description | task-path] [--from=<step-slug>] [--research=PATH] [--e2e] [--user-docs]"
 user-invocable: true
 ---
 
-# Development Orchestrator
+# Development Dispatcher
 
-Unified workflow for all development tasks — bug fixes, enhancements, and new features. Phases activate based on context and analysis findings, not predetermined task types.
+Entry point for development tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:dev-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
 
-## Initialization
+Development state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `codebase-analysed`, `gap-analysed`, `tdd-red-proven`, `spec-written`, `spec-audited`, `plan-created`, `implementation-done`, `tdd-green-proven`, `options-chosen`, `verification-done`, `e2e-run`, `docs-generated`, `task-completed`. The routing table below maps slugs to subskills.
 
-**BEFORE executing any phase, you MUST complete these steps:**
+For the all-in-one loop with in-session `question` gates, use `/owflow:goal-development`.
+
+Gates follow the shared contract in the [Gate Contract](../orchestrator-framework/references/gate-contract.md), with the [dispatcher exception](../orchestrator-framework/references/gate-contract.md).
+
+## Entry Gate
+
+**BEFORE deriving the handoff, complete these steps:**
 
 ### Step 1: Load Framework Patterns
 
 **Read the framework reference file NOW using the Read tool:**
 
-1. `../orchestrator-framework/references/orchestrator-patterns.md` - Delegation rules, interactive mode, state schema, initialization, context passing, issue resolution
+1. The [Dispatcher & Handoff Pattern](../orchestrator-framework/references/dispatcher-handoff.md) and [Command Namespacing](../orchestrator-framework/references/command-namespacing.md) govern this skill.
 
 ### Step 2: Detect Prior Work Context
 
 **If argument is a research folder path** (matches `.owflow/tasks/research/*`):
 
 - Auto-detect research folder, extract task description from `research_context.research_question`
-- Read research artifacts (see Research-Based Development section below)
+- Read research artifacts (see Research-Based Development below)
 - Set `research_reference` in state automatically
 
 **If `--research=<path>` flag provided**:
 
-- Read research artifacts from specified path
-- Copy to `analysis/research-context/`
+- Read research artifacts from specified path, copy to `analysis/research-context/`
 - Set `research_reference` in state
 
-**If argument is a quick-\* task folder path** (matches `.owflow/tasks/quick-*/`):
+**If the task's state shows `orchestrator.entry_point: "dev-bugfix"`** (task created or last run by the quick bug fix skill):
 
-1. Read `task.yml` — extract `command`, `description`, `standards_applied`, `escalation_reason`
-2. Read `analysis/findings.md` — extract root cause, affected files, complexity assessment, test strategy
-3. Use `description` as the task description (same as research extracts `research_question`)
-4. Set `quick_reference` in orchestrator state:
-   ```yaml
-   task_context:
-     quick_reference:
-       path: .owflow/tasks/quick-bugfix/2026-05-28-fix-login-timeout
-       command: quick-bugfix
-       escalation_reason: "5+ files, unclear root cause"
-     phase_summaries:
-       quick_analysis:
-         { summary: "...", affected_files: [...], root_cause: "..." }
-   ```
-5. Update the quick-\* `task.yml`: set `escalated_to` to the new development task path
+1. No special intake needed — it is a standard development task using the standard state file and artifacts. Its dev-bugfix run already recorded condensed analysis and TDD slugs in `completed_phases`.
+2. Route by the FIRST step slug NOT in `completed_phases`, per the Routing Table — with one exception: if `implementation-done` is already complete (typical for a completed dev-bugfix run), route to `/owflow:dev-verify <task-path>`; verification does NOT require spec/plan. If the task's status is `escalated`, route normally from the first missing slug (usually `spec-written`).
 
-**How quick-\* context informs development phases**:
+The dispatcher hands off to subskills from analysis onward — spec, plan, verify, finalize steps are unchanged; research context flows through all of them.
 
-| Phase   | How Quick-\* Context is Used                                                |
-| ------- | --------------------------------------------------------------------------- |
-| Phase 1 | Codebase analyzer receives affected files and root cause as search guidance |
-| Phase 2 | Gap analyzer uses complexity assessment for risk level                      |
-| Phase 3 | TDD gate uses test strategy from findings.md as starting point              |
-| Phase 4 | Specification creator receives prior analysis as input context              |
+**How dev-bugfix context informs subskills**: dev-spec receives `phase_summaries.quick_analysis` (root cause, affected files, test strategy) as condensed analysis input; dev-verify receives the fix summary.
 
-### Step 3: Initialize Workflow
+### Step 3: Initialize or Resume
 
-1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
-2. **Create Task Directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/`
-3. **Initialize State**: Create `orchestrator-state.yml` with task info and research reference
-   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-development.yml`.
-4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section. This includes predefined docs (vision, roadmap, tech-stack, architecture) AND any user-added project docs (e.g., deployment.md, api-strategy.md). Store complete list as `project_context.project_doc_paths` in state.
+**New task** (description argument):
+
+1. **Create Task Directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/`
+2. **Initialize State**: create `orchestrator-state.yml` with task info, research/quick reference, flags
+   - **CRITICAL**: use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-development.yml`.
+3. **Discover project documentation**: read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section; store as `project_context.project_doc_paths` in state.
+4. **Command flags** (`--e2e`, `--no-e2e`, `--user-docs`, `--no-user-docs`, `--audit`, `--no-audit`) → write to `options.*` in state. Subskills read them from there.
+
+**Resume** (task-path argument):
+
+1. Read `orchestrator-state.yml`; validate expected artifacts for `completed_phases` (remove entries with missing artifacts)
+2. Find resume point: first step slug NOT in `completed_phases`; `--from=<step-slug>` overrides (validate prerequisites exist, else use `question`)
 
 **Output**:
 
 ```
-🚀 Development Orchestrator Started
+🚀 Development Dispatcher
 
 Task: [description]
 Directory: [task-path]
-
-Starting Phase 1: Codebase Analysis...
+Next step: [step name]
 ```
 
 ---
 
 ## When to Use
 
-Use for **all development tasks**: bug fixes, enhancements, new features, and any work that modifies code.
+Use for **all development tasks**: bug fixes, enhancements, new features, and any work that modifies code. Bug-shaped work has a lighter entry point: `/owflow:dev-bugfix "<description>"` (or with a task path, to fix a bug that emerged on an existing task) — it produces the same standard state and is resumable by this dispatcher. Condensed quick lanes also exist per phase — `/owflow:dev-spec --quick "<description>"`, `/owflow:dev-plan --quick "<description>"`, `/owflow:dev-implement --quick "<description>"` — each bootstraps the same standard state and stops after its phase.
 
-**DO NOT use for**: Performance optimization, security remediation, migrations, documentation-only, pure refactoring (use specialized orchestrators).
-
----
-
-## Phase Configuration
-
-| Phase | content                                      | activeForm                                        | Activation                     |
-| ----- | -------------------------------------------- | ------------------------------------------------- | ------------------------------ |
-| 1     | "Analyze codebase & clarify requirements"    | "Analyzing codebase & clarifying"                 | Always                         |
-| 2     | "Analyze gaps & clarify scope"               | "Analyzing gaps & clarifying scope"               | Always                         |
-| 3     | "Write failing test (TDD Red)"               | "Writing failing test"                            | When `has_reproducible_defect` |
-| 4     | "Gather requirements & create specification" | "Gathering requirements & creating specification" | Always                         |
-| 5     | "Audit specification"                        | "Auditing specification"                          | Always (conditional)           |
-| 6     | "Plan implementation"                        | "Planning implementation"                         | Always                         |
-| 7     | "Execute implementation"                     | "Executing implementation"                        | Always                         |
-| 8     | "Verify test passes (TDD Green)"             | "Verifying test passes"                           | When Phase 3 was executed      |
-| 9     | "Prompt verification options"                | "Prompting verification options"                  | Always                         |
-| 10    | "Verify implementation & resolve issues"     | "Verifying implementation"                        | Always                         |
-| 11    | "Run E2E tests"                              | "Running E2E tests"                               | When `e2e_enabled`             |
-| 12    | "Generate user documentation"                | "Generating user documentation"                   | When `user_docs_enabled`       |
-| 13    | "Finalize workflow"                          | "Finalizing workflow"                             | Always                         |
+**DO NOT use for**: Performance optimization, security remediation, migrations, documentation-only, pure refactoring (use the specialized orchestrators).
 
 ---
 
-## Workflow Phases
+## Routing Table (completed_phases → next subskill)
 
-### Phase 1: Codebase Analysis & Clarifications
+Derive the FIRST step slug not in `completed_phases`, then print the matching command:
 
-**Purpose**: Comprehensive codebase exploration followed by scope/requirements clarification
-**Execute**:
+| Next step (slug)                                              | Condition (from state)                                     | Handoff command                       | Produces                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------- | ------------------------------------------------- |
+| Analysis (`codebase-analysed`, `gap-analysed`)                | Always (new task or partial analysis)                      | `/owflow:dev-analyze <task-path>`     | `analysis/codebase-analysis.md`, `gap-analysis.md` |
+| TDD red gate (`tdd-red-proven`)                               | `task_characteristics.has_reproducible_defect: true`       | `/owflow:dev-tdd-red <task-path>`     | `implementation/tdd-red-gate.md`                   |
+| Specification (`spec-written`, `spec-audited`)                | `gap-analysed` completed (and `tdd-red-proven` if required)| `/owflow:dev-spec <task-path>`        | `implementation/spec.md`, `verification/spec-audit.md` |
+| Planning (`plan-created`)                                     | `implementation/spec.md` exists                            | `/owflow:dev-plan <task-path>`        | `implementation/implementation-plan.md`            |
+| Implementation (`implementation-done`, `tdd-green-proven`)    | Spec + plan exist                                          | `/owflow:dev-implement <task-path>`   | implemented code, `work-log.md`                    |
+| Verification (`options-chosen`, `verification-done`)          | `implementation-done` completed (also dev-bugfix tasks — see entry gate note; spec/plan NOT required)                                                                 | `/owflow:dev-verify <task-path>`      | `verification/implementation-verification.md`      |
+| Finalization (`e2e-run`, `docs-generated`, `task-completed`)  | `verification-done` completed                              | `/owflow:dev-finalize <task-path>`    | `documentation/`, completed task                   |
 
-1. Skill tool - `codebase-analyzer`
-2. Update state with analysis results
-3. Direct - use question for max 5 critical clarifying questions
-4. Save clarifications to `analysis/clarifications.md`
-   **Output**: `analysis/codebase-analysis.md`, `analysis/clarifications.md`
-   **State**: Update `task_context.risk_level`, `phase_summaries.codebase_analysis`, `task_context.clarifications_resolved`
+The TDD red gate is SKIPPED when `has_reproducible_defect` is false — route to dev-spec. All conditional flags (`e2e_enabled`, `user_docs_enabled`) live in state and are honored by the subskills.
 
-→ **AUTO-CONTINUE** — Do NOT end turn, do NOT prompt user. Proceed immediately to Phase 2.
+**Dev-bugfix tasks**: tasks whose `completed_phases` holds the quick slice (`codebase-analysed`, `gap-analysed`, `tdd-red-proven`, `implementation-done`, `tdd-green-proven` — no `spec-written`/`plan-created`) are valid dev tasks. The FIRST-missing-slug rule would route them to `dev-spec`; instead, when `implementation-done` is complete, prefer `/owflow:dev-verify`. Escalated (`task.status: escalated`) dev-bugfix tasks route normally from the first missing slug — the full pipeline fills in specification and planning.
 
----
+**Alternative entry points for bugs**: `/owflow:dev-bugfix "<description>"` — standalone bug fix creating the same state from scratch; `/owflow:dev-bugfix <task-path>` — fix a newly emerging problem on an existing dev task (resets downstream verification slugs after the fix, so this router re-routes to dev-verify).
 
-### Phase 2: Gap Analysis & Scope Clarification
+### Exit Gate (adapted for dispatch mode)
 
-**Purpose**: Compare current vs desired state, detect task characteristics, then resolve scope/approach decisions
-**Execute**:
+After deriving the handoff, present the results box, ask how to proceed, then hand off accordingly (see the [dispatcher exception](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the subskill.
 
-1. Task tool - `gap-analyzer` subagent
-2. **Extract and store structured data from gap-analyzer result**:
-   a. Read `task_characteristics` from gap-analyzer output — 5 fields: `has_reproducible_defect`, `modifies_existing_code`, `creates_new_entities`, `involves_data_operations`, `ui_heavy`
-   b. Write all 5 fields to `orchestrator-state.yml` at `task_context.task_characteristics`
-   c. Read `risk_level` from output and write to `task_context.risk_level`
-   d. Extract phase summary (1-2 sentences) and write to `phase_summaries.gap_analysis`
-   e. **SELF-CHECK**: "Did I read the 5 task_characteristics from the gap-analyzer output and write them to state? Let me re-read `orchestrator-state.yml` to verify the values match the gap-analyzer output."
+#### Results box
 
-**⛔ DECISION GATE** (mandatory — do NOT skip):
+```markdown
+## ✅ DEVELOPMENT TASK READY — <task name>
 
-- Parse `decisions_needed` from gap-analyzer output
-- If `decisions_needed.critical` OR `decisions_needed.important` is non-empty:
-  - MUST use `question` — one question per critical decision, batch important decisions into a single multi-select question
-- If both are empty: Note "No scope decisions needed" in state
+**Task** — [description]
+**Directory** — `<task-path>`
+**Next step** — [step name]
+[Resume note: completed steps / fresh task]
 
-**SELF-CHECK** before continuing: "Did the gap-analyzer return `decisions_needed` items? If yes, did I invoke `question`? If I skipped this, STOP and go back."
-
-3. Save scope clarifications to `analysis/scope-clarifications.md`
-4. **Set optional phase defaults** based on detected characteristics:
-   - If `task_characteristics.ui_heavy: true` → set `options.e2e_enabled: true`, `options.user_docs_enabled: true`
-   - If `task_characteristics.creates_new_entities: true` → set `options.user_docs_enabled: true`
-   - Command flags (`--e2e`, `--no-e2e`, `--user-docs`, `--no-user-docs`) override these defaults
-
-**Output**: `analysis/gap-analysis.md`, `analysis/scope-clarifications.md` (conditional)
-**State**: Update `task_context.task_characteristics`, `task_context.scope_expanded`, `options.e2e_enabled`, `options.user_docs_enabled`, `phase_summaries.gap_analysis`
-
-**Context to pass**: Risk level, codebase summary, key files, clarifications, project_doc_paths (from state)
-
-→ Pause (when decisions exist), otherwise Conditional
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "No new screens needed, just a component..." — STOP. `ui_heavy` is a signal from the gap-analyzer. Do NOT override it with your own complexity judgment.
-
-question - Display executive summary before asking. Read `analysis/gap-analysis.md` and extract: task type detected, risk level, key characteristics enabled (TDD gates, E2E, user docs), scope decisions made (if any). Then read `task_context.task_characteristics` from `orchestrator-state.yml` and determine the next phase:
-
-- If `has_reproducible_defect` is true → ask "Continue to Phase 3: TDD Red Gate?"
-- Otherwise → ask "Continue to Phase 4: Technical Approach, Requirements & Specification?"
-
----
-
-### Phase 3: TDD Red Gate (Conditional)
-
-> **Phase gate**: Requires `question` confirmation from Phase 2 before executing.
-
-**Purpose**: Write a failing test that reproduces the defect
-**Execute**: Direct - write test, verify it FAILS
-**Output**: `implementation/tdd-red-gate.md`, failing test file
-**State**: Update `tdd_red_passed: true`
-
-**Skip if**: `task_characteristics.has_reproducible_defect` is false (not set by gap-analyzer)
-
-**Critical**: Test MUST fail before implementation (proves defect exists)
-
-→ Pause
-
-question - "TDD red gate complete. Continue to Phase 4?"
-
----
-
-### Phase 4: Technical Approach, Requirements & Specification
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**⛔ ROUTING GUARD**: Read `task_context.task_characteristics` from `orchestrator-state.yml`. If `has_reproducible_defect` is true and Phase 3 is NOT in `completed_phases` → STOP, execute Phase 3 first.
-
-**Purpose**: Resolve technical decisions, gather specification requirements, then create comprehensive specification
-**Execute**:
-
-**Part A — Technical & Architecture Clarification (inline, conditional)**:
-
-1. If complex task with multiple approaches: Direct - use question for 3-5 technical questions
-2. If multiple valid architectural approaches exist: Present 2-3 approaches via question. The chosen approach is passed to specification-creator so the spec is written with the decided architecture.
-3. Save to `analysis/technical-clarifications.md` (conditional)
-
-**Skip technical clarification if**: Simple task, risk_level = low, no multiple approaches detected
-
-**Part B — Requirements Gathering (inline)**: 3. Direct - use question for specification requirements:
-
-- Adaptive question count based on description length:
-  - Brief (<30 words): 6-8 questions
-  - Standard (30-100 words): 4-6 questions
-  - Detailed (>100 words): 2-3 focused questions
-- Frame as confirmable assumptions: "I assume X, is that correct?"
-- REQUIRED questions (always include):
-  1.  **User Journey**: How will users discover/access this? Which personas? How fits existing workflows?
-  2.  **Existing Code Reuse**: Similar features, UI components, backend patterns to reference?
-  3.  **Visual Assets**: Any mockups, wireframes, screenshots? Place in `analysis/visuals/`
-
-4. Check for visual assets in `analysis/visuals/` (even if user says none)
-   - If found: note for subagent context
-   - If not found and non-UI task: skip visual asset processing
-5. Save gathered requirements to `analysis/requirements.md` with: initial description, Q&A from all rounds, similar features identified, visual assets and insights, functional requirements summary, reusability opportunities, scope boundaries, technical considerations
-
-**Part C — Specification Creation (subagent)**:
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "Let me create the specification..." — STOP. Delegate to specification-creator.
-- ❌ "I'll write the spec based on requirements..." — STOP. Delegate to specification-creator.
-- ❌ "The task is simple enough to spec inline..." — STOP. Simplicity is NOT a reason to skip delegation.
-
-**INVOKE NOW** — Task tool call:
-
-6. Task tool - `specification-creator` subagent
-
-**Context to pass to subagent**: task_path, task_description, task_characteristics, requirements_path (analysis/requirements.md), project_context_paths (INDEX.md + project_doc_paths from state — all discovered project docs), risk_level, phase_summaries (codebase_analysis, gap_analysis, clarifications, scope_clarifications, ui_mockups), research_context (if any)
-
-**SELF-CHECK**: Did you just invoke the Task tool with `specification-creator`? Or did you start writing spec.md yourself? If the latter, STOP immediately and invoke the Task tool instead.
-
-**Part D — Diagram Refinement (Skill, content-preserving)**:
-
-7. Invoke Skill tool: `diagrams-mermaid` to refine `implementation/spec.md`
-8. Add diagrams that clarify scope and communication (without replacing prose):
-   - `flowchart` for primary functional path,
-   - `sequenceDiagram` for key component interaction,
-   - optionally `C4Component` if internal module structure is required by scope.
-9. If required context is missing, add explicit open questions/assumptions section instead of inventing entities.
-
-**Output**: `analysis/technical-clarifications.md` (conditional), `analysis/requirements.md`, `implementation/spec.md`
-**State**: Update `task_context.tech_clarified`, `task_context.architecture_decision`, `phase_summaries.specification`
-
-→ Pause
-
-question - Display executive summary before asking. Read `implementation/spec.md` and extract: spec title, scope boundaries (what's included and excluded), number of key requirements, architecture approach chosen (if any), assumptions made. Format as brief overview then "Continue to specification audit?"
-
----
-
-### Phase 5: Specification Audit (Recommended)
-
-> **Phase gate**: Requires `question` confirmation from Phase 4 before executing.
-
-**Purpose**: Independent review of specification before implementation
-**Execute**: Task tool - `spec-auditor` subagent
-**Output**: `verification/spec-audit.md`
-**State**: Update `options.spec_audit_enabled`
-
-**Recommended**: Always. Present spec audit as the recommended default. User can skip if they choose.
-
-question - "Run specification audit? (Recommended)" with "Yes, run audit (Recommended)" as first option
-
-→ Pause
-
-question - Display executive summary before asking. Read `verification/spec-audit.md` and extract: overall verdict (pass/pass-with-concerns/fail), issue counts by severity, top 1-2 critical findings if any. Format as brief overview then "Continue to implementation planning?"
-
----
-
-### Phase 6: Implementation Planning
-
-> **Phase gate**: Requires `question` confirmation from Phase 5 before executing.
-
-**Purpose**: Break specification into implementation steps
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "Let me create the implementation plan..." — STOP. Delegate to implementation-planner.
-- ❌ "I'll break this into steps..." — STOP. Delegate to implementation-planner.
-- ❌ "This is simple enough to plan inline..." — STOP. Simplicity is NOT a reason to skip delegation.
-
-**INVOKE NOW** — Task tool call:
-
-**Execute**: Task tool - `implementation-planner` subagent
-**Output**: `implementation/implementation-plan.md`
-**State**: Update task groups and dependencies
-
-**Context to pass to subagent**: task_path, task_description, task_characteristics, phase_summaries (specification, gap_analysis, codebase_analysis), research_context (if any)
-
-**SELF-CHECK**: Did you just invoke the Task tool with `implementation-planner`? Or did you start writing implementation-plan.md yourself? If the latter, STOP immediately and invoke the Task tool instead.
-
-**Post-plan diagram refinement (Skill, content-preserving)**:
-
-- Invoke Skill tool: `diagrams-mermaid` for `implementation/implementation-plan.md`
-- Add a compact execution diagram (task-group dependency flow or phase/state view).
-- Keep implementation steps authoritative; diagrams are explanatory, not a replacement for task descriptions.
-
-→ Pause
-
-question - Display executive summary before asking. Read `implementation/implementation-plan.md` and extract: number of task groups, total implementation steps, key dependencies between groups, estimated complexity. Format as brief overview then "Continue to implementation?"
-
----
-
-### Phase 7: Implementation
-
-> **Phase gate**: Requires `question` confirmation from Phase 6 before executing.
-
-**Purpose**: Execute the implementation plan
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "Let me implement this directly..." — STOP. Delegate to implementation-plan-executor.
-- ❌ "This is simple enough to code inline..." — STOP. Simplicity is NOT a reason to skip delegation.
-
-**INVOKE NOW** — Skill tool call:
-
-**Execute**: Skill tool - `implementation-plan-executor`
-**Output**: Implemented code, `implementation/work-log.md`
-**State**: Update implementation progress, extract phase_summaries.implementation
-
-**SELF-CHECK**: Did you just invoke the Skill tool with `implementation-plan-executor`? Or did you start writing code yourself? If the latter, STOP immediately and invoke the Skill tool instead.
-
-**⚠️ POST-IMPLEMENTATION CONTINUATION** — After the skill completes and returns control:
-
-1. Read `orchestrator-state.yml` to confirm you are the orchestrator
-2. Update state: add Phase 7 to `completed_phases`
-3. Evaluate conditional: if `task_characteristics.has_reproducible_defect` AND Phase 3 in `completed_phases` → Phase 8, else → Phase 9
-
-→ Pause
-
-question - Display executive summary before asking. Extract from `phase_summaries.implementation` and `implementation/work-log.md`: task groups completed, files changed, test results from incremental runs, any known issues or deferred items. Format as brief overview then "Continue to verification?"
-
----
-
-### Phase 8: TDD Green Gate (Conditional)
-
-> **Phase gate**: Requires `question` confirmation from Phase 7 before executing.
-
-**Purpose**: Verify the failing test now passes
-**Execute**: Direct - run the test written in Phase 3
-**Output**: `implementation/tdd-green-gate.md`
-**State**: Update `tdd_green_passed: true`
-
-**Skip if**: Phase 3 was not executed
-
-**Critical**: Test MUST pass (proves defect is fixed)
-
-→ Pause
-
-question - "TDD gate passed. Continue to Phase 9?"
-
----
-
-### Phase 9: Verification Options Prompt
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**Purpose**: Determine which verification checks to run using tiered decision matrix
-**Execute**: Direct - display plan, confirm/adjust via question
-**Output**: Updated state with all verification options
-**State**: Set `options.code_review_enabled`, `options.pragmatic_review_enabled`, `options.reality_check_enabled`, `options.production_check_enabled`, `options.e2e_enabled`, `options.user_docs_enabled`
-**Auto-set**: `skip_test_suite: true` (full test suite already passed during implementation phase; cleared before re-verification if fixes are applied)
-
-**Step 1**: Display the verification plan:
-
-```
-Verification Plan:
-  Obligatory (always run):
-    ✓ Completeness check
-    ✓ Test suite (skipped — passed during implementation; re-enabled after fixes)
-
-  Recommended (adjustable):
-    ✓ Code review — quality and security analysis
-    ✓ Pragmatic review — detects over-engineering
-    ✓ Reality check — validates work solves the problem
-    ✓ Production readiness — deployment readiness checks
-
-  Conditional:
-    [✓/—] E2E browser testing — [reason]
-    [✓/—] User documentation — [reason]
+**Next ▸** `/owflow:<subskill> <task-path>`
 ```
 
-**Step 2** (3 questions):
+#### Acceptance question
 
-**Q1** (always): question (multi-select) — "Which standard verifications to run?"
-Options: "Code review (Recommended)", "Pragmatic review (Recommended)", "Reality check (Recommended)", "Production readiness (Recommended)". All pre-selected.
+Use `question` — "Task ready. How would you like to proceed?" with options:
 
-**Q2** (SKIP if `options.e2e_enabled: false` and no `--e2e` flag): question — "Enable E2E browser verification?" Options: "Yes (Recommended)", "No, skip".
+- **Hand off to /owflow:<subskill>** — the user invokes the suggested command (dispatcher copies it to chat for convenience). Execution starts in a fresh context.
+- **Switch to autonomous mode** — illustrate with `/owflow:goal-development <task-path>` to run remaining phases in one session with gates.
+- **Adjust** — task set-up is wrong (wrong flags, wrong research reference, wrong task); re-run the affected initialization step, re-present the results box.
+- **Stop here** — print the resume command (`/owflow:development <task-path>`) and end.
 
-**Q3** (SKIP if `options.user_docs_enabled: false` and no `--user-docs` flag): question — "Generate user documentation?" Options: "Yes (Recommended)", "No, skip".
+#### Handoff message
 
-→ Pause
-
----
-
-### Phase 10: Verification & Issue Resolution
-
-> **Phase gate**: Requires `question` confirmation from Phase 9 before executing.
-
-**Purpose**: Comprehensive implementation verification with fix-then-reverify cycles
-**Output**: `verification/implementation-verification.md`, optional code-review/pragmatic/reality reports, updated `implementation/work-log.md`
-**State**: Update verification results, `verification_context`
-
-**Execute**:
-
-**Step 1**: Invoke Skill tool - `implementation-verifier`
-
-**Step 2**: Display detailed issue breakdown grouped by category and severity:
+On Accept (hand off choice), print, then STOP:
 
 ```
-Verification Results:
-  Critical ([N]):
-    - [category]: [description] — [file:line] [fixable/manual]
-    ...
-  Warning ([N]):
-    - [category]: [description] — [file:line] [fixable/manual]
-    ...
-  Info ([N]):
-    - [description] (listed for awareness, not actionable)
+✓ Task ready at <task-path>
+
+Next step:
+  → /owflow:<subskill> <task-path>
+
+Other options:
+  /owflow:goal-development <task-path>   — run remaining phases in one loop
+  /owflow:development --from=<step-slug> <task-path>   — jump to a specific step
 ```
-
-**Step 3**: Gate on verification status:
-
-- `status: passed` → skip to Post-Verification Continuation
-- `status: passed_with_issues` or `failed` → enter user-driven fix loop (Step 4)
-
-**Step 4**: User-driven fix loop (max 3 iterations):
-
-1. Present all critical + warning issues as a numbered list
-2. question — "Which issues should I fix?" with options:
-   - "Fix all fixable issues" (convenience default)
-   - "Let me choose specific issues" (user picks by number)
-   - "Skip fixes, proceed as-is"
-3. Fix selected issues, log each to `verification_context.fixes_applied`
-4. After fixes applied: set `skip_test_suite: false` (code changed, tests must re-run)
-5. question — "Re-run verification to check fixes?" with options:
-   - "Yes, re-run verification" → re-invoke `implementation-verifier` → return to Step 2
-   - "No, proceed to next phase"
-6. Update `verification_context.reverify_count`
-
-**Exit conditions**:
-
-- No critical issues remain → proceed
-- User explicitly chooses "Skip fixes, proceed as-is" or "No, proceed to next phase" → proceed with issues logged
-- Max 3 iterations reached → question: "Proceed with known issues?" / "Stop workflow"
-- **MUST NOT proceed with unresolved critical issues unless user explicitly approves**
-
-**⚠️ POST-VERIFICATION CONTINUATION** — After issue resolution completes:
-
-1. Read `orchestrator-state.yml` to confirm you are the orchestrator
-2. Update state: add Phase 10 to `completed_phases`
-3. Proceed to Phase 11
-
-→ Pause
-
-question - Display executive summary: total issues found, issues fixed, issues remaining by severity. Then "Continue to Phase 11?"
-
----
-
-### Phase 11: E2E Testing (Optional)
-
-> **Phase gate**: Requires `question` confirmation from Phase 10 before executing.
-
-**Purpose**: Runtime browser verification with screenshots (via Playwright MCP tools, not test file generation)
-**Execute**: Task tool - `e2e-test-verifier` subagent
-**Prompt must include**: task_path (absolute), spec_path, base_url. Report saves to `{task_path}/verification/e2e-verification-report.md`.
-**Output**: `verification/e2e-verification-report.md`, screenshots
-**State**: Update E2E results
-
-**Skip if**: `options.e2e_enabled = false`
-
-→ Pause
-
-question - "E2E complete. Continue to Phase 12?"
-
----
-
-### Phase 12: User Documentation (Optional)
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**Purpose**: Generate user-facing documentation with screenshots
-**Execute**: Task tool - `user-docs-generator` subagent
-**Prompt must include**: task_path (absolute), spec_path, base_url. Guide saves to `{task_path}/documentation/user-guide.md`.
-**Output**: `documentation/user-guide.md`, screenshots
-**State**: Update docs generation status
-
-**Skip if**: `options.user_docs_enabled = false`
-
-→ Pause
-
-question - "Documentation complete. Continue to Phase 13?"
-
----
-
-### Phase 13: Finalization
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**Purpose**: Complete workflow and provide next steps
-**Execute**: Direct - create summary, update state, guide commit
-**Output**: Workflow summary
-**State**: Set `task.status: completed`
-
-**Process**:
-
-1. Create workflow summary
-2. Update task status to "completed"
-3. Provide commit message template
-4. Guide next steps (code review, PR, deployment)
-
-→ End of workflow
-
----
-
-## Domain Context (State Extensions)
-
-Development-specific fields in `orchestrator-state.yml`:
-
-Refer to the template [src/templates/orchestrator-state-development.yml](../../templates/orchestrator-state-development.yml).
 
 ---
 
@@ -536,43 +149,47 @@ Refer to the template [src/templates/orchestrator-state-development.yml](../../t
 
 ```
 .owflow/tasks/development/YYYY-MM-DD-task-name/
-├── orchestrator-state.yml
+├── orchestrator-state.yml          # Canonical state — all modes share it
 ├── analysis/
-│   ├── research-context/          # If --research provided
-│   ├── codebase-analysis.md       # Phase 1
-│   ├── clarifications.md          # Phase 1
-│   ├── gap-analysis.md            # Phase 2
-│   ├── scope-clarifications.md    # Phase 2 (conditional)
-│   └── technical-clarifications.md # Phase 4 (conditional)
+│   ├── research-context/           # If --research provided
+│   ├── codebase-analysis.md        # dev-analyze
+│   ├── clarifications.md           # dev-analyze
+│   ├── gap-analysis.md             # dev-analyze
+│   ├── scope-clarifications.md     # dev-analyze (conditional)
+│   ├── technical-clarifications.md # dev-spec (conditional)
+│   ├── requirements.md             # dev-spec
+│   └── visuals/                    # user-provided mockups
 ├── implementation/
-│   ├── spec.md                    # Phase 4
-│   ├── requirements.md            # Phase 4
-│   ├── implementation-plan.md     # Phase 6
-│   ├── work-log.md                # Phase 7
-│   ├── tdd-red-gate.md            # Phase 3 (conditional)
-│   └── tdd-green-gate.md          # Phase 8 (conditional)
+│   ├── spec.md                     # dev-spec
+│   ├── implementation-plan.md      # dev-plan
+│   ├── fix-plan.md                 # dev-bugfix (condensed approval-gated fix plan)
+│   ├── work-log.md                 # dev-implement / dev-bugfix
+│   ├── tdd-red-gate.md             # dev-tdd-red / dev-bugfix (conditional)
+│   └── tdd-green-gate.md           # dev-implement / dev-bugfix (conditional)
+├── summary.md                      # dev-bugfix (per fix run)
 ├── verification/
-│   ├── spec-audit.md              # Phase 5 (recommended)
-│   ├── implementation-verification.md  # Phase 10
-│   └── e2e-verification-report.md      # Phase 11 (optional)
+│   ├── spec-audit.md               # dev-spec (recommended)
+│   ├── implementation-verification.md  # dev-verify
+│   └── e2e-verification-report.md  # dev-finalize (optional)
 └── documentation/
-    └── user-guide.md              # Phase 12 (optional)
+    └── user-guide.md               # dev-finalize (optional)
 ```
 
 ---
 
 ## Auto-Recovery
 
-| Phase | Max Attempts | Strategy                        |
-| ----- | ------------ | ------------------------------- |
-| 1     | 2            | Expand search, prompt user      |
-| 2     | 2            | Re-analyze, ask user            |
-| 3     | 2            | Rewrite test, skip TDD with doc |
-| 5     | 2            | Regenerate spec                 |
-| 7     | 2            | Regenerate plan                 |
-| 8     | 5            | Fix syntax, imports, tests      |
-| 9     | 3            | Return to implementation        |
-| 11    | 3            | Fix tests, re-run               |
+Retries are owned by each subskill (max attempts per phase):
+
+| Subskill       | Max Attempts | Strategy                            |
+| -------------- | ------------ | ----------------------------------- |
+| dev-analyze    | 2            | Expand search, re-analyze, ask user |
+| dev-tdd-red    | 2            | Rewrite test, skip TDD with doc     |
+| dev-spec       | 2            | Regenerate spec                     |
+| dev-plan       | 2            | Regenerate plan                     |
+| dev-implement  | 5 (green)    | Fix syntax, imports, tests          |
+| dev-verify     | 3 (loop)     | Fix issues, re-run verification     |
+| dev-finalize   | 3            | Fix tests, re-run                   |
 
 ---
 
@@ -580,7 +197,7 @@ Refer to the template [src/templates/orchestrator-state-development.yml](../../t
 
 | Flag                             | Effect                          |
 | -------------------------------- | ------------------------------- |
-| `--from=PHASE`                   | Start from specific phase       |
+| `--from=<step-slug>`             | Hand off from a specific step   |
 | `--research=PATH`                | Link to completed research task |
 | `--audit` / `--no-audit`         | Force/skip specification audit  |
 | `--e2e` / `--no-e2e`             | Force/skip E2E testing          |
@@ -590,50 +207,39 @@ Refer to the template [src/templates/orchestrator-state-development.yml](../../t
 
 ## Research-Based Development
 
-When starting development from a completed research task, the orchestrator loads research context to **INFORM** all phases.
+When starting from a completed research task, the dispatcher loads research context to **INFORM** all subskills — research never SKIPS phases. Artifacts pass via `task_context.phase_summaries.research` in state and `analysis/research-context/`.
 
 ### Invocation Methods
 
 **Method 1: Research folder as sole argument** (recommended)
 
 ```
-/development .owflow/tasks/research/2026-01-12-oauth-research
+/owflow:development .owflow/tasks/research/2026-01-12-oauth-research
 ```
-
-The orchestrator auto-detects this is a research folder and:
-
-- Extracts task description from `research_context.research_question`
-- Reads all research artifacts
-- Sets `research_reference` in state
 
 **Method 2: Explicit --research flag**
 
 ```
-/development "Implement OAuth" --research=.owflow/tasks/research/2026-01-12-oauth-research
+/owflow:development "Implement OAuth" --research=.owflow/tasks/research/2026-01-12-oauth-research
 ```
 
 ### Research Artifacts (Standard List)
-
-When research context is detected, read these files from the research folder:
 
 | Artifact             | Path                              | Purpose                                        |
 | -------------------- | --------------------------------- | ---------------------------------------------- |
 | State                | `orchestrator-state.yml`          | research_type, confidence_level                |
 | Report               | `outputs/research-report.md`      | Main findings and conclusions                  |
-| Solution Exploration | `outputs/solution-exploration.md` | Alternatives and trade-offs (input to Phase 4) |
-| High-Level Design    | `outputs/high-level-design.md`    | C4 architecture (input to Phase 4)             |
-| Decision Log         | `outputs/decision-log.md`         | ADR decisions (input to Phase 4)               |
+| Solution Exploration | `outputs/solution-exploration.md` | Alternatives and trade-offs (input to dev-spec) |
+| High-Level Design    | `outputs/high-level-design.md`    | C4 architecture (input to dev-spec)            |
+| Decision Log         | `outputs/decision-log.md`         | ADR decisions (input to dev-spec)              |
 
-### How Research Informs Each Phase
+### How Research Informs Subskills
 
-**Research INFORMS phases, never SKIPS them.** Research context passes to ALL phases via `task_context.phase_summaries.research`. No phases are skipped.
-
-| Phase   | How Research Context is Used                                                                                                                                                         |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Phase 1 | Codebase analyzer receives research findings as search guidance                                                                                                                      |
-| Phase 2 | Gap analyzer uses research recommendations for comparison                                                                                                                            |
-| Phase 4 | Specification creator uses high-level-design.md as INPUT (still creates full spec). Architecture decisions use research report AND decision-log.md (lighter when ADRs comprehensive) |
-| Phase 6 | Implementation planner references research approach for task grouping                                                                                                                |
+| Subskill      | How Research Context is Used                                                                                                                              |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dev-analyze   | Codebase analyzer and gap analyzer receive research findings as search/comparison guidance                                                                 |
+| dev-spec      | specification-creator uses high-level-design.md as INPUT (still creates full spec); architecture decisions use research report AND decision-log.md        |
+| dev-plan      | implementation-planner references research approach for task grouping                                                                                     |
 
 ---
 
@@ -641,12 +247,14 @@ When research context is detected, read these files from the research folder:
 
 Invoked via:
 
-- `/development [description] [--e2e] [--user-docs] [--research=PATH]` (new)
-- `/development [task-path] [--from=PHASE] [--reset-attempts]` (resume)
+- `/owflow:development [description] [--e2e] [--user-docs] [--research=PATH]` (new)
+- `/owflow:development [task-path] [--from=<step-slug>] [--reset-attempts]` (resume)
+
+Alternative: `/owflow:goal-development` — same task lifecycle, all subskills invoked in one session with `question` gates.
 
 ---
 
 ## TDD Gate Rules
 
-**Phase 3 (Red Gate)**: Test MUST FAIL before implementation (activated when gap-analyzer detects reproducible defect)
-**Phase 8 (Green Gate)**: Test MUST PASS after implementation (activated when Phase 3 was executed)
+**Red Gate** (`/owflow:dev-tdd-red`): test MUST FAIL before implementation — activated when gap analysis detects a reproducible defect.
+**Green Gate** (inside `/owflow:dev-implement`): the same test MUST PASS after implementation — activated when the red gate was executed.

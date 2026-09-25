@@ -1,10 +1,10 @@
 ---
-name: agents-md-generator
+name: owflow:agents-md-generator
 description: Generate AGENTS.md onboarding document for AI coding agents
 argument-hint: "[directory or file path]"
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the agents-md-generator skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:agents-md-generator skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "agents-md-generator"
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /agents-md-generator.
+WHY: The user explicitly chose this workflow by using /owflow:agents-md-generator.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

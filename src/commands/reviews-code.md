@@ -1,5 +1,5 @@
 ---
-name: reviews-code
+name: owflow:reviews-code
 description: Run automated code quality, security, and performance analysis on your code
 ---
 
@@ -54,19 +54,19 @@ The code-reviewer subagent will:
 **Example 1**: Review specific task
 
 ```
-User: /reviews-code .owflow/tasks/development/2025-10-24-auth/
+User: /owflow:reviews-code .owflow/tasks/development/2025-10-24-auth/
 ```
 
 **Example 2**: Review with specific scope
 
 ```
-User: /reviews-code src/api/ --scope=security
+User: /owflow:reviews-code src/api/ --scope=security
 ```
 
 **Example 3**: Review entire project
 
 ```
-User: /reviews-code src/
+User: /owflow:reviews-code src/
 ```
 
 ## What to Expect

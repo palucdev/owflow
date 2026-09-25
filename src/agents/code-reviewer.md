@@ -228,7 +228,7 @@ issue_counts:
 
 ## Integration
 
-**Invoked by**: implementation-verifier (Phase 3), standalone via `/reviews-code` command
+**Invoked by**: implementation-verifier (Phase 3), standalone via `/owflow:reviews-code` command
 
 **Prerequisites**:
 

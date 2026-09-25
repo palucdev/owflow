@@ -1,5 +1,5 @@
 ---
-name: migration
+name: owflow:migration
 description: Orchestrates the complete migration workflow from current state analysis through implementation to compatibility verification. Handles technology migrations, platform changes, and architecture pattern transitions with adaptive risk assessment, incremental execution, and rollback planning. Use when migrating technologies, platforms, or architecture patterns.
 user-invocable: true
 ---
@@ -8,23 +8,35 @@ user-invocable: true
 
 Systematic migration workflow from current state analysis to verified migration with rollback capabilities.
 
-## Initialization
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
+
+## Entry Gate
 
 **BEFORE executing any phase, you MUST complete these steps:**
 
-### Step 1: Load Framework Patterns
+### Argument resolution
 
-**Read the framework reference file NOW using the Read tool:**
+- **Migration description provided** → use it as the task description.
+- **Task path / identifier** (directory under `.owflow/tasks/migrations/`) → resume mode: read `orchestrator-state.yml`, find the first incomplete phase (`--from=PHASE` overrides), validate existing artifacts, then continue from there.
+- **Nothing provided** → ask via `question`: "What technology, platform, or architecture should be migrated, and to what?" — capture source and target state before proceeding.
 
-1. `../orchestrator-framework/references/orchestrator-patterns.md` - Delegation rules, interactive mode, state schema, initialization, context passing, issue resolution
+### Prerequisites
 
-### Step 2: Initialize Workflow
+| Required for this skill | Where verified                                        | Produced by                |
+| ----------------------- | ----------------------------------------------------- | -------------------------- |
+| State file exists       | `<task-path>/orchestrator-state.yml` (resume mode)    | prior `/owflow:migration` run |
 
-1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
-2. **Create Task Directory**: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`
-3. **Initialize State**: Create `orchestrator-state.yml` with migration context
-   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-migration.yml`.
-4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
+On resume, if the state file is missing → print: `No migration task found at <path>. Run /owflow:migration <description> to start from scratch.` and STOP. Validate expected artifacts for completed phases (remove entries with missing artifacts).
+
+### Execution steps
+
+1. **Load framework patterns** — Read `../orchestrator-framework/references/orchestrator-patterns.md` NOW: delegation rules, interactive mode, state schema, initialization, context passing, issue resolution.
+2. **Initialize workflow:**
+   1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
+   2. **Create Task Directory**: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`
+   3. **Initialize State**: Create `orchestrator-state.yml` with migration context
+      - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-migration.yml`.
+   4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
 
 **Output**:
 
@@ -282,14 +294,14 @@ question - Display executive summary: total issues found, issues fixed, issues r
 
 ---
 
-### Phase 8: Documentation (Optional)
+### Phase 8: Documentation → Exit Gate (Optional)
 
 > **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
 
-**Purpose**: Create migration guide for end users
-**Execute**: Task tool - `user-docs-generator` subagent
-**Output**: `documentation/migration-guide.md`
-**State**: Set documentation complete
+**Purpose**: Create migration guide (optional) and run the Exit Gate
+**Execute**: Task tool - `user-docs-generator` subagent (conditional) + Direct (Exit Gate)
+**Output**: `documentation/migration-guide.md` (conditional)
+**State**: Set documentation complete, then `task.status: completed`
 
 **Skip if**: `options.docs_enabled = false`
 
@@ -300,6 +312,39 @@ question - Display executive summary: total issues found, issues fixed, issues r
 - Step-by-step migration procedure
 - Rollback procedures
 - Troubleshooting common issues
+
+**Results box** (present regardless of whether docs ran):
+
+```markdown
+## ✅ MIGRATION COMPLETE — <task name>
+
+**Migration type** — [code / data / architecture]
+**Strategy** — [incremental / big-bang / dual-run / phased]
+**Verification** — [final verdict]
+**Rollback plan** — [path / status]
+**Migration guide** — [path] / not generated
+
+**Artifacts**
+- `analysis/current-state-analysis.md`
+- `analysis/target-state-plan.md`
+- `analysis/rollback-plan.md`
+- `implementation/work-log.md`
+- `verification/implementation-verification.md`
+- `documentation/migration-guide.md` [conditional]
+```
+
+**Results-acceptance question** — use `question` — "Are these results correct?" with options:
+
+- **Accept** — migration is complete; print next steps below.
+- **Adjust** — re-run the affected phase (fixes, re-verification, docs) with the user's corrections, then re-present the results box.
+- **Discuss** — walk through specific results (verification verdicts, rollback readiness, guide contents) in more depth; then re-ask.
+- **Stop here** — print the resume command (`/owflow:migration <task-path>`) and end.
+
+**Next steps (after Accept)**:
+
+- `/owflow:reviews-pragmatic <task-path>` — post-migration over-engineering check
+- `/owflow:standards-update "<lesson learned>"` — capture migration learnings as standards
+- Commit the changes and open a PR using the migration guide's procedures
 
 → End of workflow
 
@@ -355,7 +400,7 @@ Refer to the template [src/templates/orchestrator-state-migration.yml](../../tem
 
 Invoked via:
 
-- `/migration [description] [--type=TYPE]` (new)
-- `/migration [task-path] [--from=PHASE]` (resume)
+- `/owflow:migration [description] [--type=TYPE]` (new)
+- `/owflow:migration [task-path] [--from=PHASE]` (resume)
 
 Task directory: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`

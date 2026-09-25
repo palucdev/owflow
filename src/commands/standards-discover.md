@@ -1,10 +1,10 @@
 ---
-name: standards-discover
+name: owflow:standards-discover
 description: Discover coding standards from project configuration files, code patterns, documentation, and external sources (PRs, CI/CD)
 argument-hint: [task description]
 ---
 
-CRITICAL INSTRUCTION: You MUST invoke the standards-discover skill immediately as your FIRST action.
+CRITICAL INSTRUCTION: You MUST invoke the owflow:standards-discover skill immediately as your FIRST action.
 
 Use the Skill tool with these exact parameters:
 name: "standards-discover"
@@ -17,7 +17,7 @@ DO NOT:
 - Substitute your own approach or workflow
 - Execute any part of the workflow yourself
 
-WHY: The user explicitly chose this workflow by using /standards-discover.
+WHY: The user explicitly chose this workflow by using /owflow:standards-discover.
 Invoke the skill now and let it orchestrate the complete workflow.
 
 ---

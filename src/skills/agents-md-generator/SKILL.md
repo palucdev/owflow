@@ -1,11 +1,11 @@
 ---
-name: agents-md-generator
+name: owflow:agents-md-generator
 description: >
   Generate an AGENTS.md onboarding document for AI coding agents working in
   this repository. Inspects the repo (package manifest, README, scripts,
   lint/test config, layout, commit history) and writes a concise contributor
   guide titled "Repository Guidelines". Use when the user invokes
-  /agents-md-generator, asks to "create AGENTS.md", "write an agent onboarding
+  /owflow:agents-md-generator, asks to "create AGENTS.md", "write an agent onboarding
   doc", "generate contributor guide for agents", or similar. The output is
   optimized to be small, precise, reference-heavy, and ordered with critical
   rules at the top — so a future agent reads it once and stays unblocked.
@@ -16,6 +16,12 @@ user-invocable: true
 # AGENTS.md generator
 
 Produce an `AGENTS.md` that serves as an onboarding document for AI coding agents in this repository. The file is short, specific to the repo, and structured so the most important rules appear first.
+
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md) (confirm-or-revise exception — see the [Confirm-or-Revise Exception](../orchestrator-framework/references/confirm-or-revise-exception.md)).
+
+## Entry Gate
+
+The input resolution below IS this skill's entry gate:
 
 ## Input resolution
 
@@ -174,16 +180,36 @@ Each guard is a hard gate. If any fails, revise the draft.
 
 Professional, instructional, terse. Second person ("Run `npm test` before pushing" or "Run `./mvnw verify` before pushing") or imperative ("Place new handlers in `src/api/<feature>/`" or "Place new controllers in `src/main/java/<package>/controller/`"). No marketing voice, no emojis, no decorative dividers.
 
-## After writing
+## After writing (Exit Gate — confirm-or-revise form)
+
+Per the shared contract's exception for no-follow-up skills, present the results box, then ask only a confirm-or-revise question (no unsolicited follow-up suggestions):
+
+**Results box**:
+
+```markdown
+## ✅ AGENTS.MD COMPLETE — <path>
+
+**Scope** — [repo-level / directory-level]
+**Words** — [<word count> body words]
+**Sections** — [<1-line section order summary>]
+
+**Written** — `<path>`
+```
 
 Report to the user:
 
 - the file path written,
 - the body word count,
-- a one-line summary of the section order chosen,
-- a reminder: _test the file by running a real task with a fresh agent session — onboarding docs only prove themselves on the next run._
+- a one-line summary of the section order chosen.
 
-Do not propose follow-ups unless the user asks.
+**Results-acceptance question** — use `question` — "Is the document correct?" with options:
+
+- **Accept** — keep it. Reminder (always print with or without acceptance): _test the file by running a real task with a fresh agent session — onboarding docs only prove themselves on the next run._
+- **Adjust** — user specifies changes (trim, reorder, re-shape a section); apply them surgically, re-run the Quality guards, re-present the results box.
+- **Discuss** — justify a specific rule or citation (its file source); then re-ask.
+- **Stop here** — keep the file as written; nothing further at this time.
+
+After the user's response, stop. Do not propose further follow-ups unless the user asks.
 
 ## Edge cases
 

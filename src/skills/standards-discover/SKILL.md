@@ -1,5 +1,5 @@
 ---
-name: standards-discover
+name: owflow:standards-discover
 description: Discover coding standards from project configuration files, code patterns, documentation, and external sources (PRs, CI/CD)
 user-invocable: true
 ---
@@ -67,7 +67,7 @@ Custom scope values are matched against existing `.owflow/docs/standards/*/` dir
 ### Phase 1: Planning & Initialization
 
 1. **Parse options** from command arguments
-2. **Check prerequisites**: Verify `.owflow/docs/` exists. If not, offer to run `/flow-init` first
+2. **Check prerequisites**: Verify `.owflow/docs/` exists. If not, offer to run `/owflow:flow-init` first
 3. **Read existing standards** from `.owflow/docs/INDEX.md` to identify updates vs creates and avoid duplicates
 4. **Display discovery plan** showing scope, sources, and estimated time
 5. **Get user confirmation** via question before proceeding
@@ -181,14 +181,37 @@ Display application summary: created count, updated count, total active.
 
 ---
 
-### Phase 9: Summary Report
+### Phase 9: Summary Report → Exit Gate
 
-Display final results:
+Present final results and close (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
 
-- Sources analyzed (config files, code files sampled, docs parsed, PRs reviewed)
-- Standards applied (created/updated counts by category)
-- Standards skipped (low confidence, user declined)
-- Next steps (review, commit, re-run schedule)
+**Results box**:
+
+```markdown
+## ✅ STANDARDS DISCOVER COMPLETE
+
+**Sources analyzed** — [config files, code samples, docs, PRs]
+**Applied** — [created] created / [updated] updated ([total] active)
+**Skipped** — [count — low confidence / declined]
+
+**Artifacts**
+- `.owflow/docs/INDEX.md`
+- `.owflow/docs/standards/<category>/<topic>.md` [per applied standard]
+```
+
+**Results-acceptance question** — use `question` — "Are these results correct?" with options:
+
+- **Accept** — discovery and application are complete; print next steps below.
+- **Adjust** — re-review skipping findings (e.g., "show low-confidence items", "re-run a source"), apply the additional standards, then re-present the results box.
+- **Discuss** — walk through specific applied standards (evidence, confidence breakdown, sources) in more depth; then re-ask.
+- **Stop here** — end.
+
+**Next steps (after Accept)**:
+
+- Review the applied standards files in `.owflow/docs/standards/`
+- Commit the changes
+- `/owflow:standards-update "<convention>"` — document any conventions discovery missed
+- Re-run periodically: `/owflow:standards-discover --scope=quick`
 
 ---
 
@@ -196,7 +219,7 @@ Display final results:
 
 | Situation               | Strategy                                              |
 | ----------------------- | ----------------------------------------------------- |
-| `.owflow/docs/` missing | Offer `/flow-init`, abort if declined                 |
+| `.owflow/docs/` missing | Offer `/owflow:flow-init`, abort if declined                 |
 | gh CLI unavailable      | Skip PR analysis, continue with other sources         |
 | GitHub API rate limit   | Skip PR analysis, note in report                      |
 | Config file parse error | Skip that file, log warning, continue                 |
@@ -220,17 +243,17 @@ Display final results:
 
 ```bash
 # Full discovery (default)
-/standards-discover
+/owflow:standards-discover
 
 # Quick scan (config files only, ~30-60s)
-/standards-discover --scope=quick
+/owflow:standards-discover --scope=quick
 
 # Frontend standards only
-/standards-discover --scope=frontend
+/owflow:standards-discover --scope=frontend
 
 # High confidence, auto-apply
-/standards-discover --confidence=80 --auto-apply
+/owflow:standards-discover --confidence=80 --auto-apply
 
 # Skip external analysis (offline/no GitHub)
-/standards-discover --skip-external
+/owflow:standards-discover --skip-external
 ```

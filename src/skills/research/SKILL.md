@@ -1,5 +1,5 @@
 ---
-name: research
+name: owflow:research
 description: Orchestrates comprehensive research workflows from question definition through findings documentation. Handles technical, requirements, literature, and mixed research types with adaptive methodology, multi-source gathering, pattern synthesis, and evidence-based reporting. Supports standalone research tasks and embedded research phase in other workflows.
 user-invocable: true
 ---
@@ -8,22 +8,34 @@ user-invocable: true
 
 Systematic research workflow from question definition to evidence-based documentation.
 
-## Initialization
+Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
+
+## Entry Gate
 
 **BEFORE executing any phase, you MUST complete these steps:**
 
-### Step 1: Load Framework Patterns
+### Argument resolution
 
-**Read the framework reference file NOW using the Read tool:**
+- **Research question provided** → use it as the task description.
+- **Task path / identifier** (directory under `.owflow/tasks/research/`) → resume mode: read `orchestrator-state.yml`, find the first incomplete phase (`--from=PHASE` overrides), validate existing artifacts, then continue from there.
+- **Nothing provided** → ask via `question`: "What is your research question?" (free-form answer), then proceed.
 
-1. `../orchestrator-framework/references/orchestrator-patterns.md` - Delegation rules, interactive mode, state schema, initialization, context passing, issue resolution
+### Prerequisites
 
-### Step 2: Initialize Workflow
+| Required for this skill | Where verified                                        | Produced by                |
+| ----------------------- | ----------------------------------------------------- | -------------------------- |
+| State file exists       | `<task-path>/orchestrator-state.yml` (resume mode)    | prior `/owflow:research` run |
 
-1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
-2. **Create Task Directory**: `.owflow/tasks/research/YYYY-MM-DD-task-name/`
-3. **Initialize State**: Create `orchestrator-state.yml` with research context
-   - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-research.yml`.
+On resume, if the state file is missing → print: `No research task found at <path>. Run /owflow:research <question> to start from scratch.` and STOP. Validate expected artifacts for completed phases (remove entries with missing artifacts).
+
+### Execution steps
+
+1. **Load framework patterns** — Read `../orchestrator-framework/references/orchestrator-patterns.md` NOW: delegation rules, interactive mode, state schema, initialization, context passing, issue resolution.
+2. **Initialize workflow:**
+   1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
+   2. **Create Task Directory**: `.owflow/tasks/research/YYYY-MM-DD-task-name/`
+   3. **Initialize State**: Create `orchestrator-state.yml` with research context
+      - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-research.yml`.
 
 **Output**:
 
@@ -341,26 +353,47 @@ question - "Design complete. Continue to output generation?"
 
 ---
 
-### Phase 6: Completion
+### Phase 6: Completion → Exit Gate
 
 > **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
 
-**Purpose**: Summarize research results and suggest next steps
+**Purpose**: Present research results, confirm correctness with the user, and hand off (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md))
 **Execute**: Direct
 **Output**: No new files — summarizes existing outputs
 
 **Process**:
 
 1. Inventory all generated outputs: `outputs/research-report.md` (always), plus conditional: `solution-exploration.md`, `high-level-design.md`, `decision-log.md`
-2. Present executive summary to user:
-   - Key findings and confidence level
-   - Which optional phases ran (brainstorming, design)
-   - Key decision highlights (if brainstorming/design ran)
-3. If design artifacts exist, suggest starting development in a fresh session:
-   ```
-   To start development based on this research, clear context first or start a new session, then run:
-   /development [task-path]
-   ```
+2. **Results box**:
+
+```markdown
+## ✅ RESEARCH COMPLETE — <research question>
+
+**Type** — [research type]
+**Confidence** — [confidence level]
+**Phases run** — [e.g. 1, 3-4 brainstorm, 5 design]
+**Key findings** — [2-3 one-line highlights]
+**Decisions** — [count of ADRs, if design ran]
+
+**Artifacts**
+- `outputs/research-report.md`
+- `outputs/solution-exploration.md` [conditional]
+- `outputs/high-level-design.md` [conditional]
+- `outputs/decision-log.md` [conditional]
+```
+
+3. **Results-acceptance question** — use `question` — "Are these results correct?" with options:
+   - **Accept** — research is complete; print next steps (below).
+   - **Adjust** — re-run the affected phase (re-gather, re-brainstorm, re-design) with the user's corrections, then re-present the results box.
+   - **Discuss** — walk through specific findings or decisions in more depth; then re-ask.
+   - **Stop here** — print the resume command (`/owflow:research <task-path>`) and end.
+
+4. **Next steps (after Accept)** — if design artifacts exist, suggest starting development in a fresh session:
+
+```
+To start development based on this research, clear context first or start a new session, then run:
+→ /owflow:development <task-path>
+```
 
 → End of workflow
 
@@ -420,7 +453,7 @@ Refer to the template [src/templates/orchestrator-state-research.yml](../../temp
 
 ### As Standalone Research
 
-**Command**: `/research [research-question]`
+**Command**: `/owflow:research [research-question]`
 **Flow**: Complete all phases, save outputs in task directory
 
 ### As Embedded Research Phase
@@ -444,8 +477,8 @@ Refer to `research_outputs` in the template [src/templates/orchestrator-state-re
 
 Invoked via:
 
-- `/research [question] [--type=TYPE] [--brainstorm] [--no-brainstorm] [--design] [--no-design]` (new)
-- `/research [task-path] [--from=PHASE]` (resume)
+- `/owflow:research [question] [--type=TYPE] [--brainstorm] [--no-brainstorm] [--design] [--no-design]` (new)
+- `/owflow:research [task-path] [--from=PHASE]` (resume)
 
 **Brainstorming flags**:
 
