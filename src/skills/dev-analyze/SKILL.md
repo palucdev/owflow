@@ -108,6 +108,7 @@ Read `task_context.task_characteristics` from state and print the suggested comm
 
 **Other options**:
 
+- `/owflow:dev-spec --quick <task-path>` — `optional` condensed alternative: writes the condensed spec directly on the fly (no specification-creator subagent; audit skipped) instead of the full requirements/spec flow
 - `/owflow:goal-development <task-path>` — `optional` shortcut: runs all remaining phases in one loop (red gate if flagged → spec → plan → implement → verify → finalize)
 - `/owflow:dev-spec <task-path>` — `optional` — skips the TDD gate manually (not recommended for reproducible defects; remaining plan unchanged: plan → implement → verify → finalize)
 

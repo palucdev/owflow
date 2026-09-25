@@ -88,22 +88,27 @@ The dispatcher routes bugfix tasks straight to `/owflow:dev-verify` when `implem
 
 #### 4. Quick dev lane (`--quick`)
 
-Condensed entries that bootstrap a standard task inline, then continue with the lane's condensed work. Use when analysis/spec phases can be done in one pass.
+Condensed entries that bootstrap a standard task inline, then continue with the lane's condensed work. Three lanes, one per phase cut-off: `/owflow:dev-spec --quick` (spec only), `/owflow:dev-plan --quick` (spec + plan), `/owflow:dev-implement --quick` (spec + plan + implementation). Use when analysis/spec phases can be done in one pass.
 
 ```mermaid
 flowchart TD
+    QS["/owflow:dev-spec --quick desc"] --> QB0["Step 1: bootstrap task + standards + quick analysis<br/>Step 2: condensed requirements<br/>Step 3: write condensed spec directly (no specification-creator subagent)<br/>spec-written, audit skipped (lane stops)"]
     QP["/owflow:dev-plan --quick desc"] --> QB1["Step 1: bootstrap task + condensed spec"]
     QI["/owflow:dev-implement --quick desc"] --> QB2["Step 1: bootstrap task + condensed spec<br/>Step 2: write plan directly (no planner subagent)"]
+    QB0 --> Choice0{"Continue with"}
+    Choice0 -- "/owflow:dev-plan" --> NPlan["Full delegated planning"]
+    Choice0 -- "/owflow:dev-plan --quick" --> Plan
     QB1 --> Plan["implementation-plan.md saved<br/>plan-created (lane stops)"]
     QB2 --> Impl["Step 3: implement directly in main agent<br/>with discovered standards<br/>implementation-done"]
     Plan --> Choice{"Continue with"}
     Choice -- "/owflow:dev-implement" --> NImpl["Full delegated implementation"]
     Choice -- "/owflow:dev-implement --quick" --> Impl
+    NPlan --> Choice
     NImpl --> Next
     Impl --> Next["Step: continue with /owflow:dev-verify <task-path><br/>or stop — task stays resumable"]
 ```
 
-As opposed to full implementation it is not using implementation-plan-executor or other subagents: the `dev-implement --quick` lane implements **directly in the main agent** (applying the standards read during the condensed prelude, with continuous discovery for newly-surfaced areas), for the full pipeline this delegation stays reserved. The same applies when `--quick` is passed to `/owflow:dev-implement` on an existing task (e.g., a quick plan). Full-pipeline runs are unaffected: without `--quick`, implementation always delegates.
+Quick lanes do not use the pipeline's subagents: `dev-spec --quick` writes the condensed spec directly (no `specification-creator`), `dev-plan --quick` writes the plan directly (no `implementation-planner`), and `dev-implement --quick` implements **directly in the main agent** (no `implementation-plan-executor`), applying the standards read during the condensed prelude (with continuous discovery for newly-surfaced areas). The same applies when `--quick` is passed to those subskills on an existing task (e.g., a quick spec or quick plan). Full-pipeline runs are unaffected: without `--quick`, specification, planning, and implementation always delegate. Anything bug-shaped (a proven reproducible defect) still routes through the TDD red gate — `--quick` never bypasses it; see the bugfix lane above.
 
 #### 5. Research-based development
 
@@ -295,11 +300,12 @@ Each task folder follows the pattern `YYYY-MM-DD-task-name/`. Development tasks 
 │   ├── clarifications.md           # dev-analyze
 │   ├── gap-analysis.md             # dev-analyze
 │   ├── findings.md                 # dev-bugfix (condensed bug analysis)
-│   ├── requirements.md             # dev-spec
+│   ├── quick-analysis.md           # quick lanes (condensed prelude analysis)
+│   ├── requirements.md             # dev-spec / dev-spec --quick
 │   ├── research-context/           # Research artifacts (if --research used)
 │   └── visuals/                    # user-provided mockups
 ├── implementation/
-│   ├── spec.md                     # Specification (WHAT to build) — dev-spec
+│   ├── spec.md                     # Specification (WHAT to build) — dev-spec / quick lanes
 │   ├── implementation-plan.md      # Step breakdown (HOW) — dev-plan
 │   ├── fix-plan.md                 # dev-bugfix (condensed, approval-gated)
 │   ├── tdd-red-gate.md             # dev-tdd-red / dev-bugfix (conditional)

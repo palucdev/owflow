@@ -76,7 +76,7 @@ Next step: [step name]
 
 ## When to Use
 
-Use for **all development tasks**: bug fixes, enhancements, new features, and any work that modifies code. Bug-shaped work has a lighter entry point: `/owflow:dev-bugfix "<description>"` (or with a task path, to fix a bug that emerged on an existing task) — it produces the same standard state and is resumable by this dispatcher.
+Use for **all development tasks**: bug fixes, enhancements, new features, and any work that modifies code. Bug-shaped work has a lighter entry point: `/owflow:dev-bugfix "<description>"` (or with a task path, to fix a bug that emerged on an existing task) — it produces the same standard state and is resumable by this dispatcher. Condensed quick lanes also exist per phase — `/owflow:dev-spec --quick "<description>"`, `/owflow:dev-plan --quick "<description>"`, `/owflow:dev-implement --quick "<description>"` — each bootstraps the same standard state and stops after its phase.
 
 **DO NOT use for**: Performance optimization, security remediation, migrations, documentation-only, pure refactoring (use the specialized orchestrators).
 

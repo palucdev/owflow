@@ -178,16 +178,16 @@ Update or create standards from conversation context or explicit description. Wh
 
 Lightweight options for small tasks that don't need a full orchestrator workflow.
 
-### `/dev-implement --quick ["task description"]`
+### `/dev-spec --quick ["task description"]`
 
-The quick development lane — a condensed subset of the development pipeline, run inside `/dev-implement`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-implement --quick"`), discovers and reads applicable standards, writes a condensed spec + implementation plan, and asks for approval before implementing. Execution is delegated like any other development task.
+The spec-only quick lane — a condensed subset of the development pipeline, run inside `/dev-spec`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-spec --quick"`), discovers and reads applicable standards, runs a brief codebase analysis, gathers condensed requirements, then writes the condensed specification directly on the fly — no `specification-creator` subagent (that delegation stays reserved for the full pipeline). Diagrams are optional and gated by a question; the specification audit is skipped (Exit Gate acceptance substitutes; `/reviews-spec-audit` stays available later). Bug-shaped work (proven defect) still requires the TDD red gate — it is never bypassed by `--quick`; use `/dev-bugfix` for the quick TDD lane.
 
-**When to use**: Task is clear, no architectural decisions needed, you know what needs doing.
+**When to use**: You want a standards-aware, resumable spec before any plan — but the spec alone is enough for now.
 
 **Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
-**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`, `implementation/work-log.md`
+**Artifacts**: `analysis/requirements.md`, `analysis/quick-analysis.md`, `implementation/spec.md`
 
-After implementation it stops at the dev-implement exit gate — continue the pipeline with `/dev-verify` (or `/development <task-path>`), or stop there if the results are enough.
+After the spec it stops at the dev-spec exit gate — continue the pipeline with `/dev-plan` (or `/development <task-path>`), or stop there if the spec is enough.
 
 ### `/dev-plan --quick ["task description"]`
 
@@ -199,6 +199,17 @@ The plan-only quick lane — a condensed subset of the development pipeline, run
 **Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`
 
 After planning it stops at the dev-plan exit gate — continue the pipeline with `/dev-implement` (or `/development <task-path>`), or stop there if the plan is enough.
+
+### `/dev-implement --quick ["task description"]`
+
+The quick development lane — a condensed subset of the development pipeline, run inside `/dev-implement`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-implement --quick"`), discovers and reads applicable standards, writes a condensed spec + implementation plan, and asks for approval before implementing. Execution is delegated like any other development task.
+
+**When to use**: Task is clear, no architectural decisions needed, you know what needs doing.
+
+**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
+**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`, `implementation/work-log.md`
+
+After implementation it stops at the dev-implement exit gate — continue the pipeline with `/dev-verify` (or `/development <task-path>`), or stop there if the results are enough.
 
 ### `/dev-bugfix [bug description | task-path]`
 
