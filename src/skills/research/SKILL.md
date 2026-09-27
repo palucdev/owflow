@@ -49,7 +49,7 @@ Gates follow the shared contract in the [Gate Contract](../orchestrator-framewor
 3. **Create Task Items**: use `TaskCreate` for the research steps (one item per subskill handoff), then set the execution order with `TaskUpdate addBlockedBy` (plan → gather → synthesize → scope → enabled optional chain → finalize). On resume, refresh the already-evidenced items instead of re-creating them.
 4. **Command flags**: `--brainstorm` / `--no-brainstorm` and `--design` / `--no-design` → write to `options.*` in state; `--type=TYPE` → `research_context.research_type`. Subskills read them from there.
 
-> **In-flight cutover**: tasks initialized by the pre-split monolith carry `phase-N`-keyed state (`completed_phases`, `auto_fix_attempts`, `phase_summaries`), which this dispatcher does not parse into step slugs — such state is NOT auto-migrated. Resume those tasks from their existing artifacts via `research-plan` onward, or start fresh with `/owflow:research <question>`.
+> **In-flight cutover**: tasks initialized before the slug re-key carry `phase-N`-keyed state, which this dispatcher does not parse into step slugs. Resume those tasks from their existing artifacts via `/owflow:research-plan <task-path>` — that skill adds the missing template keys and adopts slugs from artifacts — or start fresh with `/owflow:research <question>`.
 
 **Output**:
 
@@ -94,7 +94,7 @@ Derive the FIRST step slug not in `completed_phases`, then print the matching co
 | Next step (slug)                                              | Condition (from state)                                                                                          | Handoff command                          | Produces                                                   |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
 | Brief + plan (`brief-written`, `plan-created`)                 | Always (new task or partial foundation)                                                                          | `/owflow:research-plan <task-path>`      | `planning/research-brief.md`, `research-plan.md`, `sources.md` |
-| Gather (`findings-gathered`)                                  | `plan-created` completed (plan keeps a parsable `## Gathering Strategy`); quick-authored findings count as done   | `/owflow:research-gather <task-path>`    | `analysis/findings/*.md`                                    |
+| Gather (`findings-gathered`)                                  | `plan-created` completed (gather parses `## Gathering Strategy`, or falls back to 4 default categories); quick-authored findings count as done | `/owflow:research-gather <task-path>`    | `analysis/findings/*.md`                                    |
 | Synthesize (`synthesis-complete`)                             | `findings-gathered` completed                                                                                    | `/owflow:research-synthesize <task-path>` | `analysis/synthesis.md`, `outputs/research-report.md`       |
 | Optional-phase decision (`options-resolved`)                  | `synthesis-complete` completed                                                                                   | `/owflow:research-scope <task-path>`     | none (writes both `options.*` flags in state)               |
 | Brainstorm (`alternatives-generated`)                         | `options.brainstorming_enabled: true` (after `options-resolved`)                                                 | `/owflow:research-brainstorm <task-path>` | `outputs/solution-exploration.md`                           |
@@ -108,9 +108,11 @@ The optional chain is SKIPPED per its enablement flags — the three remaining-p
 - `brainstorming_enabled: false` AND `design_enabled: true` (design-only) → skip the brainstorm rows → `/owflow:research-design`.
 - Both disabled → skip to `/owflow:research-finalize`.
 
+**A flag set to `false` means that step is settled, not pending** — including when a subskill flipped its own flag after a user-chosen skip. A row whose enablement flag is `false` never becomes the "first missing slug" again, and no missing slug blocks a terminal step: `research-finalize` accepts a task whose enabled steps are all recorded regardless of the unused ones.
+
 `research-completed` already in `completed_phases` → the task is TERMINAL: no handoff.
 
-The `research-plan` handoff honors a `--quick` flag carried over from the research-plan command's own hint — quick runs are only ever routed on resume, never started from this dispatcher's hint.
+This dispatcher never starts or forwards `--quick`. An interrupted quick task (`entry_point: "research-plan --quick"`, `synthesis-complete` not yet recorded) resumes at full fidelity for the missing pieces. To finish that pass condensed, the user runs `/owflow:research-plan --quick <task-path>` directly.
 
 References moved into their owning subskills (read there, not here): `research-methodologies.md` lives in `research-plan/references/`, `brainstorming-techniques.md` in `research-brainstorm/references/`, `design-techniques.md` in `research-design/references/`.
 

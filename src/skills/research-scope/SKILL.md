@@ -7,7 +7,7 @@ user-invocable: true
 
 # Research Scope — Optional-Phase Decision (options-resolved)
 
-Work phase of the research workflow. Evaluates whether the optional brainstorming and design phases would add value — independently — and records both enablement decisions in state. A state-only step: no new artifacts. This skill is the **single resolution home** for both enablement flags; the optional subskills (`research-brainstorm`, `research-converge`, `research-design`) keep their own routing guards as defense-in-depth only. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
+Work phase of the research workflow. Evaluates whether the optional brainstorming and design phases would add value — independently — and records both enablement decisions in state. A state-only step: no new artifacts. This skill is the **resolution home** for both enablement flags. The only later writer is a user-chosen skip after repeated agent failures: `research-brainstorm` / `research-design` may set their own flag to `false` and record the reason. The optional subskills keep routing guards as defense-in-depth. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
 Related phases: `/owflow:research-synthesize` (produces the synthesis this evaluation reads), `/owflow:research-brainstorm` + `/owflow:research-converge` + `/owflow:research-design` (the optional chain it resolves), `/owflow:research-finalize` (the terminal step both flags may route to). In quick mode, the foundation artifacts were fused inside `research-plan` — the evaluation reads the same `analysis/synthesis.md` regardless.
 
@@ -58,9 +58,9 @@ Flags `--brainstorm`/`--no-brainstorm` and `--design`/`--no-design` pass through
    - Whether the research suggests architectural decisions (yes → valuable)
    - Research type (requirements/mixed → likely valuable; technical → depends)
    - Whether design artifacts would feed into the development workflow
-5. **One question per still-null flag** — dev-style options with the recommendation marked:
-   - Brainstorming: `question` — "[Brainstorming recommendation]. Would you like to explore solution alternatives?" — options: "Yes, explore alternatives (Recommended)" / "No, skip brainstorming"
-   - Design: `question` — "[Design recommendation]. Would you like to generate a high-level design?" — options: "Yes, generate design (Recommended)" / "No, skip design"
+5. **One question per still-null flag** — put "(Recommended)" on the option the evaluation above actually favors, and list that option first:
+   - Brainstorming: `question` — "[Brainstorming recommendation]. Would you like to explore solution alternatives?" — options: "Yes, explore alternatives" / "No, skip brainstorming"
+   - Design: `question` — "[Design recommendation]. Would you like to generate a high-level design?" — options: "Yes, generate design" / "No, skip design"
 
    The two evaluations are independent: the brainstorming answer does not change the design evaluation, and vice versa. If both flags were auto-resolved from CLI flags, both questions are skipped.
 6. **Write both flags together — never partial**: the state write happens ONCE, after both decisions resolve; a mid-skill crash never records one flag alone in `options.*` alongside the slug.
@@ -75,7 +75,7 @@ Apply after EVERY step above:
 
 1. **Write immediately — as ONE unit**: the enablement decision resolves as a whole; `options.brainstorming_enabled` and `options.design_enabled` are written together in a single state write, and the `options-resolved` slug is appended ONLY once both decisions have resolved (flag-resolved or user-answered). Never batch results of other steps into one end-of-skill write, and never write one flag without the other.
 2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
-3. **Failures** — if the evaluation fails or a user declines both questions, do NOT append `options-resolved` to `completed_phases`; instead append it to `orchestrator.failed_phases` and increment `auto_fix_attempts["options-resolved"]`.
+3. **Failures** — if the evaluation fails or a question is dismissed with no usable answer, do NOT append `options-resolved` to `completed_phases`; instead append it to `orchestrator.failed_phases` and increment `auto_fix_attempts["options-resolved"]`. Answering "No" to both questions is a valid resolution (both flags `false` → finalize), not a failure.
 4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-research.yml`. Fix any reported issue immediately before proceeding.
 5. **Final check** — before the Exit Gate, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
 

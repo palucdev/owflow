@@ -278,7 +278,7 @@ Information gathering runs parallel subagents across multiple source categories 
 ### Resume
 
 ```bash
-/owflow:research [task-path] [--from=<slug>] [--reset-attempts]
+/owflow:research [task-path] [--from=<slug>]
 ```
 
 Resume derives from state: the first step slug not in `completed_phases` determines the next subskill; `--from` overrides with a step slug — `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `options-resolved`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed` (prerequisites are validated). Works across assisted and autonomous modes, including tasks started by the `--quick` lane.

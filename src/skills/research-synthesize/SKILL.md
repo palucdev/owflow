@@ -7,7 +7,7 @@ user-invocable: true
 
 # Research Synthesize — Synthesis & Research Report (synthesis-complete)
 
-Work phase of the research workflow. Delegates pattern synthesis and evidence-based reporting to the research-synthesizer agent (`analysis/synthesis.md` + `outputs/research-report.md`). This is the research-foundation boundary: the Exit Gate absorbs the foundation→optional pause, so its acceptance question IS the gate the old orchestrator called the Phase1→2 pause. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
+Work phase of the research workflow. Delegates pattern synthesis and evidence-based reporting to the research-synthesizer agent (`analysis/synthesis.md` + `outputs/research-report.md`). This is the research-foundation boundary: the Exit Gate is the pause between the foundation and the optional-phase decision. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
 Related phases: `/owflow:research-gather` (produces the merged findings), `/owflow:research-scope` (consumes the synthesis for the enablement decision).
 
@@ -34,7 +34,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `synthesis-complete`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
 2. **Content check — findings present**: the per-category files under `analysis/findings/` must exist (artifacts before state — drop the `findings-gathered` entry and route back to `/owflow:research-gather <task-path>` when they do not).
-3. **Skip/resume**: if `synthesis-complete` is in `completed_phases`, validate `analysis/synthesis.md` AND `outputs/research-report.md` exist; missing → re-run below; both present → report existing synthesis + report summaries and route to the Exit Gate.
+3. **Skip/resume**: if `analysis/synthesis.md` AND `outputs/research-report.md` both exist, adopt them — append `synthesis-complete` if it is missing, backfill `research_outputs.synthesis` and `research_outputs.research_report` when those fields are still null, report the existing summaries, and route to the Exit Gate. Either file missing → re-run below (drop a stale `synthesis-complete` entry first).
 
 ## Execute (delegated synthesis)
 
@@ -51,7 +51,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 - Confidence levels for each finding
 - Documented gaps and uncertainties
 
-> **SELF-CHECK on both artifacts**: after the Task tool returns, verify `analysis/synthesis.md` AND `outputs/research-report.md` exist (synthesis documents gaps; report carries confidence per finding). If missing: **STOP. Re-invoke the research-synthesizer with corrected context.** If the second attempt also fails, use `question` to report the failure and ask whether to retry or continue without.
+> **SELF-CHECK on both artifacts**: after the Task tool returns, verify `analysis/synthesis.md` AND `outputs/research-report.md` exist (synthesis documents gaps; report carries confidence per finding). If missing: **STOP. Re-invoke the research-synthesizer with corrected context.** If the second attempt also fails, use `question` to report the failure and ask whether to retry (after targeted re-gathering if the gaps require it) or stop. There is no continue-without-synthesis path — `research-scope` and every later step read these artifacts. On stop, record the failure per the State Update Convention and print the resume command.
 
 ### Post-synthesis decision re-cap (direct, condensable)
 

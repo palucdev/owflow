@@ -29,13 +29,10 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 | ---------------------------------- | -------------------------------------------------------------------- | -------------------------------------- |
 | State file exists                  | `<task-path>/orchestrator-state.yml`                                 | `/owflow:research <question>` or the research-plan quick bootstrap |
 | Plan exists                        | `plan-created` in `completed_phases` + `planning/research-plan.md` exists | `/owflow:research-plan <task-path>`    |
-| Plan has a parsable Gathering Strategy | `## Gathering Strategy` section present in the plan file          | `/owflow:research-plan <task-path>` (or its quick mode) |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `findings-gathered`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
-2. **Content check — plan parsability**: Read `planning/research-plan.md`. If the file is missing OR lacks a `## Gathering Strategy` section (categories + count) → print the blocked block, then STOP:
-   1. Steps that must be completed first: research brief & plan (`brief-written` with the brief, `plan-created` with the parsable plan).
-   2. `Run /owflow:research-plan <task-path> first.`
-3. **Skip/resume — only missing categories re-fan**: if `findings-gathered` is in `completed_phases`, validate the per-category files really exist under `analysis/findings/` (artifacts before state). Missing category files → re-fan ONLY the missing categories and re-append `findings-gathered` only after they land; all categories present → report existing findings and route to the Exit Gate. Quick-authored findings count as pre-existing category files.
+2. **Content check — plan file**: Read `planning/research-plan.md`. If the file is missing → print the blocked block, then STOP (`Run /owflow:research-plan <task-path> first.`). A missing `## Gathering Strategy` section does NOT block — Execute falls back to the default 4 categories.
+3. **Skip/resume — only missing categories re-fan**: existing files under `analysis/findings/` count as done whether or not `findings-gathered` is already in `completed_phases` (artifacts before state; quick-authored and pre-split files included). Re-fan ONLY categories with no matching file, then append `findings-gathered` once every planned category has a file. All categories already present → adopt the slug if it is missing, report existing findings, and route to the Exit Gate.
 
 ## Execute (delegated fan)
 

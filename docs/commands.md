@@ -86,7 +86,7 @@ Research is split the same way as development: `/research` is the workflow **dis
 | `/research-converge [task-path-or-identifier]` | Per-area approach decisions over the alternatives (conditional) |
 | `/research-design [task-path-or-identifier]` | High-level design with decision log (conditional) |
 | `/research-finalize [task-path-or-identifier]` | Inventory of research outputs, confirmation, completion |
-| `/goal-research [task description \| task-path] [--from=<slug>]` | Autonomous mode — runs every subskill in one session with question gates |
+| `/goal-research [task description \| task-path] [--from=<slug>] [--brainstorm\|--no-brainstorm] [--design\|--no-design] [--type=<type>]` | Autonomous mode — runs every subskill in one session with question gates |
 
 Every `research-*` subskill resolves its task from a full path or just the directory identifier under `.owflow/tasks/research/`, validates prerequisites from state, and stops with the ordered prerequisite steps when something is missing — it never auto-picks a task. `--from` takes a step slug (e.g. `/research --from=plan-created .owflow/tasks/research/<task>`), not a phase number; slugs: `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `options-resolved`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. Quick lane starts only via `/research-plan --quick "<description>"` — a condensed pass that fuses brief, plan, gather, and synthesis, continuable by any research subskill.
 

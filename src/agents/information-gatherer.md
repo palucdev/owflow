@@ -53,8 +53,8 @@ hidden: true
 **When source_category is NOT `all`**:
 
 - Filter `planning/sources.md` to only include matching category (or use gathering strategy focus area for custom categories)
-- Skip summary generation (Phase 7) - handled by orchestrator merge step
-- Skip verification generation - handled by orchestrator merge step
+- Skip summary generation (Phase 7) - handled by the research-gather merge step
+- Skip verification generation - handled by the research-gather merge step
 - Write only category-specific findings files
 
 ---
@@ -451,7 +451,7 @@ Follow the research plan phases systematically. Typical progression:
 
 ### Phase 7: Create Findings Summary
 
-**SKIP this phase if `source_category` is NOT `all`** - summary will be created by orchestrator merge step when running in parallel mode.
+**SKIP this phase if `source_category` is NOT `all`** - summary will be created by the research-gather merge step when running in parallel mode.
 
 **Execute this phase only when `source_category` is `all` or not specified.**
 
@@ -675,17 +675,17 @@ analysis/findings/
 
 ---
 
-## Integration with Research Orchestrator
+## Integration with the Research Workflow
 
-**Input from Phase 1, Step 2**:
+**Invoked by**: the `owflow:research-gather` subskill (Task tool), one call per planned category, all calls in ONE message
 
+**Input**:
 - `planning/research-plan.md` (methodology + gathering strategy)
 - `planning/sources.md` (data sources)
 
-**Output to Phase 1, Step 4** (via merge in Step 3):
-
+**Output** (merged by the calling subskill):
 - `analysis/findings/*.md` (detailed findings by source category)
 
-**State Update**: Report back to orchestrator (Phase 1, Step 3 gathering complete)
+**State Update**: The calling subskill records `findings-gathered`
 
-**Next Step**: Orchestrator merges findings into `00-summary.md` and `99-verification.md`, then invokes research-synthesizer
+**Next Step**: `owflow:research-synthesize` merges the findings and invokes research-synthesizer

@@ -99,6 +99,6 @@ The Exit Gate runs after all phase work and state updates are final. It presents
 
 ## Exceptions
 
-- **Dispatchers** (`development`): the Exit Gate's acceptance question is adapted — the results box is the handoff block, and the question asks how to proceed (hand off to the suggested subskill / switch to autonomous mode / adjust / stop).
+- **Dispatchers** (`development`, `research`): the Exit Gate's acceptance question is adapted — the results box is the handoff block, and the question asks how to proceed (hand off to the suggested subskill / switch to autonomous mode / adjust / stop).
 - **Utility skills with explicit no-follow-up contracts** (`agents-md-generator`, `rule-reviewer`): the acceptance question is confirm-or-revise only; follow-up suggestions stay prohibited unless the user asks. See [confirm-or-revise exception](confirm-or-revise-exception.md).
-- **Orchestrated mode** (`goal-development`): the subskill's own Exit Gate acceptance question IS the loop gate — Accept means "continue to the next subskill". The wrapper MUST NOT add a second consecutive `question`.
+- **Orchestrated mode** (`goal-development`, `goal-research`): the subskill's own Exit Gate acceptance question IS the loop gate — Accept means "continue to the next subskill". The wrapper MUST NOT add a second consecutive `question`.

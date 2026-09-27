@@ -9,7 +9,7 @@ user-invocable: true
 
 Work phase of the research workflow. Creates the research brief, delegates methodology selection and gathering-strategy planning to the research-planner agent, and writes the research plan. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
-Supports a **quick mode** (`--quick`, or any research question with no existing task): a condensed lane that bootstraps a standard research task (state file, docs discovery) and then fuses brief, plan + sources, gather, and synthesis into one pass — quick mode is the ONLY place where the planner delegation, the gatherer fan, and the synthesizer delegation are condensable. After the Exit Gate, the pipeline continues with `/owflow:research-gather` (full lane) or `/owflow:research-scope` (quick). The task is a regular research task, resumable by any research subskill at full fidelity.
+Supports a **quick mode** (`--quick` only): a condensed lane that bootstraps a standard research task (state file, docs discovery) and then fuses brief, plan + sources, gather, and synthesis into one pass — quick mode is the ONLY place where the planner delegation, the gatherer fan, and the synthesizer delegation are condensable. A research question without `--quick` is not quick mode — the routing table asks first. After the Exit Gate, the pipeline continues with `/owflow:research-gather` (full lane) or `/owflow:research-scope` (quick). The task is a regular research task, resumable by any research subskill at full fidelity.
 
 ## Entry Gate
 
@@ -44,12 +44,14 @@ If the path does **not exist** or matches **no identifier** → print the blocke
 | State file exists                     | `<task-path>/orchestrator-state.yml`                 | `/owflow:research <question>` (dispatcher init) or the quick bootstrap |
 | Research question resolved (resume)   | `research_context.research_question` non-null in state | brief step (`brief-written`) or quick bootstrap  |
 
-1. **Read `orchestrator-state.yml`** from the task path. If missing → quick bootstrap when invoked with `--quick` or a question argument (see Quick Mode), otherwise mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `brief-written`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch, or /owflow:research-plan --quick "<question>" for a quick fused task.` and STOP.
-2. **Content check (resume)**: `research_context.research_question` must be non-null. If null (state exists, question never recorded), prompt via `question` — "What is your research question?" — and let the brief step record it in state.
-3. **Skip/resume** — validate artifacts before trusting state (drop entries whose artifacts are missing, re-run that step):
-   - `brief-written` present → `planning/research-brief.md` exists → skip the brief step.
-   - `plan-created` present → `planning/research-plan.md` AND `planning/sources.md` exist → report the existing plan summary and route to the Exit Gate (a `--quick` resume instead condenses only the quick pass pieces that are still missing).
-4. **`--quick` honored**: any `--quick` invocation routes into Quick Mode below regardless of argument kind.
+1. **Read `orchestrator-state.yml`** from the task path. If missing → quick bootstrap only when invoked with `--quick` (see Quick Mode). A question argument without `--quick` follows the routing table (ask first). Otherwise mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `brief-written`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch, or /owflow:research-plan --quick "<question>" for a quick fused task.` and STOP.
+2. **Legacy state**: tasks created before the slug re-key still carry `phase-N` keys and lack `entry_point`, `project_doc_paths`, `research_outputs.synthesis`, and the slug-keyed `auto_fix_attempts` / `phase_summaries` slots. Before the first write, add every key the current `orchestrator-state-research.yml` declares and that verify_template would report missing. Do not translate `phase-N` entries in `completed_phases` into slugs — adopt from artifacts (step 4) instead. Extra `phase-N` keys may stay; they do not fail verify_template.
+3. **Content check (resume)**: `research_context.research_question` must be non-null. If null (state exists, question never recorded), prompt via `question` — "What is your research question?" — and let the brief step record it in state.
+4. **Skip/resume** — artifacts before state. If the file exists but its slug is missing, adopt it (append the slug, backfill still-null fields) instead of re-running:
+   - `planning/research-brief.md` exists → append `brief-written` if missing, then skip the brief step.
+   - `planning/research-plan.md` AND `planning/sources.md` exist → append `plan-created` if missing, backfill `methodology` / `sources` / `phase_summaries.plan` when still null, report the existing plan summary, and route to the Exit Gate (a `--quick` resume instead condenses only the quick-pass pieces that are still missing).
+   - A slug whose artifact is missing → drop the slug and re-run that step.
+5. **`--quick` honored**: any `--quick` invocation routes into Quick Mode below regardless of argument kind. The dispatcher and `goal-research` never forward `--quick`; an interrupted quick task resumes here in condensed mode only when the user passes `--quick` again.
 
 ## Quick Mode (condensed brief → synthesis, one pass)
 
@@ -67,10 +69,10 @@ Quick mode produces the same artifacts as the full lane — just condensed into 
 
 **MANDATORY order — brief before plan, plan before gather, gather before synthesis:**
 
-1. **Condensed brief** — run the full lane's brief step inline (parse question, classify type, determine scope, success criteria, write `planning/research-brief.md`, docs discovery when not already done). Append `brief-written` on completion.
-2. **Condensed plan + sources — written directly, NO delegation**: read `references/research-methodologies.md` using the Read tool (methodology selection still applies), then write `planning/research-plan.md` and `planning/sources.md` as separate artifacts on the exact full-lane paths. **Quick acceptance check: the plan MUST keep a `## Gathering Strategy` section (categories + count) verbatim** — this exact form is what `research-gather` content-checks and parses; without it the plan is not deliverable. **This REPLACES the research-planner delegation in Execute below (quick mode is the only exception to the plan anti-pattern)**, and it pins the gathering categories: ≤2 categories → the gather step below stays inline with zero agents; more → fan capped at 3. Append `plan-created` on completion (`phase_summaries.plan` summary).
-3. **Condensed gather** — when the plan's `## Gathering Strategy` has ≤2 categories, write the per-category finding files into `analysis/findings/` directly, zero agents (**quick mode is the ONLY exception to the always-fan rule**); with 3+ categories, launch the fan capped at 3 gatherers in ONE message (same mechanics as `/owflow:research-gather`). Append `findings-gathered` on completion — condensation noted in `phase_summaries.gather`.
-4. **Condensed synthesis — ALWAYS inline**: write `analysis/synthesis.md` (pattern analysis, cross-references, documented gaps and uncertainties) and `outputs/research-report.md` (comprehensive report answering the research question, confidence per finding) directly (**quick mode is the ONLY exception to the research-synthesizer delegation**); set `research_context.confidence_level`. Append `synthesis-complete` on completion — condensation noted in `phase_summaries.synthesize`.
+1. **Condensed brief** — run the full lane's brief step inline (parse question, classify type, determine scope, success criteria, write `planning/research-brief.md`, docs discovery when not already done). Append `brief-written` on completion and set `research_context.research_type`, `research_question`, `scope`, and `project_doc_paths` — the same fields the full-lane brief step writes.
+2. **Condensed plan + sources — written directly, NO delegation**: read `references/research-methodologies.md` using the Read tool (methodology selection still applies), then write `planning/research-plan.md` and `planning/sources.md` as separate artifacts on the exact full-lane paths. **Quick acceptance check: the plan MUST keep a `## Gathering Strategy` section (categories + count)** — this pass uses that count to choose inline gather vs a capped fan; `research-gather` parses the same section and falls back to 4 default categories only when it is absent. **This REPLACES the research-planner delegation in Execute below (quick mode is the only exception to the plan anti-pattern)**, and it pins the gathering categories: ≤2 categories → the gather step below stays inline with zero agents; more → fan capped at 3. Append `plan-created` on completion and set `research_context.methodology`, `sources`, and `phase_summaries.plan` — the same fields the full-lane plan step writes.
+3. **Condensed gather** — when the plan's `## Gathering Strategy` has ≤2 categories, write the per-category finding files into `analysis/findings/` directly, zero agents (**quick mode is the ONLY exception to the always-fan rule**); with 3+ categories, launch the fan capped at 3 gatherers in ONE message (same mechanics as `/owflow:research-gather`). Append `findings-gathered` on completion; set `research_context.gathering_strategy` and `research_outputs.findings_directory`; note the condensation in `phase_summaries.gather`.
+4. **Condensed synthesis — ALWAYS inline**: write `analysis/synthesis.md` (pattern analysis, cross-references, documented gaps and uncertainties) and `outputs/research-report.md` (comprehensive report answering the research question, confidence per finding) directly (**quick mode is the ONLY exception to the research-synthesizer delegation**); set `research_context.confidence_level`, `research_outputs.synthesis`, and `research_outputs.research_report`. Append `synthesis-complete` on completion — condensation noted in `phase_summaries.synthesize`.
 
 Slugs are appended individually on each step's completion — never batched (see State Update Convention). Then continue with the **Exit Gate** below; its results box notes the condensed pass.
 
@@ -83,10 +85,10 @@ Slugs are appended individually on each step's completion — never batched (see
 ### Brief (`brief-written`, inline)
 
 **Artifacts**: `planning/research-brief.md`
-**Resume check**: if `planning/research-brief.md` exists, skip to the plan step.
+**Resume check**: if `planning/research-brief.md` exists, adopt it (append `brief-written` if that slug is missing) and skip to the plan step.
 
 1. Parse research question (from command or prompt user)
-2. Classify research type (auto-detect from keywords or use `--type` flag)
+2. Classify research type. If `research_context.research_type` is already one of `technical`, `requirements`, `literature`, `mixed` (the dispatcher or `goal-research` wrote it from `--type`), keep that value. The template placeholder `"technical | requirements | literature | mixed"` is not a classification — auto-detect from keywords in that case. This skill's own command does not take `--type`.
 3. Determine scope (included, excluded, constraints)
 4. Define success criteria
 5. Create research brief
@@ -98,20 +100,20 @@ Slugs are appended individually on each step's completion — never batched (see
 ### Plan (`plan-created`, delegated)
 
 **Artifacts**: `planning/research-plan.md`, `planning/sources.md`
-**Resume check**: if `planning/research-plan.md` AND `planning/sources.md` exist, skip to the Exit Gate.
+**Resume check**: if `planning/research-plan.md` AND `planning/sources.md` exist, adopt them (append `plan-created` if that slug is missing; backfill `methodology`, `sources`, and `phase_summaries.plan` when still null) and skip to the Exit Gate.
 
 > **ANTI-PATTERN — never write the research plan yourself in a full-lane run. "The question is simple" is NOT a reason to skip delegation. (Quick mode is the ONLY exception — its condensed pass step 2 writes the plan directly and skips this step.)**
 
 1. **Read `references/research-methodologies.md` NOW using the Read tool** — research type classification, methodology selection, gathering strategies (the reference lives in this skill's own folder).
 2. **INVOKE NOW**: Task tool - `research-planner` subagent (never the Skill tool — this is an agent). Pass (Pattern 7 — accumulated context): task_path, research_brief_path, research_type, research_question, scope, project_doc_paths (from state). Output: `planning/research-plan.md`, `planning/sources.md`.
-3. **Plan parsability**: the plan MUST keep a `## Gathering Strategy` section (categories + count) — the gather subskill content-checks and parses exactly this section; a plan without it is not deliverable.
+3. **Plan parsability**: the plan SHOULD keep a `## Gathering Strategy` section (categories + count). `research-gather` parses that section; if the planner omitted it, do NOT hand-author the section in a full-lane run — note the omission in `phase_summaries.plan` and let gather fall back to its default 4 categories.
 4. **State write**: append `plan-created` to `completed_phases`; update `research_context.methodology`, `sources`, `phase_summaries.plan`; bump `orchestrator.updated`. On failure: append `plan-created` to `failed_phases`, increment `auto_fix_attempts["plan-created"]`. Then re-read state + run `verify_template`.
 
 ## State Update Convention (per step)
 
 Apply after EVERY step above:
 
-1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed (e.g. `brief-written`, `plan-created`) plus that step's fields. Never batch multiple steps into one end-of-skill write. In quick mode, the prelude steps follow the same rule: `brief-written` after the condensed brief, `plan-created` after the condensed plan + sources, `findings-gathered` after the condensed gather, `synthesis-complete` after the condensed synthesis — each on its own completion, condensation noted in `phase_summaries.gather` / `phase_summaries.synthesize`.
+1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed (e.g. `brief-written`, `plan-created`) plus that step's fields. Never batch multiple steps into one end-of-skill write. In quick mode, the prelude steps follow the same rule: `brief-written` after the condensed brief, `plan-created` after the condensed plan + sources, `findings-gathered` after the condensed gather, `synthesis-complete` after the condensed synthesis — each on its own completion, with the same state fields the full-lane owner writes (`methodology`/`sources`, `gathering_strategy`, `research_outputs.findings_directory`/`synthesis`/`research_report`) and condensation noted in `phase_summaries.gather` / `phase_summaries.synthesize`.
 2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
 3. **Failures** — if the step fails or its retries are abandoned, do NOT append to `completed_phases`; instead append the step's slug to `orchestrator.failed_phases` and increment `auto_fix_attempts["<slug>"]`.
 4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-research.yml`. Fix any reported issue immediately before proceeding.

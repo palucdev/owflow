@@ -7,9 +7,9 @@ user-invocable: true
 
 # Research Design — High-Level Design (design-generated)
 
-Work phase of the research workflow. Creates the high-level architecture design from the selected solution approach — or, when brainstorming was skipped, seeded from the research-report recommendations — as two artifacts (`outputs/high-level-design.md`, `outputs/decision-log.md`), then refines diagrams via the `diagrams-mermaid` Skill. Conditional optional phase — runs only when `options.design_enabled: true` (or convergence already completed, the design-only branch). The design Entry Gate owns the brainstorm-skipped branch explicitly. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
+Work phase of the research workflow. Creates the high-level architecture design from the selected solution approach — or, when brainstorming was skipped, seeded from the research-report recommendations — as two artifacts (`outputs/high-level-design.md`, `outputs/decision-log.md`), then refines diagrams via the `diagrams-mermaid` Skill. Conditional optional phase — runs only when `options.design_enabled: true`. The design-only branch (brainstorming skipped) is owned here: `selected_approach` is seeded from the research report. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
-Related phases: `/owflow:research-scope` (decided the enablement flags), `/owflow:research-brainstorm` + `/owflow:research-converge` (produce the chosen combination consumed as `selected_approach`), `/owflow:research-finalize` (always next). The design-techniques reference lives in this skill's own folder (`references/design-techniques.md` — lands with the references redistribution step).
+Related phases: `/owflow:research-scope` (decided the enablement flags), `/owflow:research-brainstorm` + `/owflow:research-converge` (produce the chosen combination consumed as `selected_approach`), `/owflow:research-finalize` (always next). The design-techniques reference lives in this skill's own folder (`references/design-techniques.md`).
 
 ## Entry Gate
 
@@ -36,15 +36,13 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 | Design input ready      | brainstorm ran — `approaches-chosen` in `completed_phases`; OR brainstorm skipped — `outputs/research-report.md` exists with recommendations | `/owflow:research-converge <task-path>` (or `/owflow:research-synthesize <task-path>`) |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `design-generated`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
-2. **Conditional activation (defense-in-depth)**: design runs when `options.design_enabled: true` OR `approaches-chosen` is in `completed_phases`. If BOTH are false/absent — `options.design_enabled: false` AND `approaches-chosen` not in `completed_phases` → print `Design is disabled or undecided — high-level design phase not required.` Then:
-   - `null` (enablement never decided) → suggest `→ /owflow:research-scope <task-path>` (single-resolution home for both flags), then STOP.
-   - disabled/absent with the chain otherwise complete → nothing to design: suggest `→ /owflow:research-finalize <task-path>` (optional chain exhausted), then STOP.
-3. **No-brainstorm branch (design Entry Gate owns it)**: if `options.brainstorming_enabled: false` OR `approaches-chosen` is not in `completed_phases`, this is the design-only branch — brainstorming was skipped, so `selected_approach` is seeded from `outputs/research-report.md` recommendations in Part A. State this explicitly: `Brainstorming was skipped — seeding the design from research-report recommendations.` Validate `outputs/research-report.md` exists; missing → blocked-block route `→ /owflow:research-synthesize <task-path>`, then STOP.
-4. **Skip/resume**: if `design-generated` is in `completed_phases`, validate BOTH `outputs/high-level-design.md` AND `outputs/decision-log.md` exist; either missing → re-run Parts B-D below; both present → report the existing design summary and route to the Exit Gate.
-5. **Prerequisite check**: `options-resolved` must be in `completed_phases`, plus the design input per the table above (`approaches-chosen` when brainstorm ran; `synthesis-complete` + `outputs/research-report.md` on the design-only branch). If missing → print the blocked block, then STOP:
-   - Steps that must be completed first: optional-phase decision (`options-resolved`) → chosen approaches (`approaches-chosen`, only when brainstorming ran).
-   - `Run /owflow:research-scope <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, `/owflow:research-synthesize`, `/owflow:research-brainstorm`, or `/owflow:research-converge`).
-   - If no task exists yet: `Run /owflow:research <question> to start a task from scratch.`
+2. **Prerequisite check**: `options-resolved` must be in `completed_phases` and `options.design_enabled` must be non-null. If missing, or the flag is null → print the blocked block (`→ /owflow:research-scope <task-path>`, or the earliest missing earlier step), then STOP.
+3. **Conditional activation**: design runs ONLY when `options.design_enabled: true`. If `false` → print `Design is disabled — high-level design phase not required.` and suggest `→ /owflow:research-finalize <task-path>`, then STOP. Convergence having completed does NOT enable design.
+4. **Design input**:
+   - `options.brainstorming_enabled: true` and `approaches-chosen` not in `completed_phases` → the brainstorm chain is still pending. Print the blocked block pointing at whichever step is missing — `/owflow:research-brainstorm <task-path>` when `alternatives-generated` is absent, otherwise `/owflow:research-converge <task-path>` — then STOP. Do NOT seed from the research report while brainstorming is still enabled.
+   - `options.brainstorming_enabled: true` and `approaches-chosen` in `completed_phases` but `phase_summaries.converge.decision_areas` has no `chosen_approach` → convergence never resolved its areas: `→ /owflow:research-converge <task-path>`, then STOP.
+   - `options.brainstorming_enabled: false` → design-only branch. State `Brainstorming was skipped — seeding the design from research-report recommendations.` Validate `outputs/research-report.md` exists; missing → `→ /owflow:research-synthesize <task-path>`, then STOP.
+5. **Skip/resume**: if `design-generated` is in `completed_phases`, validate BOTH `outputs/high-level-design.md` AND `outputs/decision-log.md` exist; either missing → re-run Parts B-D below; both present → report the existing design summary and route to the Exit Gate.
 
 ## Execute (Part A direct + Part B delegated + Part C direct + Part D Skill)
 
@@ -70,11 +68,11 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
    - Accumulated context: `research_type`, `research_question`, `confidence_level`, `phase_summaries`
    - `project_doc_paths` (from state)
    - MUST-contract: the designer writes BOTH `outputs/high-level-design.md` AND `outputs/decision-log.md`
-2. > **SELF-CHECK**: After the Task tool returns, verify BOTH `outputs/high-level-design.md` and `outputs/decision-log.md` exist. If either is missing: **STOP. Do NOT proceed to Part D or the Exit Gate.** Re-invoke the designer with corrected context. If a second attempt also fails, use `question` to report the failure and ask whether to retry or skip design.
+2. > **SELF-CHECK**: After the Task tool returns, verify BOTH `outputs/high-level-design.md` and `outputs/decision-log.md` exist. If either is missing: **STOP. Do NOT proceed to Part D or the Exit Gate.** Re-invoke the designer with corrected context. If a second attempt also fails, use `question` to report the failure and ask whether to retry or skip design. A skip sets `options.design_enabled: false` (see State Update Convention) — it does not leave the flag true.
 
-### Part C — Executive Summary (direct, folded)
+### Part C — Executive Summary (direct)
 
-Content-preserving fold from the monolith: read `outputs/high-level-design.md` and `outputs/decision-log.md`, then present the executive summary THROUGH the Exit-Gate results box below (architecture style and key components, decision count, key decision highlights 1 line each, integration points with the existing system if applicable) — no separate presentation round.
+Read `outputs/high-level-design.md` and `outputs/decision-log.md`, then present the executive summary through the Exit-Gate results box below (architecture style and key components, decision count, key decision highlights 1 line each, integration points with the existing system if applicable) — no separate presentation round.
 
 ### Part D — Diagram Refinement (Skill, content-preserving)
 
@@ -83,8 +81,6 @@ Content-preserving fold from the monolith: read `outputs/high-level-design.md` a
    - one architecture view (`C4Container` preferred; `C4Component` only if needed),
    - one interaction/state view (`sequenceDiagram` or `flowchart`) for the critical flow.
 3. If minimum context for a diagram is missing, record explicit gaps in the document and avoid speculative components/relationships.
-
-> Part C — Executive Summary: content-preserving fold — architecture style, key components, decision count, key highlights, and integration points are presented in the Exit-Gate results box below.
 
 ### Close (`design-generated`)
 
@@ -96,7 +92,7 @@ Apply after EVERY step above:
 
 1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed (`design-generated`) plus that step's fields. Never batch multiple steps into one end-of-skill write.
 2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
-3. **Failures** — if the designer delegation fails or its retries are abandoned, do NOT append `design-generated` to `completed_phases`; instead append it to `orchestrator.failed_phases` and increment `auto_fix_attempts["design-generated"]`. A user-chosen skip via `question` after repeated failures is a deliberate decision: record it in `phase_summaries.design.summary` — no `completed_phases` entry, no `failed_phases` entry.
+3. **Failures** — if the designer delegation fails or its retries are abandoned, do NOT append `design-generated` to `completed_phases`; instead append it to `orchestrator.failed_phases` and increment `auto_fix_attempts["design-generated"]`. A user-chosen skip via `question` after repeated failures is a deliberate decision, not a failure: set `options.design_enabled: false`, record the reason in `phase_summaries.design.summary`, and append neither `design-generated` nor a `failed_phases` entry. Then present the Exit Gate (results box notes the skip; next step is `/owflow:research-finalize <task-path>`). Do NOT leave the flag true — the dispatcher would route back into this skill.
 4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-research.yml`. Fix any reported issue immediately before proceeding.
 5. **Final check** — before the Exit Gate, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
 
@@ -108,7 +104,7 @@ Apply after EVERY step above:
 
 ## Exit Gate
 
-Present results, get user confirmation, then hand off (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
+Present results, get user confirmation, then hand off (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill. A user-chosen skip still uses this Exit Gate; its results box says the step was skipped and why, and the next step is `/owflow:research-finalize <task-path>`.
 
 ### Results box
 

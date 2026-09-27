@@ -387,15 +387,17 @@ Combine relevant elements from above frameworks based on research objectives.
 
 ---
 
-## Integration with Research Orchestrator
+## Integration with the Research Workflow
 
-**Input from Phase 1, Step 3** (Information Gathering):
+**Invoked by**: the `owflow:research-synthesize` subskill (Task tool)
+
+**Input** (information gathering):
 - `analysis/findings/*.md` (all finding files)
 
-**Output to Phase 2** (Brainstorming Decision) / **Phase 3** (Brainstorming):
+**Output**:
 - `analysis/synthesis.md` (patterns and insights)
 - `outputs/research-report.md` (comprehensive report)
 
-**State Update**: Report back to orchestrator (Phase 1, Step 4 complete)
+**State Update**: The calling subskill records `synthesis-complete`
 
-**Next Step**: Orchestrator evaluates brainstorming value (Phase 2) then creates deliverables
+**Next Step**: `owflow:research-scope` evaluates brainstorming and design value, then the optional chain runs

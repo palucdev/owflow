@@ -33,12 +33,14 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 | ----------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | State file exists       | `<task-path>/orchestrator-state.yml`                                             | `/owflow:research <question>` or the research-plan quick bootstrap |
 | Foundation complete     | `synthesis-complete` in `completed_phases` + `outputs/research-report.md` exists | `/owflow:research-synthesize <task-path>`                          |
-| Optional chain resolved | `options-resolved` in `completed_phases` + both `options.*` flags non-null       | `/owflow:research-scope <task-path>`                               |
+| Optional chain resolved | `options-resolved` in `completed_phases` + both flags non-null; every flag still `true` has its slug in `completed_phases` | `/owflow:research-scope <task-path>` (then the enabled chain) |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `research-completed`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
-2. **Prerequisite check**: `synthesis-complete` AND `options-resolved` must be in `completed_phases`, and `outputs/research-report.md` must exist. If missing → print the blocked block, then STOP:
-   - Steps that must be completed first: foundation (`brief-written` → `plan-created` → `findings-gathered` → `synthesis-complete`) → optional-phase decision (`options-resolved`) → the enabled parts of the optional chain (`alternatives-generated` / `approaches-chosen` / `design-generated`).
-   - `Run /owflow:research-scope <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, or `/owflow:research-synthesize`).
+2. **Prerequisite check**: `synthesis-complete` AND `options-resolved` must be in `completed_phases`, `outputs/research-report.md` must exist, and both `options.*` flags must be non-null. Then enforce the flags still set:
+   - `options.brainstorming_enabled: true` requires `alternatives-generated` AND `approaches-chosen` in `completed_phases` (and `outputs/solution-exploration.md` exists).
+   - `options.design_enabled: true` requires `design-generated` in `completed_phases` (and both design artifacts exist).
+   A flag left `true` with its slug missing is pending work, not a skip — a user-chosen skip flips that flag to `false`. If any of the above is missing → print the blocked block for the earliest missing step, then STOP:
+   - `Run /owflow:research-scope <task-path> first` when the decision is missing (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, `/owflow:research-synthesize`, `/owflow:research-brainstorm`, `/owflow:research-converge`, or `/owflow:research-design`).
    - If no task exists yet: `Run /owflow:research <question> to start a task from scratch.`
 3. **Skip/resume**: if `task.status` is `completed`, report the existing finalization (results box from the inventory below) and STOP (dev-finalize terminal pattern).
 4. **Conditional activation**: this skill always runs — every chain (both disabled / design-only / full brainstorm chain) reaches completion here. The optional phases only affect the inventory and the "Phases run" line.
@@ -71,13 +73,13 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 ### Close (`research-completed`)
 
-1. **State write**: append `research-completed` to `completed_phases` and set `task.status: completed` — ONLY after the results box is presented; do NOT write any `phase_summaries.finalize` slot (the template has no finalize slot; writing one would fail `verify_template`); bump `orchestrator.updated`. On failure: append `research-completed` to `failed_phases`, increment `auto_fix_attempts["research-completed"]`. Then re-read state + run `verify_template` (see State Update Convention).
+1. **State write**: append `research-completed` to `completed_phases` and set `task.status: completed` — ONLY after the results box is presented; do NOT write a `phase_summaries.finalize` slot (the template has no finalize slot — finalization is state-only, and the inventory lives in `research_outputs.*`); bump `orchestrator.updated`. On failure: append `research-completed` to `failed_phases`, increment `auto_fix_attempts["research-completed"]`. Then re-read state + run `verify_template` (see State Update Convention).
 
 ## State Update Convention (per step)
 
 Apply after EVERY step above:
 
-1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed (`research-completed`) plus that step's fields. Never batch multiple steps into one end-of-skill write. **No `phase_summaries.finalize` write** — the template has no such slot; writing one would fail `verify_template` (the inventory lives in `research_outputs.*`, not in phase summaries).
+1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed (`research-completed`) plus that step's fields. Never batch multiple steps into one end-of-skill write. **No `phase_summaries.finalize` write** — the template has no such slot (finalization is state-only; the inventory lives in `research_outputs.*`).
 2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
 3. **Failures** — if finalization fails, do NOT append `research-completed` to `completed_phases`; instead append it to `orchestrator.failed_phases` and increment `auto_fix_attempts["research-completed"]`.
 4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-research.yml`. Fix any reported issue immediately before proceeding.

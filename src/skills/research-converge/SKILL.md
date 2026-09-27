@@ -7,7 +7,7 @@ user-invocable: true
 
 # Research Converge — Per-Area Decisions (approaches-chosen)
 
-Work phase of the research workflow. Interactive convergence: presents the brainstorming alternatives for each decision area — one area, one dedicated `question` — and records the chosen combination in state (state-only; no new artifacts). Conditional optional phase — runs only when brainstorming ran (ADR-003 dissolves the monolith's Phase-3 AUTO-CONTINUE, making the brainstorm→converge boundary explicit across the two skills' gates). State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
+Work phase of the research workflow. Interactive convergence: presents the brainstorming alternatives for each decision area — one area, one dedicated `question` — and records the chosen combination in state (state-only; no new artifacts). Conditional optional phase — runs only when brainstorming ran. There is no auto-continue from brainstorm: this skill's Entry Gate re-checks the artifact. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
 Related phases: `/owflow:research-brainstorm` (produces `outputs/solution-exploration.md`, which this skill parses), `/owflow:research-design` (consumes the chosen combination as `selected_approach`), `/owflow:research-finalize` (the route when design is off).
 
@@ -35,15 +35,12 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 | Alternatives exist      | `alternatives-generated` in `completed_phases` + `outputs/solution-exploration.md` exists   | `/owflow:research-brainstorm <task-path>`                          |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `approaches-chosen`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
-2. **Conditional activation (defense-in-depth)**: brainstorming was skipped — `options.brainstorming_enabled: false`, OR `alternatives-generated` not in `completed_phases` (and no delimited skip note in `phase_summaries.brainstorm`) → print `Brainstorming was skipped or never ran — nothing to converge on.` Then:
-   - `options.design_enabled: true` → suggest `→ /owflow:research-design <task-path>` (design-only branch; the design Entry Gate owns that branch explicitly), then STOP.
-   - Otherwise → suggest `→ /owflow:research-finalize <task-path>`, then STOP.
-   - Exception: brainstorm ran but the artifact was later removed (`alternatives-generated` present, `outputs/solution-exploration.md` missing) → route `→ /owflow:research-brainstorm <task-path>` to regenerate instead of the routes above.
-3. **Skip/resume (per-area partial resume)**: if `approaches-chosen` is in `completed_phases`, validate every `phase_summaries.converge.decision_areas` entry carries `chosen_approach` — all resolve → report the existing chosen combination and route to the Exit Gate; any area unresolved → re-ask ONLY the unresolved areas below. Also — even WITHOUT the slug — skip any area whose `decision_areas` entry already carries `chosen_approach`; only unresolved areas are ever asked.
-4. **Prerequisite check**: `synthesis-complete` AND `alternatives-generated` must be in `completed_phases` (with `outputs/solution-exploration.md` present). If missing → print the blocked block, then STOP:
-   - Steps that must be completed first: synthesis (`synthesis-complete`) → solution alternatives (`alternatives-generated`).
-   - `Run /owflow:research-brainstorm <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, or `/owflow:research-synthesize`).
-   - If no task exists yet: `Run /owflow:research <question> to start a task from scratch.`
+2. **Prerequisite check**: `synthesis-complete` AND `options-resolved` must be in `completed_phases`, and `options.brainstorming_enabled` must be non-null. If missing → print the blocked block, then STOP:
+   - `Run /owflow:research-scope <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, or `/owflow:research-synthesize`).
+   - A null `options.brainstorming_enabled` is undecided → `→ /owflow:research-scope <task-path>`, then STOP.
+3. **Conditional activation**: `options.brainstorming_enabled: false` means brainstorming was skipped (including a user-chosen skip after repeated failures, which flips this flag). Print `Brainstorming was skipped — nothing to converge on.` Then suggest `→ /owflow:research-design <task-path>` when `options.design_enabled: true`, else `→ /owflow:research-finalize <task-path>`, then STOP.
+4. **Brainstorm pending**: `options.brainstorming_enabled: true` but `alternatives-generated` is missing, OR `outputs/solution-exploration.md` is missing → brainstorm has not produced alternatives yet. Print the blocked block (`→ /owflow:research-brainstorm <task-path>`), then STOP. Do NOT treat a missing slug as a skip.
+5. **Skip/resume (per-area partial resume)**: if `approaches-chosen` is in `completed_phases`, validate every `phase_summaries.converge.decision_areas` entry carries `chosen_approach` — all resolve → report the existing chosen combination and route to the Exit Gate; any area unresolved → re-ask ONLY the unresolved areas below. Also — even WITHOUT the slug — skip any area whose `decision_areas` entry already carries `chosen_approach`; only unresolved areas are ever asked.
 
 ## Execute (direct interactive — per-area convergence)
 

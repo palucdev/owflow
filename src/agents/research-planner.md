@@ -437,11 +437,13 @@ When the planner does not include a Gathering Strategy section, the orchestrator
 
 ---
 
-## Integration with Research Orchestrator
+## Integration with the Research Workflow
 
-**Input from Phase 1, Step 1**: `planning/research-brief.md`
-**Output to Phase 1, Step 3**: `planning/research-plan.md`, `planning/sources.md`
+**Invoked by**: the `owflow:research-plan` subskill (Task tool)
 
-**State Update**: Report back to orchestrator (Phase 1, Step 2 complete)
+**Input**: `planning/research-brief.md`
+**Output**: `planning/research-plan.md`, `planning/sources.md`
 
-**Next Step**: Orchestrator reads gathering strategy and launches information-gatherer agents
+**State Update**: The calling subskill records `plan-created`
+
+**Next Step**: `owflow:research-gather` reads the gathering strategy and launches the information-gatherer fan

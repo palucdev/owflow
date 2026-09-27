@@ -35,16 +35,33 @@ const RESEARCH_COMMAND_FILES = [
 const readSource = (relativePath: string): string =>
   fs.readFileSync(path.join(srcRoot, relativePath), "utf8");
 
+/**
+ * References redistributed into the research subskill folders share the skill's
+ * vocabulary surface (research-methodologies.md uses its own "Phase 1-4"
+ * reading protocol with a space, so it stays allowed).
+ */
+const referenceSurfaces = (folder: string): string[] => {
+  const dir = path.join(srcRoot, "skills", folder, "references");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".md"))
+    .map((f) => `skills/${folder}/references/${f}`);
+};
+
 describe("research vocabulary guard (slug vocabulary integrity)", () => {
-  test("should contain no phase-N remnants in research skills, the research template, or research commands", () => {
+  test("should contain no phase-N remnants in research skills, their references, the research template, or research commands", () => {
     const surfaces: string[] = [
-      ...RESEARCH_SKILL_FOLDERS.map(
-        (folder) => `skills/${folder}/SKILL.md`,
-      ),
+      ...RESEARCH_SKILL_FOLDERS.flatMap((folder) => [
+        `skills/${folder}/SKILL.md`,
+        ...referenceSurfaces(folder),
+      ]),
       "templates/orchestrator-state-research.yml",
       ...RESEARCH_COMMAND_FILES.map((name) => `commands/${name}.md`),
     ];
 
+    // Legacy vocabulary leaked in as `phase-N`, `Phase 1→2`, `Phase-3`, ... —
+    // match case-insensitively so historical references fail the guard too.
     const violations: string[] = [];
     for (const surface of surfaces) {
       const fullPath = path.join(srcRoot, surface);
@@ -53,7 +70,7 @@ describe("research vocabulary guard (slug vocabulary integrity)", () => {
         continue;
       }
       const content = fs.readFileSync(fullPath, "utf8");
-      const matches = content.match(/phase-[1-6]/g);
+      const matches = content.match(/phase-?[1-6]\b/gi);
       if (matches && matches.length > 0) {
         violations.push(`${surface}: ${matches.length}× phase-N remnant`);
       }
