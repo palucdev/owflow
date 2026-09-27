@@ -1,6 +1,6 @@
 # Brainstorming Techniques
 
-These techniques guide Phase 3 (Solution Brainstorming) of the research workflow. They provide patterns for expanding the solution space, evaluating alternatives, and managing scope.
+These techniques guide the Solution Brainstorming phase of the research-brainstorm skill. They provide patterns for expanding the solution space, evaluating alternatives, and managing scope.
 
 ---
 

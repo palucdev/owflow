@@ -73,22 +73,26 @@ Starts migration workflow (8 phases) with mandatory rollback planning and risk a
 
 ## Research
 
-### `/research [question | task-path]`
+Research is split the same way as development: `/research` is the workflow **dispatcher** (assisted mode) that initializes/resumes the task, derives the next step from state, and hands off to a standalone `research-*` subskill. Each subskill runs in a fresh context. Research tasks use descriptive step slugs in `completed_phases` (see [Workflow Details](workflows.md) for the full flow).
 
-Starts research workflow (8 phases) with multi-source gathering, synthesis, and optional solution brainstorming, or resumes an existing one. Can be run without arguments — the plugin extracts the research question from your conversation.
+| Command                       | Purpose                                                      |
+| ----------------------------- | ------------------------------------------------------------ |
+| `/research [task description \| task-path] [--from=<slug>] [--brainstorm\|--no-brainstorm] [--design\|--no-design] [--type=<type>]` | Start or resume a research task; hands off to the next subskill |
+| `/research-plan [task-path-or-identifier \| "description"] [--quick]` | Research brief, methodology selection, and research plan with a parsable Gathering Strategy |
+| `/research-gather [task-path-or-identifier]` | Parallel findings fan across multiple source categories |
+| `/research-synthesize [task-path-or-identifier]` | Synthesis and the evidence-based research report with per-finding confidence |
+| `/research-scope [task-path-or-identifier] [--brainstorm\|--no-brainstorm] [--design\|--no-design]` | Optional-phase decision — writes the `--brainstorm` and `--design` enablement flags in state |
+| `/research-brainstorm [task-path-or-identifier]` | Solution-alternative brainstorming (conditional) |
+| `/research-converge [task-path-or-identifier]` | Per-area approach decisions over the alternatives (conditional) |
+| `/research-design [task-path-or-identifier]` | High-level design with decision log (conditional) |
+| `/research-finalize [task-path-or-identifier]` | Inventory of research outputs, confirmation, completion |
+| `/goal-research [task description \| task-path] [--from=<slug>]` | Autonomous mode — runs every subskill in one session with question gates |
 
-| Flag                                                | Description                              |
-| --------------------------------------------------- | ---------------------------------------- |
-| `--type=technical\|requirements\|literature\|mixed` | Research methodology type                |
-| `--brainstorm`                                      | Force brainstorming + design phases      |
-| `--no-brainstorm`                                   | Skip brainstorming phases                |
-| `--from=PHASE`                                      | Start from or resume at a specific phase |
-| `--reset-attempts`                                  | Reset failed attempt counters (resume)   |
+Every `research-*` subskill resolves its task from a full path or just the directory identifier under `.owflow/tasks/research/`, validates prerequisites from state, and stops with the ordered prerequisite steps when something is missing — it never auto-picks a task. `--from` takes a step slug (e.g. `/research --from=plan-created .owflow/tasks/research/<task>`), not a phase number; slugs: `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `options-resolved`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. Quick lane starts only via `/research-plan --quick "<description>"` — a condensed pass that fuses brief, plan, gather, and synthesis, continuable by any research subskill.
 
 Research output can feed into development: `/development --research=.owflow/tasks/research/...`
 
 **Task directory**: `.owflow/tasks/research/`
-**Resume phases**: `foundation`, `brainstorming-decision`, `brainstorming`, `design`, `outputs`, `verification`, `integration`
 
 ---
 

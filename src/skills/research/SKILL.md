@@ -1,51 +1,64 @@
 ---
 name: owflow:research
-description: Orchestrates comprehensive research workflows from question definition through findings documentation. Handles technical, requirements, literature, and mixed research types with adaptive methodology, multi-source gathering, pattern synthesis, and evidence-based reporting. Supports standalone research tasks and embedded research phase in other workflows.
+description: Research workflow dispatcher. Initializes/resumes research tasks, derives the next step from state, and hands off to the matching /owflow:research-* subskill. Handles comprehensive research and analysis — technical, requirements, literature, and mixed research types with adaptive methodology, multi-source gathering, pattern synthesis, and evidence-based artifact outputs (findings documentation). Supports standalone research tasks and embedded research phases feeding development workflows. Use /owflow:goal-research to run all phases in one session.
+argument-hint: "[task description | task-path] [--from=<slug>] [--brainstorm|--no-brainstorm] [--design|--no-design] [--type=<type>]"
 user-invocable: true
 ---
 
-# Research Orchestrator
+# Research Dispatcher
 
-Systematic research workflow from question definition to evidence-based documentation.
+Entry point for research tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:research-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
 
-Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
+Research state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `options-resolved`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. The routing table below maps slugs to subskills.
+
+For the all-in-one loop with in-session `question` gates, use `/owflow:goal-research`.
+
+Gates follow the shared contract in the [Gate Contract](../orchestrator-framework/references/gate-contract.md), with the [dispatcher exception](../orchestrator-framework/references/gate-contract.md).
 
 ## Entry Gate
 
-**BEFORE executing any phase, you MUST complete these steps:**
+**BEFORE deriving the handoff, complete these steps:**
 
-### Argument resolution
+### Step 1: Load Framework Patterns
 
-- **Research question provided** → use it as the task description.
-- **Task path / identifier** (directory under `.owflow/tasks/research/`) → resume mode: read `orchestrator-state.yml`, find the first incomplete phase (`--from=PHASE` overrides), validate existing artifacts, then continue from there.
-- **Nothing provided** → ask via `question`: "What is your research question?" (free-form answer), then proceed.
+**Read the framework reference files NOW using the Read tool:**
 
-### Prerequisites
+1. The [Dispatcher & Handoff Pattern](../orchestrator-framework/references/dispatcher-handoff.md) governs this skill.
+2. The [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) bound what subskills delegate.
+3. The [Orchestrator Patterns](../orchestrator-framework/references/orchestrator-patterns.md) define state schema, initialization, and context passing.
 
-| Required for this skill | Where verified                                        | Produced by                |
-| ----------------------- | ----------------------------------------------------- | -------------------------- |
-| State file exists       | `<task-path>/orchestrator-state.yml` (resume mode)    | prior `/owflow:research` run |
+### Step 2: Resolve the Argument
 
-On resume, if the state file is missing → print: `No research task found at <path>. Run /owflow:research <question> to start from scratch.` and STOP. Validate expected artifacts for completed phases (remove entries with missing artifacts).
+**If the argument is a task path or identifier** (a directory, or a directory name under `.owflow/tasks/research/`) → **resume mode**:
 
-### Execution steps
+1. Read `orchestrator-state.yml`; validate expected artifacts for `completed_phases` (remove entries whose artifacts are missing)
+2. Find resume point: first step slug NOT in `completed_phases`; `--from=<slug>` overrides (validate its prerequisites exist, else use `question`)
+3. Missing state file → print: `No research task found at <path>. Run /owflow:research <question> to start from scratch.` and STOP
 
-1. **Load framework patterns** — Read `../orchestrator-framework/references/orchestrator-patterns.md` NOW: delegation rules, interactive mode, state schema, initialization, context passing, issue resolution.
-2. **Initialize workflow:**
-   1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
-   2. **Create Task Directory**: `.owflow/tasks/research/YYYY-MM-DD-task-name/`
-   3. **Initialize State**: Create `orchestrator-state.yml` with research context
-      - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-research.yml`.
+**If the argument is a research question description** (any other free text) → new task.
+
+**If nothing is provided** → ask via `question`: "What is your research question?" (free-form answer), then WAIT. Never guess or auto-pick a task.
+
+### Step 3: Initialize (new task)
+
+**New task** (research question argument):
+
+1. **Create Task Directory**: `.owflow/tasks/research/YYYY-MM-DD-task-name/` (3-5 kebab-case words from the question)
+2. **Initialize State**: create `orchestrator-state.yml` from the research template — `task.title` / `task.description` from the question, `task.status: in_progress`, `orchestrator.task_path`, `orchestrator.entry_point: "research"` (template/bootstrap mechanic)
+   - **CRITICAL**: use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-research.yml`.
+3. **Create Task Items**: use `TaskCreate` for the research steps (one item per subskill handoff), then set the execution order with `TaskUpdate addBlockedBy` (plan → gather → synthesize → scope → enabled optional chain → finalize). On resume, refresh the already-evidenced items instead of re-creating them.
+4. **Command flags**: `--brainstorm` / `--no-brainstorm` and `--design` / `--no-design` → write to `options.*` in state; `--type=TYPE` → `research_context.research_type`. Subskills read them from there.
+
+> **In-flight cutover**: tasks initialized by the pre-split monolith carry `phase-N`-keyed state (`completed_phases`, `auto_fix_attempts`, `phase_summaries`), which this dispatcher does not parse into step slugs — such state is NOT auto-migrated. Resume those tasks from their existing artifacts via `research-plan` onward, or start fresh with `/owflow:research <question>`.
 
 **Output**:
 
 ```
-🚀 Research Orchestrator Started
+🚀 Research Dispatcher
 
 Task: [research question]
 Directory: [task-path]
-
-Starting Phase 1: Initialize research...
+Next step: [step name]
 ```
 
 ---
@@ -74,26 +87,101 @@ Use when:
 
 ---
 
-## Local References
+## Routing Table (completed_phases → next subskill)
 
-| File                                     | When to Use | Purpose                                                                                        |
-| ---------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
-| `references/research-methodologies.md`   | Phase 1     | Research type classification, methodology selection, gathering strategies, analysis frameworks |
-| `references/brainstorming-techniques.md` | Phase 3     | Divergent/convergent thinking, interactive exploration, scope guardrails                       |
-| `references/design-techniques.md`        | Phase 5     | Decision documentation (MADR), ADR guidance, decision linking                                  |
+Derive the FIRST step slug not in `completed_phases`, then print the matching command:
+
+| Next step (slug)                                              | Condition (from state)                                                                                          | Handoff command                          | Produces                                                   |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| Brief + plan (`brief-written`, `plan-created`)                 | Always (new task or partial foundation)                                                                          | `/owflow:research-plan <task-path>`      | `planning/research-brief.md`, `research-plan.md`, `sources.md` |
+| Gather (`findings-gathered`)                                  | `plan-created` completed (plan keeps a parsable `## Gathering Strategy`); quick-authored findings count as done   | `/owflow:research-gather <task-path>`    | `analysis/findings/*.md`                                    |
+| Synthesize (`synthesis-complete`)                             | `findings-gathered` completed                                                                                    | `/owflow:research-synthesize <task-path>` | `analysis/synthesis.md`, `outputs/research-report.md`       |
+| Optional-phase decision (`options-resolved`)                  | `synthesis-complete` completed                                                                                   | `/owflow:research-scope <task-path>`     | none (writes both `options.*` flags in state)               |
+| Brainstorm (`alternatives-generated`)                         | `options.brainstorming_enabled: true` (after `options-resolved`)                                                 | `/owflow:research-brainstorm <task-path>` | `outputs/solution-exploration.md`                           |
+| Converge (`approaches-chosen`)                                | `alternatives-generated` completed (brainstorm ran)                                                              | `/owflow:research-converge <task-path>`  | per-area `chosen_approach` in state (`phase_summaries.converge`) |
+| Design (`design-generated`)                                   | `options.design_enabled: true` (after `approaches-chosen`, or the design-only branch)                            | `/owflow:research-design <task-path>`    | `outputs/high-level-design.md`, `outputs/decision-log.md`   |
+| Finalization (`research-completed`)                           | Foundation complete + optional chain resolved (all enabled parts done)                                           | `/owflow:research-finalize <task-path>`  | task completed (`task.status: completed`)                   |
+
+The optional chain is SKIPPED per its enablement flags — the three remaining-path shapes after `options-resolved`:
+
+- `brainstorming_enabled: true` → brainstorm → converge → design (when `design_enabled: true`) → finalize.
+- `brainstorming_enabled: false` AND `design_enabled: true` (design-only) → skip the brainstorm rows → `/owflow:research-design`.
+- Both disabled → skip to `/owflow:research-finalize`.
+
+`research-completed` already in `completed_phases` → the task is TERMINAL: no handoff.
+
+The `research-plan` handoff honors a `--quick` flag carried over from the research-plan command's own hint — quick runs are only ever routed on resume, never started from this dispatcher's hint.
+
+References moved into their owning subskills (read there, not here): `research-methodologies.md` lives in `research-plan/references/`, `brainstorming-techniques.md` in `research-brainstorm/references/`, `design-techniques.md` in `research-design/references/`.
 
 ---
 
-## Phase Configuration
+## Exit Gate (adapted for dispatch mode)
 
-| Phase | content                                                | activeForm                              | Agent/Skill                                                                  |
-| ----- | ------------------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------- |
-| 1     | "Research foundation (init, plan, gather, synthesize)" | "Executing research foundation"         | Direct + research-planner + information-gatherer (xN) + research-synthesizer |
-| 2     | "Evaluate brainstorming value"                         | "Evaluating brainstorming value"        | Direct                                                                       |
-| 3     | "Generate solution alternatives"                       | "Generating solution alternatives"      | solution-brainstormer                                                        |
-| 4     | "Evaluate brainstorming alternatives"                  | "Evaluating brainstorming alternatives" | Direct (interactive)                                                         |
-| 5     | "Design high-level architecture"                       | "Designing high-level architecture"     | Direct + solution-designer                                                   |
-| 6     | "Summarize research and suggest next steps"            | "Completing research"                   | Direct                                                                       |
+After deriving the handoff, present the results box, ask how to proceed, then hand off accordingly (see the [dispatcher exception](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the subskill.
+
+### Results box
+
+```markdown
+## ✅ RESEARCH TASK READY — <task name>
+
+**Task** — [research question]
+**Directory** — `<task-path>`
+**Next step** — [step name]
+[Resume note: completed steps / fresh task]
+
+**Next ▸** `/owflow:research-<subskill> <task-path>`
+```
+
+### Acceptance question
+
+Use `question` — "Task ready. How would you like to proceed?" with options:
+
+- **Hand off to /owflow:research-<subskill>** — the user invokes the suggested command (dispatcher copies it to chat for convenience). Execution starts in a fresh context.
+- **Switch to autonomous mode** — illustrate with `/owflow:goal-research <task-path>` to run remaining steps in one session with gates.
+- **Adjust** — task set-up is wrong (wrong flags, wrong question, wrong task); re-run the affected initialization step, re-present the results box.
+- **Stop here** — print the resume command (`/owflow:research <task-path>`) and end.
+
+### Handoff message
+
+On Accept (hand off choice), print, then STOP:
+
+```
+✓ Research task ready at <task-path>
+
+Next step:
+  → /owflow:research-<subskill> <task-path>
+
+Other options:
+  /owflow:goal-research <task-path>   — run remaining steps in one loop
+  /owflow:research --from=<slug> <task-path>   — jump to a specific step
+```
+
+---
+
+## Task Structure
+
+```
+.owflow/tasks/research/YYYY-MM-DD-research-name/
+├── orchestrator-state.yml
+├── planning/
+│   ├── research-brief.md           # research-plan (brief step)
+│   ├── research-plan.md            # research-plan (plan step)
+│   └── sources.md                  # research-plan (plan step)
+├── analysis/
+│   ├── findings/
+│   │   ├── codebase-*.md           # research-gather (per category)
+│   │   ├── docs-*.md               # research-gather
+│   │   ├── config-*.md             # research-gather
+│   │   ├── external-*.md           # research-gather
+│   │   └── [custom-category]-*.md  # research-gather (dynamic categories)
+│   └── synthesis.md                # research-synthesize (reasoning log)
+├── outputs/
+│   ├── research-report.md          # research-synthesize (main deliverable)
+│   ├── solution-exploration.md     # research-brainstorm (conditional)
+│   ├── high-level-design.md        # research-design (conditional)
+│   └── decision-log.md             # research-design (conditional)
+```
 
 ---
 
@@ -108,368 +196,40 @@ Use when:
 
 ---
 
-## Workflow Phases
+## Integration with Other Workflows
 
-### Phase 1: Research Foundation
+### As Standalone Research
 
-**Purpose**: Initialize research, plan methodology, gather information from all sources, and synthesize findings into a research report
-**Execute**: Multi-step: Direct + research-planner + information-gatherer (xN) + research-synthesizer
-**Output**: `planning/research-brief.md`, `planning/research-plan.md`, `planning/sources.md`, `analysis/findings/*.md`, `analysis/synthesis.md`, `outputs/research-report.md`
-**State**: Set `research_context.research_type`, `research_question`, `scope`, `methodology`, `sources`, `confidence_level`, `gathering_strategy`
+**Command**: `/owflow:research [research-question | task-path]` — the dispatcher hands off step by step; `/owflow:goal-research <task-path>` runs the complete workflow in one session with interactive gates.
 
-This phase executes 4 sequential steps. On resume, check existing artifacts to skip completed steps.
+### As Embedded Research Phase (documentation only — no wiring)
 
-#### Step 1: Initialize (Direct)
+> This is documentation for parent-orchestrator authors, NOT an execution path of this dispatcher: nothing here auto-invokes a parent, and no research subskill chains into development or migration steps.
 
-**Artifacts**: `planning/research-brief.md`
-**Resume check**: If `planning/research-brief.md` exists, skip to Step 2
+In the split family, a parent orchestrator (development, migration) that needs research sequences the research subskills directly via the Skill tool — plan → gather → synthesize → scope (+ the enabled optional chain) — and SKIPS `research-finalize`-style completion: the parent handles next steps and keeps control of the flow. Design artifacts feed the parent's specification phase; the research report is saved in the parent task's `analysis/research/` context per the parent's own state setup.
 
-1. Parse research question (from command or prompt user)
-2. Classify research type (auto-detect from keywords or use `--type` flag)
-3. Determine scope (included, excluded, constraints)
-4. Define success criteria
-5. Create research brief
-6. Update state: set `research_context.research_type`, `research_question`, `scope`
-7. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `research_context.project_doc_paths` in state.
+**Handoff fields the parent reads**: refer to `research_outputs.*` in the template [src/templates/orchestrator-state-research.yml](../../templates/orchestrator-state-research.yml).
 
-#### Step 2: Plan (Subagent)
-
-**Artifacts**: `planning/research-plan.md`, `planning/sources.md`
-**Resume check**: If `planning/research-plan.md` AND `planning/sources.md` exist, skip to Step 3
-
-**Read `references/research-methodologies.md` NOW using the Read tool** — research type classification, methodology selection, gathering strategies
-
-**INVOKE NOW**: Use Task tool with `subagent_type: research-planner`
-
-**Context to pass**: task_path, research_brief_path, research_type, research_question, scope, project_doc_paths (from state)
-
-Update state: `research_context.methodology`, `sources`
-
-#### Step 3: Gather + Merge (Parallel Subagents + Direct)
-
-**Artifacts**: `analysis/findings/*.md` (category-specific)
-**Resume check**: If any `analysis/findings/*.md` files exist, skip to Step 4
-
-**Determine gatherer count and categories**:
-
-1. Read `planning/research-plan.md` for **Gathering Strategy** section
-2. If gathering strategy found: use specified categories and count (cap at 8 max)
-3. If no gathering strategy: fall back to default 4 categories (codebase, documentation, configuration, external)
-4. Update state: `research_context.gathering_strategy`
-
-**CRITICAL: Launch all N agents in ONE message for parallel execution.**
-
-**Parallel Execution Pattern**:
-
-```
-Read gathering strategy from research-plan.md
-For each category in strategy:
-  Use Task tool: source_category=[category_id] → analysis/findings/[prefix]-*.md
-```
-
-#### Step 4: Synthesize (Subagent)
-
-**Artifacts**: `analysis/synthesis.md`, `outputs/research-report.md`
-**Resume check**: If `analysis/synthesis.md` AND `outputs/research-report.md` exist, skip (Phase 1 complete)
-
-**INVOKE NOW**: Use Task tool with `subagent_type: research-synthesizer`
-
-**Context to pass**: task_path, findings_directory_path, research_question, research_type, methodology
-
-**Synthesizer produces**:
-
-- Pattern analysis and cross-references (`analysis/synthesis.md`)
-- Comprehensive research report answering research question (`outputs/research-report.md`)
-- Confidence levels for each finding
-- Documented gaps and uncertainties
-
-Update state: `research_context.confidence_level`
-
----
-
-→ Pause
-
-question - "Research foundation complete (initialized, planned, gathered, synthesized). Continue to brainstorming evaluation?"
-
----
-
-### Phase 2: Optional Phases Decision
-
-> **Phase gate**: Requires `question` confirmation from Phase 1 before executing.
-
-**Purpose**: Evaluate whether brainstorming and/or design phases would be valuable (independently)
-**Execute**: Direct
-**Output**: Updated `orchestrator-state.yml`
-**State**: Set `options.brainstorming_enabled`, `options.design_enabled`
-
-**Auto-resolve if**: `--brainstorm`/`--no-brainstorm` flags (brainstorming only), `--design`/`--no-design` flags (design only)
-
-**Process**:
-
-1. Read `analysis/synthesis.md` summary and `research_type` from state
-2. Evaluate brainstorming value based on:
-   - Number of viable approaches identified in synthesis (multiple → valuable)
-   - Problem novelty (new domain → valuable; well-understood → less so)
-   - Whether synthesis identified competing trade-offs (yes → valuable)
-3. Evaluate design value based on:
-   - Whether research suggests architectural decisions (yes → valuable)
-   - Research type (requirements/mixed → likely valuable; technical → depends)
-   - Whether design artifacts would feed into development workflow
-4. If `brainstorming_enabled` not already set by flag, question:
-   - "[Brainstorming recommendation]. Would you like to explore solution alternatives?"
-   - Options: "Yes, explore alternatives" / "No, skip brainstorming"
-5. If `design_enabled` not already set by flag, question:
-   - "[Design recommendation]. Would you like to generate a high-level design?"
-   - Options: "Yes, generate design" / "No, skip design"
-6. Update state: set `brainstorming_enabled` and `design_enabled`
-
-→ If brainstorming enabled: continue to Phase 3
-→ If brainstorming disabled AND design enabled: skip to Phase 5
-→ If both disabled: skip to Phase 6
-
----
-
-### Phase 3: Solution Generation
-
-**Purpose**: Generate solution alternatives from research evidence using specialized brainstormer subagent
-**Execute**: solution-brainstormer subagent
-**Output**: `outputs/solution-exploration.md`
-**State**: Update `phase_summaries.phase-3`
-
-**Skip if**: `brainstorming_enabled = false` (user chose to skip in Phase 2, or `--no-brainstorm` flag)
-
-**Read `references/brainstorming-techniques.md` NOW using the Read tool** — divergent/convergent thinking techniques, scope guardrails
-
-> **ANTI-PATTERN**: Do NOT generate solution alternatives inline. The solution-brainstormer agent has specialized multi-perspective analysis capabilities.
-
-**INVOKE NOW**: Use Task tool with `subagent_type: solution-brainstormer`
-
-**Context to pass** (Pattern 7):
-
-- `task_path`, `synthesis_path`, `research_report_path`
-- `output_path`: `outputs/solution-exploration.md` — brainstormer MUST write to this exact path
-- Accumulated context: `research_type`, `research_question`, `confidence_level`, `phase_summaries` (Phase 1)
-- `project_doc_paths` (from state)
-
-> **SELF-CHECK**: After Task tool returns, verify `outputs/solution-exploration.md` exists and contains alternatives. If missing: **STOP. Do NOT proceed to Phase 4 or Phase 5.** Re-invoke the brainstormer with corrected context (ensure `output_path` is `outputs/solution-exploration.md`). If second attempt also fails, use question to report the failure and ask whether to retry or skip brainstorming.
-
-→ **AUTO-CONTINUE**
-
----
-
-### Phase 4: Solution Convergence
-
-**Purpose**: Present brainstorming alternatives to user for decision-making on each decision area
-**Execute**: Direct (interactive)
-**Output**: Updated `orchestrator-state.yml` with chosen approaches
-**State**: Update `phase_summaries.phase-4` with `decision_areas` and `deferred_ideas`
-
-**Skip if**: `brainstorming_enabled = false`
-**Resume check**: If `phase_summaries.phase-4.decision_areas` has entries with `chosen_approach` set, skip already-resolved areas
-
-> **ANTI-PATTERN**: Do NOT present all decision areas in a single summary table and ask one combined "do you agree?" question. Each area MUST get its own detailed presentation and its own question call.
->
-> **ANTI-PATTERN**: Do NOT show full alternatives/pros/cons for the first area and then shortcut remaining areas to just a recommendation line + question. EVERY area gets the SAME level of detail — all alternatives with descriptions, pros, and cons. No exceptions.
-
-1. Read `outputs/solution-exploration.md`
-2. For each decision area sequentially, output ALL of the following (steps a-d) BEFORE calling question:
-   a. **Area header**: area name and why this decision matters (1-2 sentences of context)
-   b. **Alternatives detail**: For EVERY alternative in this area, show:
-   - Name and description (2-3 sentences)
-   - Pros (bullet list)
-   - Cons (bullet list)
-     c. **Recommendation**: which alternative is recommended and why (1 sentence)
-     d. **question**: this area's alternatives as options (mark recommended with "(Recommended)") + "Need more info" option
-     e. If user picks → record choice, move to next area
-     f. If "Need more info" → present the detailed trade-off analysis for the requested alternative, then re-ask
-
-> **SELF-CHECK before each question**: Did you output the alternatives with pros/cons for THIS area? If you only showed a recommendation line without listing all alternatives and their pros/cons, STOP and output the full detail before asking.
-
-3. After all areas resolved, present a brief summary of the chosen combination
-4. Update state with chosen approaches per decision area
-
-> **GATE CHECK**: Verify that question was called for EACH decision area. If any decision area was skipped for any reason (e.g., output file missing, read failure), STOP and resolve before continuing. Do NOT mark Phase 4 complete without user convergence on all decision areas.
-
-→ Pause
-
-question - "Brainstorming complete. Continue to high-level design?"
-
----
-
-### Phase 5: High-Level Design
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**Purpose**: Create architecture design from selected solution approach
-**Execute**: Orchestrator-Direct Hybrid
-**Output**: `outputs/high-level-design.md`, `outputs/decision-log.md`
-**State**: Update `phase_summaries.phase-5`
-
-**Skip if**: `design_enabled = false`
-
-**Read `references/design-techniques.md` NOW using the Read tool** — MADR format, ADR guidance, decision documentation patterns
-
-**Part A — Design Direction (Direct)**:
-
-1. If Phase 4 ran: confirm selected approaches from convergence
-2. If Phase 4 was skipped: use research report recommendations as design input
-3. question for any design preferences or constraints (e.g., "Any architectural constraints or preferences?")
-
-**Part B — Design Generation (Subagent)**:
-
-> **ANTI-PATTERN**: Do NOT generate C4 architecture diagrams or ADRs inline. The solution-designer agent has specialized architecture and MADR documentation capabilities.
-
-**INVOKE NOW**: Use Task tool with `subagent_type: solution-designer`
-
-**Context to pass** (Pattern 7):
-
-- `task_path`, `synthesis_path`, `research_report_path`
-- `solution_exploration_path` (only if Phase 3-4 ran)
-- `selected_approach` (from Phase 4 convergence if ran, or from research report recommendations)
-- `design_preferences` (from Part A)
-- Accumulated context: `research_type`, `research_question`, `confidence_level`, `phase_summaries`
-- `project_doc_paths` (from state)
-
-> **SELF-CHECK**: After Task tool returns, verify both `outputs/high-level-design.md` and `outputs/decision-log.md` exist. If missing: **STOP. Do NOT proceed to Part C.** Re-invoke the designer with corrected context. If second attempt also fails, use question to report the failure and ask whether to retry or skip design.
-
-**Part C — Summary (Direct)**: 3. Read `outputs/high-level-design.md` and `outputs/decision-log.md` 4. Present executive summary to user:
-
-- Architecture style and key components
-- Number of architectural decisions recorded
-- Key decision highlights (1 line each)
-- Integration points with existing system (if applicable)
-
-**Part D — Diagram Refinement (Skill, content-preserving)**:
-
-5. Invoke Skill tool: `diagrams-mermaid` to refine visual communication in `outputs/high-level-design.md`
-6. Add diagrams that supplement (not replace) existing architecture content:
-   - one architecture view (`C4Container` preferred, `C4Component` only if needed),
-   - one interaction/state view (`sequenceDiagram` or `flowchart`) for the critical flow.
-7. If minimum context for a diagram is missing, record explicit gaps in the document and avoid speculative components/relationships.
-
-→ Pause
-
-question - "Design complete. Continue to output generation?"
-
----
-
-### Phase 6: Completion → Exit Gate
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**Purpose**: Present research results, confirm correctness with the user, and hand off (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md))
-**Execute**: Direct
-**Output**: No new files — summarizes existing outputs
-
-**Process**:
-
-1. Inventory all generated outputs: `outputs/research-report.md` (always), plus conditional: `solution-exploration.md`, `high-level-design.md`, `decision-log.md`
-2. **Results box**:
-
-```markdown
-## ✅ RESEARCH COMPLETE — <research question>
-
-**Type** — [research type]
-**Confidence** — [confidence level]
-**Phases run** — [e.g. 1, 3-4 brainstorm, 5 design]
-**Key findings** — [2-3 one-line highlights]
-**Decisions** — [count of ADRs, if design ran]
-
-**Artifacts**
-- `outputs/research-report.md`
-- `outputs/solution-exploration.md` [conditional]
-- `outputs/high-level-design.md` [conditional]
-- `outputs/decision-log.md` [conditional]
-```
-
-3. **Results-acceptance question** — use `question` — "Are these results correct?" with options:
-   - **Accept** — research is complete; print next steps (below).
-   - **Adjust** — re-run the affected phase (re-gather, re-brainstorm, re-design) with the user's corrections, then re-present the results box.
-   - **Discuss** — walk through specific findings or decisions in more depth; then re-ask.
-   - **Stop here** — print the resume command (`/owflow:research <task-path>`) and end.
-
-4. **Next steps (after Accept)** — if design artifacts exist, suggest starting development in a fresh session:
-
-```
-To start development based on this research, clear context first or start a new session, then run:
-→ /owflow:development <task-path>
-```
-
-→ End of workflow
-
----
-
-## Domain Context (State Extensions)
-
-Research-specific fields in `orchestrator-state.yml`:
-
-Refer to the template [src/templates/orchestrator-state-research.yml](../../templates/orchestrator-state-research.yml).
-
----
-
-## Task Structure
-
-```
-.owflow/tasks/research/YYYY-MM-DD-research-name/
-├── orchestrator-state.yml
-├── planning/
-│   ├── research-brief.md           # Phase 1, Step 1
-│   ├── research-plan.md            # Phase 1, Step 2
-│   └── sources.md                  # Phase 1, Step 2
-├── analysis/
-│   ├── findings/
-│   │   ├── codebase-*.md           # Phase 1, Step 3
-│   │   ├── docs-*.md               # Phase 1, Step 3
-│   │   ├── config-*.md             # Phase 1, Step 3
-│   │   ├── external-*.md           # Phase 1, Step 3
-│   │   └── [custom-category]-*.md  # Phase 1, Step 3 (dynamic categories)
-│   └── synthesis.md                # Phase 1, Step 4 (reasoning log)
-├── outputs/
-│   ├── research-report.md          # Phase 1, Step 4 (main deliverable)
-│   ├── solution-exploration.md     # Phase 3 (conditional)
-│   ├── high-level-design.md        # Phase 5 (conditional)
-│   └── decision-log.md             # Phase 5 (conditional)
-```
+Full autonomous research (research as its own goal, every gate honored) = `/owflow:goal-research`. A `--no-exit` flag for embedded runs is deferred — not part of this design.
 
 ---
 
 ## Auto-Recovery
 
-| Phase      | Max Attempts | Strategy                                                      |
-| ---------- | ------------ | ------------------------------------------------------------- |
-| 1 (Step 1) | 1            | Prompt user for clarification if question unclear             |
-| 1 (Step 2) | 2            | Expand search patterns, use fallback mixed methodology        |
-| 1 (Step 3) | 3            | Retry failed agents only, continue with successful categories |
-| 1 (Step 4) | 2            | Request targeted re-gathering for gaps                        |
-| 2          | 1            | Re-evaluate recommendation if synthesis unclear               |
-| 3          | 2            | Re-invoke solution-brainstormer with adjusted context         |
-| 4          | 1            | Re-read exploration file, re-present decision areas           |
-| 5          | 2            | Re-invoke solution-designer with adjusted context             |
-| 6          | 0            | Summary only                                                  |
+Retries are owned by each subskill (each `/owflow:research-*` SKILL.md carries its own max attempts and strategy).
 
 ---
 
-## Integration with Other Workflows
+## Command Flags
 
-### As Standalone Research
+| Flag                              | Effect                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| `--from=<slug>`                   | Hand off (resume mode) from a specific step slug                                     |
+| `--type=<type>`                   | Force the research type classification ("technical \| requirements \| literature \| mixed") |
+| `--brainstorm` / `--no-brainstorm` | Force/skip the optional brainstorming chain (auto-resolves the scope decision)       |
+| `--design` / `--no-design`        | Force/skip high-level design                                                         |
 
-**Command**: `/owflow:research [research-question]`
-**Flow**: Complete all phases, save outputs in task directory
-
-### As Embedded Research Phase
-
-**Invoked by**: development orchestrator, migration orchestrator
-
-**Integration**:
-
-1. Parent orchestrator invokes research skill
-2. Research executes phases 1-5 (skip Phase 6 completion — parent orchestrator handles next steps)
-3. Design outputs fed into parent's specification phase
-4. Research report saved in parent task's `analysis/research/` directory
-
-**Handoff**:
-
-Refer to `research_outputs` in the template [src/templates/orchestrator-state-research.yml](../../templates/orchestrator-state-research.yml).
+There is deliberately NO `--quick` on this dispatcher — condensed quick starts go through `/owflow:research-plan --quick`, which this routing table honors on the `research-plan` rows.
 
 ---
 
@@ -477,19 +237,9 @@ Refer to `research_outputs` in the template [src/templates/orchestrator-state-re
 
 Invoked via:
 
-- `/owflow:research [question] [--type=TYPE] [--brainstorm] [--no-brainstorm] [--design] [--no-design]` (new)
-- `/owflow:research [task-path] [--from=PHASE]` (resume)
+- `/owflow:research [question] [--type=TYPE] [--brainstorm|--no-brainstorm] [--design|--no-design]` (new)
+- `/owflow:research [task-path] [--from=<slug>]` (resume)
 
-**Brainstorming flags**:
-
-- `--brainstorm`: Force brainstorming phase (auto-resolves Phase 2 brainstorming decision to "enable")
-- `--no-brainstorm`: Skip brainstorming phase
-- Neither: Phase 2 presents recommendation and asks user
-
-**Design flags**:
-
-- `--design`: Force high-level design phase (auto-resolves Phase 2 design decision to "enable")
-- `--no-design`: Skip high-level design phase
-- Neither: Phase 2 presents recommendation and asks user
+Alternative: `/owflow:goal-research <task-path>` — same task lifecycle, all subskills invoked in one session with `question` gates.
 
 Task directory: `.owflow/tasks/research/YYYY-MM-DD-task-name/`

@@ -1,6 +1,6 @@
 # Design Techniques
 
-These techniques guide Phase 3 (High-Level Design) of the research workflow. They provide patterns for capturing and documenting design decisions in a durable, traceable format.
+These techniques guide High-Level Design in the research-design skill. They provide patterns for capturing and documenting design decisions in a durable, traceable format.
 
 ---
 

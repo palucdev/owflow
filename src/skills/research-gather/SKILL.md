@@ -1,0 +1,117 @@
+---
+name: owflow:research-gather
+description: Research skill — reads the plan's Gathering Strategy and launches the parallel information-gatherer agent fan in ONE message, then merges per-category findings. Ends the gathering step of the research workflow (findings-gathered) and continues with research-synthesize.
+argument-hint: "[task-path-or-identifier]"
+user-invocable: true
+---
+
+# Research Gather — Parallel Findings Fan (findings-gathered)
+
+Work phase of the research workflow. Reads the gathering strategy out of the research plan and launches the parallel information-gatherer fan (`analysis/findings/*.md`, one file per category). State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
+
+Related phases: `/owflow:research-plan` (produces the plan this skill parses), `/owflow:research-synthesize` (consumes the merged findings). In quick mode, `research-plan` may author findings inline — those are pre-existing category files for this skill.
+
+## Entry Gate
+
+Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)):
+
+- **Path** (absolute or project-relative) to the task directory — use as-is.
+- **Identifier** — exact directory name inside `.owflow/tasks/research/` (e.g., `2026-09-26-my-research`); resolve to its path.
+- If the argument is **missing**, the path does **not exist**, or matches **no identifier** → print the blocked block, then STOP (never guess or auto-pick a task):
+  1. Steps that must be completed first (in order), each with its command:
+     - Research brief & plan (`brief-written`, `plan-created`) → `/owflow:research-plan <task-path>`
+  2. List available research-task identifiers (directories under `.owflow/tasks/research/`) to resume from, if any.
+  3. Hint: `Run /owflow:research-plan <task-path> first, /owflow:research <question> to start a task from scratch, or pass a task path/identifier to resume.`
+
+### Prerequisites
+
+| Required for this skill            | Where verified                                                      | Produced by                            |
+| ---------------------------------- | -------------------------------------------------------------------- | -------------------------------------- |
+| State file exists                  | `<task-path>/orchestrator-state.yml`                                 | `/owflow:research <question>` or the research-plan quick bootstrap |
+| Plan exists                        | `plan-created` in `completed_phases` + `planning/research-plan.md` exists | `/owflow:research-plan <task-path>`    |
+| Plan has a parsable Gathering Strategy | `## Gathering Strategy` section present in the plan file          | `/owflow:research-plan <task-path>` (or its quick mode) |
+
+1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `findings-gathered`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
+2. **Content check — plan parsability**: Read `planning/research-plan.md`. If the file is missing OR lacks a `## Gathering Strategy` section (categories + count) → print the blocked block, then STOP:
+   1. Steps that must be completed first: research brief & plan (`brief-written` with the brief, `plan-created` with the parsable plan).
+   2. `Run /owflow:research-plan <task-path> first.`
+3. **Skip/resume — only missing categories re-fan**: if `findings-gathered` is in `completed_phases`, validate the per-category files really exist under `analysis/findings/` (artifacts before state). Missing category files → re-fan ONLY the missing categories and re-append `findings-gathered` only after they land; all categories present → report existing findings and route to the Exit Gate. Quick-authored findings count as pre-existing category files.
+
+## Execute (delegated fan)
+
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).
+
+**Scope**: normal runs — quick-mode findings authored inside `research-plan` are treated as pre-existing category files (Entry Gate resume check) and are NOT re-gathered.
+
+### Determine the gatherer count and categories
+
+1. Read the **Gathering Strategy** section from `planning/research-plan.md`
+2. If gathering strategy found: use specified categories and count (cap at 8 max)
+3. If no gathering strategy: fall back to the default 4 categories — codebase, documentation, configuration, external — and set `source: default`
+4. Update state: `research_context.gathering_strategy`
+
+**CRITICAL: Launch all N agents in ONE message for parallel execution.**
+
+**Parallel Execution Pattern**:
+
+```
+Read gathering strategy from planning/research-plan.md
+For each category in strategy:
+  Use Task tool: source_category=[category_id] → analysis/findings/[prefix]-*.md
+```
+
+> **ANTI-PATTERN — never launch the gatherer fan as sequential Task calls or via the Skill tool. Agents go through the Task tool, one call per category, all N calls in ONE message.**
+
+### Merge & close (`findings-gathered`)
+
+1. Verify one findings file per category exists under `analysis/findings/`
+2. **State write**: append `findings-gathered` to `completed_phases`; update `research_context.gathering_strategy`, `phase_summaries.gather`; set `research_outputs.findings_directory`; bump `orchestrator.updated`. On failure (or a category permanently failing): append `findings-gathered` to `failed_phases`, increment `auto_fix_attempts["findings-gathered"]`. Then re-read state + run `verify_template` (see State Update Convention).
+
+## State Update Convention (per step)
+
+Apply after EVERY step above:
+
+1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed (`findings-gathered`) plus that step's fields. Never batch multiple steps into one end-of-skill write.
+2. **Timestamp** — set `orchestrator.updated` to the current UTC timestamp on every write.
+3. **Failures** — if the step fails or its retries are abandoned, do NOT append to `completed_phases`; instead append the step's slug to `orchestrator.failed_phases` and increment `auto_fix_attempts["findings-gathered"]`.
+4. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-research.yml`. Fix any reported issue immediately before proceeding.
+5. **Final check** — before the Exit Gate, one consolidated re-read + `verify_template` run to confirm the full state matches everything performed in this session.
+
+## Recovery
+
+| Step                          | Max Attempts | Strategy                                                      |
+| ----------------------------- | ------------ | ------------------------------------------------------------- |
+| Gather (`findings-gathered`)  | 3            | Retry failed agents only, continue with successful categories |
+
+## Exit Gate
+
+Present results, get user confirmation, then hand off (see [Gate Contract](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the next skill.
+
+### Results box
+
+```markdown
+## ✅ RESEARCH GATHER COMPLETE — <research question>
+
+**Categories** — [N gathered / M planned]
+**Findings files** — [list of `analysis/findings/*.md` files]
+**Source** — [planner-specified strategy / default 4-category fallback]
+
+**Artifacts**
+
+- `analysis/findings/*.md` ([per category])
+```
+
+### Results-acceptance question
+
+Use `question` — "Are these results correct?" with options:
+
+- **Accept** — the findings are good; continue.
+- **Adjust** — re-run only the affected categories (missing/failed agents only — successful category files stay), update state and artifacts, re-present the results box.
+- **Discuss** — walk through a specific category's findings in more depth; then re-ask.
+- **Stop here** — print the resume command (`/owflow:research-gather <task-path>`) and end. Note: on a later resume, only the missing categories re-fan.
+
+### Next steps (after Accept)
+
+- `→ /owflow:research-synthesize <task-path>` — `required` next: delegates the synthesis agent for pattern analysis (`analysis/synthesis.md`) + the comprehensive research report (`outputs/research-report.md`) with confidence per finding. Remaining after: scope → optional chain → finalize.
+
+Then STOP.
