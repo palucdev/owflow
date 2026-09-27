@@ -8,6 +8,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 import path from "node:path";
 import fs from "node:fs";
 
+import { PLUGIN_VERSION } from "./constants.js";
 import type { OpenCodeConfig } from "./types/opencode-types.js";
 import { verify_template } from "./tools/verify_template.js";
 import { rereadOrchestratorState } from "./hooks/session-compaction.js";
@@ -29,7 +30,9 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
      * them without requiring manual config file edits.
      */
     config: async (config: unknown) => {
-      console.log("[owflow] Starting plugin installation...");
+      console.log(
+        `[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`,
+      );
       let typedConfig = config as OpenCodeConfig;
 
       // Get small_model config for alias resolution
@@ -57,7 +60,9 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
       configureAgents(typedConfig, smallModel);
 
       config = typedConfig;
-      console.log("[owflow] Plugin installation completed successfully.");
+      console.log(
+        `[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`,
+      );
     },
 
     "experimental.session.compacting": async (input, output) => {

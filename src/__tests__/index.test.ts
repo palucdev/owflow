@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 
 import OwflowPlugin from "../index.js";
+import { PLUGIN_VERSION } from "../constants.js";
 import * as skillsConfig from "../configuration/skills-config.js";
 import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";
@@ -75,10 +76,10 @@ describe("OwflowPlugin index", () => {
           "test-haiku",
         );
         expect(consoleLogSpy).toHaveBeenCalledWith(
-          "[owflow] Starting plugin installation...",
+          `[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`,
         );
         expect(consoleLogSpy).toHaveBeenCalledWith(
-          "[owflow] Plugin installation completed successfully.",
+          `[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`,
         );
       } finally {
         skillsSpy.mockRestore();
