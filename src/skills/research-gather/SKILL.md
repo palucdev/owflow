@@ -67,14 +67,14 @@ Each gathering category is delegated to ONE `information-gatherer` subagent via 
 ```
 Read gathering strategy from planning/research-plan.md
 For each category in strategy:
-  Use Task tool: information-gatherer with source_category=[category_id] → analysis/findings/[prefix]-*.md
+  Use Task tool: information-gatherer with source_category=[category_id] → analysis/findings/[category_id]-*.md
 ```
 
 > **ANTI-PATTERN — never launch the gatherer fan as sequential Task calls or via the Skill tool. The `information-gatherer` agents go through the Task tool, one call per category, all N calls in ONE message.**
 
 ### Output artifact & handoff to research-synthesize
 
-The output artifact of this skill is the **findings directory**: `analysis/findings/*.md`, exactly one file per gathering category (`[prefix]-*.md`, e.g. `codebase-*.md`, `docs-*.md`, plus any custom categories). `research_outputs.findings_directory` records that path in state.
+The output artifact of this skill is the **findings directory**: `analysis/findings/*.md`, exactly one file per gathering category (`[category-id]-*.md` — the category ID leads the filename; e.g. `codebase-*.md`, `docs-*.md`, plus any custom categories). The file tail adds only keywords NOT already in the category ID (no stacked/repeated slugs). `research_outputs.findings_directory` records that path in state.
 
 `research-synthesize` consumes exactly these files: it reads every `analysis/findings/*.md` (the Entry Gate verifies one file per planned category exists), cross-references them in `analysis/synthesis.md`, and feeds the merged evidence into `outputs/research-report.md`. Nothing else from this skill flows downstream — the findings files ARE the contract.
 

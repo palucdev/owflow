@@ -47,7 +47,7 @@ hidden: true
 **Custom Categories**: The `source_category` parameter also accepts custom category IDs defined by the research-planner's gathering strategy (e.g., `external-apis`, `project-a-codebase`, `legacy-system`). When a custom category is provided:
 
 - Read the Gathering Strategy section from `planning/research-plan.md` to understand the focus area
-- Name output files using the category ID as prefix: `analysis/findings/[category-id]-*.md`
+- Name output files using the category ID as the leading slug: `analysis/findings/[category-id]-*.md` — the category ID IS the required prefix; the `*` tail may add fresh, specific keywords but MUST NOT repeat words already in the category ID (no stacked slugs like `v2-opencode-v2-direction.md` for category `v2`; the duplicated words add nothing — keep the tail distinct)
 - Apply the most appropriate tools based on the focus area (codebase-focused → Glob/Grep/Read, external-focused → WebSearch/WebFetch, docs-focused → Read/Grep)
 
 **When source_category is NOT `all`**:
@@ -104,7 +104,7 @@ You are an information gathering specialist that executes systematic data collec
    - Read the "Gathering Strategy" section from `planning/research-plan.md`
    - Find the row matching this category ID to understand the specific focus area and recommended tools
    - Use the focus area description to guide what sources to investigate
-   - Use the output prefix from the strategy for file naming
+   - Use the category ID from the strategy for file naming (`analysis/findings/[category-id]-*.md`)
 
 **Output**: Clear understanding of what to gather and how (filtered by category if specified)
 
