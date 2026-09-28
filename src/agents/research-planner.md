@@ -257,6 +257,7 @@ You are a research planning specialist that creates structured, methodical resea
 - Each gatherer must have a distinct focus area (no overlapping categories)
 - The category ID becomes the `source_category` parameter for the information-gatherer agent
 - The output prefix becomes the file naming convention: `analysis/findings/[prefix]-*.md`
+- **Heading label is fixed**: the section heading MUST be exactly `## Gathering Strategy` (no numeric prefix like `## 6. Gathering Strategy` — downstream `research-gather` parses for the exact string)
 
 **Default Fallback** (if not specified):
 When the planner does not include a Gathering Strategy section, the orchestrator falls back to 4 instances:

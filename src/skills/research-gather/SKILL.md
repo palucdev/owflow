@@ -55,7 +55,7 @@ Each gathering category is delegated to ONE `information-gatherer` subagent via 
 
 ### Determine the gatherer count and categories
 
-1. Read the **Gathering Strategy** section from `planning/research-plan.md`
+1. Read the **Gathering Strategy** section from `planning/research-plan.md` (heading may carry a numeric prefix, e.g. `## 6. Gathering Strategy` — match the heading by the words "Gathering Strategy", not the exact literal)
 2. If gathering strategy found: use specified categories and count (cap at 8 max)
 3. If no gathering strategy: fall back to the default 4 categories — codebase, documentation, configuration, external — and set `source: default`
 4. Update state: `research_context.gathering_strategy`
