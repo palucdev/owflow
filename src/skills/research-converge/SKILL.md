@@ -39,6 +39,14 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
    - `Run /owflow:research-brainstorm <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, or `/owflow:research-synthesize`).
 3. **Skip/resume (per-area partial resume)**: if `approaches-chosen` is in `completed_phases`, validate every `phase_summaries.converge.decision_areas` entry carries `chosen_approach` — all resolve → report the existing chosen combination and route to the Exit Gate; any area unresolved → re-ask ONLY the unresolved areas below. Also — even WITHOUT the slug — skip any area whose `decision_areas` entry already carries `chosen_approach`; only unresolved areas are ever asked.
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode (full lane)                                                | Quick mode (`research-quick`)                                                                          |
+| ---------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Consumed: `outputs/solution-exploration.md`    | parsed for decision areas + alternatives                                | identical — when the optional chain runs after a quick pass, the exploration file was produced by research-brainstorm |
+| Produced: none (state-only)                    | decisions recorded inline per area                                      | same mechanics — research-quick never converges inline                                                     |
+| State write                                    | `approaches-chosen`; `phase_summaries.converge {summary, decision_areas, deferred_ideas}` (per-area partial writes) | same slug and fields                                                          |
+
 ## Execute (direct interactive — per-area convergence)
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) — per-area convergence is direct interactive work (like dev-verify's interactive phases); no agents involved.

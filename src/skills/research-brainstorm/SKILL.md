@@ -39,6 +39,14 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
    - `Run /owflow:research-synthesize <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan` or `/owflow:research-gather`).
    - If no task exists yet: `Run /owflow:research <question> to start a task from scratch.`
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode (full lane)                                        | Quick mode (`research-quick`)                                                                    |
+| ---------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Consumed: `analysis/synthesis.md`, `outputs/research-report.md` | foundation inputs (from synthesize)                              | identical — research-quick produces the same standard artifacts, so this skill runs unchanged afterwards |
+| Produced: `outputs/solution-exploration.md`    | delegated to `solution-brainstormer` (Task tool)                 | NOT produced here — the quick lane stops at synthesis; the optional chain always runs as this skill    |
+| State write                                    | `alternatives-generated`; `phase_summaries.brainstorm`, `research_outputs.solution_exploration` | same (this skill never runs inside a quick pass)                                  |
+
 ## Execute (delegated brainstorm)
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).

@@ -34,6 +34,15 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 2. **Content check — plan file**: Read `planning/research-plan.md`. If the file is missing → print the blocked block, then STOP (`Run /owflow:research-plan <task-path> first.`). A missing `## Gathering Strategy` section does NOT block — Execute falls back to the default 4 categories.
 3. **Skip/resume — only missing categories re-fan**: existing files under `analysis/findings/` count as done whether or not `findings-gathered` is already in `completed_phases` (artifacts before state; quick-lane and pre-split files included). Re-fan ONLY categories with no matching file, then append `findings-gathered` once every planned category has a file. All categories already present → adopt the slug if it is missing, report existing findings, and route to the Exit Gate.
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode (full lane)                                                   | Quick mode (`research-quick`)                                                              |
+| ---------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Consumed: `planning/research-plan.md`          | parsed for `## Gathering Strategy` (fallback: 4 default categories)          | same — quick plan always keeps a `## Gathering Strategy` section, pinning gather inline vs capped fan |
+| Consumed: `information-gatherer` agents (Task tool, one per category, all N in ONE message) | N agents (cap 8)                                                     | zero agents (≤2 categories, inline) or the fan capped at 3 agents                              |
+| Produced: `analysis/findings/*.md`             | exactly one per gathering category                                         | same paths — quick-lane findings are pre-existing category files here, never re-fanned          |
+| State write                                    | `findings-gathered`; `gathering_strategy`, `research_outputs.findings_directory`, `phase_summaries.gather` | same slug and fields, condensation-noted                                             |
+
 ## Execute (delegated fan)
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).

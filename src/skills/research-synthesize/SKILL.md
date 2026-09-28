@@ -36,6 +36,16 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 2. **Content check — findings present**: the per-category files under `analysis/findings/` must exist (artifacts before state — drop the `findings-gathered` entry and route back to `/owflow:research-gather <task-path>` when they do not).
 3. **Skip/resume**: if `analysis/synthesis.md` AND `outputs/research-report.md` both exist, adopt them — append `synthesis-complete` if it is missing, backfill `research_outputs.synthesis` and `research_outputs.research_report` when those fields are still null, report the existing summaries, and route to the Exit Gate. Either file missing → re-run below (drop a stale `synthesis-complete` entry first).
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode (full lane)                                                                        | Quick mode (`research-quick`)                                             |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Consumed: `analysis/findings/*.md`             | all per-category files (the gather contract)                                                     | same — quick-lane findings feed the inline synthesis                                        |
+| Consumed: `research-synthesizer` agent (Task tool) | 1 delegated call                                                                             | n/a — synthesis is ALWAYS inline in the quick lane (the ONLY exception to this delegation)  |
+| Produced: `analysis/synthesis.md`              | delegated (patterns, cross-references, gaps)                                                     | written directly inline                                                                     |
+| Produced: `outputs/research-report.md`         | delegated (report + per-finding confidence)                                                      | written directly inline                                                                     |
+| State write                                    | `synthesis-complete`; `confidence_level`, `phase_summaries.synthesize`, `research_outputs.synthesis` + `.research_report` | same slug and fields, condensation-noted                     |
+
 ## Execute (delegated synthesis)
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).

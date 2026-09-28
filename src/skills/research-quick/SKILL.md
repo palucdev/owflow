@@ -46,6 +46,17 @@ If the path does **not exist** or matches **no identifier** → print the blocke
 2. **Content check (resume)**: `research_context.research_question` must be non-null. If null (state exists, question never recorded), prompt via `question` — "What is your research question?" — and let the condensed brief record it in state.
 3. **Skip/resume — artifacts before state**: adopt existing artifacts instead of re-running (`planning/research-brief.md` → `brief-written`; `planning/research-plan.md` AND `planning/sources.md` → `plan-created`; findings files → `findings-gathered`; `analysis/synthesis.md` + `outputs/research-report.md` → `synthesis-complete`), then condense ONLY the quick-pass pieces that are still missing. All pieces present → report the existing results and route to the Exit Gate.
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode (full lane, for comparison)                     | Quick mode (this skill's condensed pass)                             |
+| ---------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Consumed: argument                             | task path/identifier (subskills never bootstrap)              | task path/identifier OR a research question (bootstrap + fuse in one pass) |
+| Produced: `planning/research-brief.md`         | inline (`research-plan` brief step)                           | inline — condensed brief, identical path                                   |
+| Produced: `planning/research-plan.md`, `planning/sources.md` | delegated to `research-planner`                | written directly inline (the ONLY exception to the planner anti-pattern)   |
+| Produced: `analysis/findings/*.md`             | `information-gatherer` fan (cap 8, one agent per category)    | inline with zero agents (≤2 categories) or capped fan at 3 agents          |
+| Produced: `analysis/synthesis.md`, `outputs/research-report.md` | delegated to `research-synthesizer`          | ALWAYS inline (the ONLY exception to the synthesizer anti-pattern)         |
+| State write                                    | `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete` (owned by `research-plan`/`research-gather`/`research-synthesize`) | same slugs and fields per step, `entry_point: "research-quick"`, condensation noted in `phase_summaries.gather` / `phase_summaries.synthesize` |
+
 ## Quick bootstrap (no state file, question argument)
 
 1. **Create Task Directory**: `.owflow/tasks/research/YYYY-MM-DD-task-name/` (3–5 kebab-case words from the question).

@@ -41,6 +41,17 @@ If the path does **not exist** or matches **no identifier** → print the blocke
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → a question argument follows the routing table (ask first). Otherwise mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `brief-written`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch, or /owflow:research-quick "<question>" for a quick fused task.` and STOP.
 2. **Content check (resume)**: `research_context.research_question` must be non-null. If null (state exists, question never recorded), prompt via `question` — "What is your research question?" — and let the brief step record it in state.
+
+## Input / Output Artifacts
+
+| Artifact                                                              | Normal mode (full lane)                                                           | Quick mode (`research-quick`)                                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Consumed: state (`research_context.research_question`, `.research_type`, `.project_doc_paths`) | input                                                                           | same — quick bootstrap already records them (condensed brief)                                  |
+| Consumed: `references/research-methodologies.md`                      | read before delegation                                                              | read by research-quick directly (no delegation)                                                |
+| Produced: `planning/research-brief.md`                                | inline (brief step)                                                                 | inline — condensed brief, identical path                                                       |
+| Produced: `planning/research-plan.md`, `planning/sources.md`           | delegated to `research-planner` (plan step)                                         | written directly inline (the ONLY exception to the planner-delegation anti-pattern)            |
+| State write                                                           | `brief-written`, `plan-created` slugs; `methodology`, `sources`, `phase_summaries.plan` | same slugs and fields, condensation-noted                                                     |
+
 3. **Skip/resume** — artifacts before state. If the file exists but its slug is missing, adopt it (append the slug, backfill still-null fields) instead of re-running:
    - `planning/research-brief.md` exists → append `brief-written` if missing, then skip the brief step.
    - `planning/research-plan.md` AND `planning/sources.md` exist → append `plan-created` if missing, backfill `methodology` / `sources` / `phase_summaries.plan` when still null, report the existing plan summary, and route to the Exit Gate.

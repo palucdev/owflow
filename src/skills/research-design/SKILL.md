@@ -42,6 +42,15 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
    - Neither slug present → brainstorming has not produced alternatives. Ask via `question`: "Brainstorming hasn't run — seed the design from the research report, or brainstorm first?" → seed from report (design-only branch): state `Brainstorming did not run — seeding the design from research-report recommendations.`, validate `outputs/research-report.md` exists (missing → `→ /owflow:research-synthesize <task-path>`, then STOP) and proceed; → brainstorm first: `→ /owflow:research-brainstorm <task-path>`, then STOP.
 4. **Skip/resume**: if `design-generated` is in `completed_phases`, validate BOTH `outputs/high-level-design.md` AND `outputs/decision-log.md` exist; either missing → re-run Parts B-D below; both present → report the existing design summary and route to the Exit Gate.
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode (full lane)                                                   | Quick mode (`research-quick`)                                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Consumed: `phase_summaries.converge.decision_areas` (chosen combination) | becomes `selected_approach` when brainstorm ran                       | same fields — when the optional chain runs after a quick pass, converge ran as the normal subskill        |
+| Consumed: `outputs/research-report.md`         | design-only branch seed (`selected_approach` from recommendations)           | identical — research-quick produces the same report artifact                                              |
+| Produced: `outputs/high-level-design.md`, `outputs/decision-log.md` | delegated to `solution-designer`, refined via `diagrams-mermaid` Skill | NOT produced in the quick pass — design always runs as this skill after the quick lane                    |
+| State write                                    | `design-generated`; `phase_summaries.design {summary, architecture_style, decisions_count}`, `research_outputs.high_level_design` + `.decision_log` | same (this skill never runs inside a quick pass)               |
+
 ## Execute (Part A direct + Part B delegated + Part C direct + Part D Skill)
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).

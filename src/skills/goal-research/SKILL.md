@@ -11,6 +11,14 @@ Autonomous mode for research tasks. Initializes (or resumes) the task, then invo
 
 Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md) — orchestrated mode exception: each subskill's own Exit Gate acceptance question IS the loop gate (Accept = continue to the next subskill).
 
+## Input / Output Artifacts
+
+| Artifact                            | Normal mode (this wrapper)                                                  | Quick mode (`research-quick`)                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Consumed: argument (question / path)| research question (new task) or task path/identifier (resume)                 | n/a — this wrapper never starts a quick run; a completed quick pass just skips rows 2-3            |
+| Consumed/produced: all task artifacts| owned entirely by the invoked subskills (none here — delegate, never inline) | same — the subskills run at full fidelity after a quick pass                                       |
+| State write                         | `orchestrator.task_ids` (task items) + `orchestrator.updated` only            | none additional — state was already written by the quick pass                                      |
+
 ## Entry Gate
 
 Identical to the research dispatcher — complete ALL of its entry-gate steps first (see `../research/SKILL.md` Entry Gate):

@@ -39,6 +39,14 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 3. **Skip/resume**: if `task.status` is `completed`, report the existing finalization (results box from the inventory below) and STOP (dev-finalize terminal pattern).
 4. **Always runs**: this skill always runs — every path (no optional steps / design-only / full brainstorm chain) reaches completion here. The optional phases only affect the inventory and the "Phases run" line.
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode (full lane)                                        | Quick mode (`research-quick`)                                                    |
+| ---------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Consumed: `outputs/research-report.md` (always) + conditional design/brainstorm artifacts | inventoried per `research_outputs.*` in state | identical — a quick-pass task brings the same standard artifacts                             |
+| Produced: none (state-only)                    | no new files — finalization is an inventory                         | same — after a quick pass this skill completes the task the same way                        |
+| State write                                    | `research-completed`; `task.status: completed`                     | same slug and field                                                                    |
+
 ## Execute (direct — inline-legal finalization)
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) — finalization is inline-legal ("finalization" is a simple, direct step; no agents involved).

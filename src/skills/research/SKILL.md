@@ -15,6 +15,16 @@ For the all-in-one loop with in-session `question` gates, use `/owflow:goal-rese
 
 Gates follow the shared contract in the [Gate Contract](../orchestrator-framework/references/gate-contract.md), with the [dispatcher exception](../orchestrator-framework/references/gate-contract.md).
 
+## Input / Output Artifacts
+
+| Artifact                                       | Normal mode                                                       | Quick mode                                                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Argument (question / path)                     | research question (new task) or task path/identifier (resume)       | task path/identifier only — quick runs are never STARTED here; an interrupted quick task resumes at full fidelity |
+| `orchestrator-state.yml`                       | read on resume (artifact validation of `completed_phases`)          | read on resume — honors `entry_point: "research-quick"` and quick-lane artifacts                            |
+| Task directory + `orchestrator-state.yml` init | written (Step 3, new task) — `entry_point: "research"`              | n/a — quick bootstrap is owned by `/owflow:research-quick`                                                  |
+
+The dispatcher writes nothing else — every task artifact is produced by the subskills (see [Task Structure](#task-structure)).
+
 ## Entry Gate
 
 **BEFORE deriving the handoff, complete these steps:**
