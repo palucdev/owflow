@@ -116,6 +116,8 @@ The optional chain is the user's choice — there is no enablement flag in state
 
 This dispatcher never starts or forwards quick runs. An interrupted quick task (`entry_point: "research-quick"`, `synthesis-complete` not yet recorded) resumes at full fidelity for the missing pieces via the matching subskills. To finish that pass condensed, the user runs `/owflow:research-quick <task-path>` directly.
 
+Forking (utility, not a routing row): `/owflow:research-fork <task-path> [--from=<slug>] [--name="..."]` copies a completed-enough task (`synthesis-complete` recorded) to a new task diverging at a chosen completed step — dropped steps reset state fields and exclude artifacts; the source stays untouched. The fork is a plain research task from then on, routable by this dispatcher like any other.
+
 References moved into their owning subskills (read there, not here): `research-methodologies.md` lives in `research-plan/references/`, `brainstorming-techniques.md` in `research-brainstorm/references/`, `design-techniques.md` in `research-design/references/`.
 
 ---

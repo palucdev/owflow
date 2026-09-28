@@ -11,6 +11,7 @@ import fs from "node:fs";
 import { PLUGIN_VERSION } from "./utils/plugin-info.js";
 import type { OpenCodeConfig } from "./types/opencode-types.js";
 import { verify_template } from "./tools/verify_template.js";
+import { fork_task } from "./tools/fork_task.js";
 import { rereadOrchestratorState } from "./hooks/session-compaction.js";
 import { guardAgainstDestructiveActions } from "./hooks/before-tool.js";
 import { configureSkills } from "./configuration/skills-config.js";
@@ -24,6 +25,7 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
   return {
     tool: {
       verify_template,
+      fork_task,
     },
     /**
      * Register owflow's skills, commands, and agents so OpenCode discovers

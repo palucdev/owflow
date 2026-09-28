@@ -139,6 +139,13 @@ You can always be explicit when you prefer - arguments and flags simply override
 
 Task type (feature/bug/enhancement) is auto-detected from context. Override with `--type=feature|bug|enhancement` if needed. Or use `/owflow:work` as a single entry point that routes to the right workflow.
 
+### Research Utility
+
+| Command                       | Use When                                                                        |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `/owflow:research-quick "<description>"` | Condensed research: brief → plan → gather → synthesis in one pass     |
+| `/owflow:research-fork <task-path> [--from=<slug>] [--name="..."]` | Branch a completed research task and re-run from the fork point with different choices |
+
 ### Quick Commands
 
 For smaller tasks that don't need a full workflow:
@@ -219,6 +226,12 @@ You can also append additional instructions to narrow scope or guide the workflo
 
 ```bash
 /owflow:development .owflow/tasks/research/2026-01-12-oauth-research Implement only phase 1
+```
+
+**Fork a research task to diverge from it.** If you want to re-run part of a completed research with different choices while keeping the original intact, fork it — the copy keeps everything up to the fork point verbatim (state + artifacts) and drops the rest (state fields reset, artifacts not copied):
+
+```bash
+/owflow:research-fork .owflow/tasks/research/2026-01-12-oauth-research --from=synthesis-complete --name="compare-scoping-alternatives"
 ```
 
 ## Known Issues
