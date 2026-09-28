@@ -1,7 +1,7 @@
 ---
 name: owflow:research
-description: Research workflow dispatcher. Initializes/resumes research tasks, derives the next step from state, and hands off to the matching /owflow:research-* subskill. Handles comprehensive research and analysis — technical, requirements, literature, and mixed research types with adaptive methodology, multi-source gathering, pattern synthesis, and evidence-based artifact outputs (findings documentation). Supports standalone research tasks and embedded research phases feeding development workflows. Use /owflow:goal-research to run all phases in one session.
-argument-hint: "[task description | task-path] [--from=<slug>] [--brainstorm|--no-brainstorm] [--design|--no-design] [--type=<type>]"
+description: Research workflow dispatcher. Initializes/resumes research tasks, derives the next step from state, and hands off to the matching /owflow:research-* subskill. Handles comprehensive research and analysis — technical, requirements, literature, and mixed research types with adaptive methodology, multi-source gathering, pattern synthesis, and evidence-based artifact outputs (findings documentation). Supports standalone research tasks and embedded research phases feeding development workflows.
+argument-hint: "[task description | task-path] [--from=<slug>] [--type=<type>]"
 ---
 
 CRITICAL INSTRUCTION: You MUST invoke the owflow:research skill immediately as your FIRST action.
@@ -27,13 +27,13 @@ Invoke the skill now and let it dispatch the matching research step.
 Research workflow **dispatcher** (assisted mode). The skill handles:
 
 - Task initialization/resume and state management (`orchestrator-state.yml`)
-- Research context intake and `--brainstorm`/`--design`/`--type` flag handling
+- Research context intake and `--type` flag handling
 - Deriving the next pending step from state (descriptive slugs, NOT phase numbers)
 - Handing off to the matching `/owflow:research-*` subskill, then stopping
 
 Run `/owflow:goal-research` instead for autonomous mode (all subskills in one session with gates).
 
-Quick lane: starts only via `/owflow:research-plan --quick "<description>"` — a condensed research task that fuses brief, plan, gather, and synthesis into one pass, continuable by any research subskill.
+Quick lane: starts only via `/owflow:research-quick "<description>"` — a condensed research task that fuses brief, plan, gather, and synthesis into one pass, continuable by any research subskill.
 
 Entry points:
 
@@ -45,10 +45,9 @@ Steps (each works on the shared task directory):
 - `/owflow:research-plan <description | task-path>` — brief, methodology & plan
 - `/owflow:research-gather <task-path>` — parallel findings fan
 - `/owflow:research-synthesize <task-path>` — synthesis & research report
-- `/owflow:research-scope <task-path>` — optional-phase decision
-- `/owflow:research-brainstorm <task-path>` — solution alternatives (conditional)
-- `/owflow:research-converge <task-path>` — per-area decisions (conditional)
-- `/owflow:research-design <task-path>` — high-level design (conditional)
+- `/owflow:research-brainstorm <task-path>` — solution alternatives (optional, user's choice)
+- `/owflow:research-converge <task-path>` — per-area decisions (after brainstorming)
+- `/owflow:research-design <task-path>` — high-level design (optional, user's choice)
 - `/owflow:research-finalize <task-path>` — completion & handoff
 
 See `skills/research/SKILL.md` for the routing table and `skills/research-*/SKILL.md` for step documentation.

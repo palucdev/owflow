@@ -9,7 +9,7 @@ user-invocable: true
 
 Work phase of the research workflow. Reads the gathering strategy out of the research plan and launches the parallel information-gatherer fan (`analysis/findings/*.md`, one file per category). State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
-Related phases: `/owflow:research-plan` (produces the plan this skill parses), `/owflow:research-synthesize` (consumes the merged findings). In quick mode, `research-plan` may author findings inline — those are pre-existing category files for this skill.
+Related phases: `/owflow:research-plan` (produces the plan this skill parses), `/owflow:research-synthesize` (consumes the merged findings). In the quick lane, `research-quick` may author findings inline — those are pre-existing category files for this skill.
 
 ## Entry Gate
 
@@ -27,18 +27,22 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 | Required for this skill            | Where verified                                                      | Produced by                            |
 | ---------------------------------- | -------------------------------------------------------------------- | -------------------------------------- |
-| State file exists                  | `<task-path>/orchestrator-state.yml`                                 | `/owflow:research <question>` or the research-plan quick bootstrap |
+| State file exists                  | `<task-path>/orchestrator-state.yml`                                 | `/owflow:research <question>` or `/owflow:research-quick` |
 | Plan exists                        | `plan-created` in `completed_phases` + `planning/research-plan.md` exists | `/owflow:research-plan <task-path>`    |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `findings-gathered`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
 2. **Content check — plan file**: Read `planning/research-plan.md`. If the file is missing → print the blocked block, then STOP (`Run /owflow:research-plan <task-path> first.`). A missing `## Gathering Strategy` section does NOT block — Execute falls back to the default 4 categories.
-3. **Skip/resume — only missing categories re-fan**: existing files under `analysis/findings/` count as done whether or not `findings-gathered` is already in `completed_phases` (artifacts before state; quick-authored and pre-split files included). Re-fan ONLY categories with no matching file, then append `findings-gathered` once every planned category has a file. All categories already present → adopt the slug if it is missing, report existing findings, and route to the Exit Gate.
+3. **Skip/resume — only missing categories re-fan**: existing files under `analysis/findings/` count as done whether or not `findings-gathered` is already in `completed_phases` (artifacts before state; quick-lane and pre-split files included). Re-fan ONLY categories with no matching file, then append `findings-gathered` once every planned category has a file. All categories already present → adopt the slug if it is missing, report existing findings, and route to the Exit Gate.
 
 ## Execute (delegated fan)
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).
 
-**Scope**: normal runs — quick-mode findings authored inside `research-plan` are treated as pre-existing category files (Entry Gate resume check) and are NOT re-gathered.
+**Scope**: normal runs — findings authored by the `research-quick` lane are treated as pre-existing category files (Entry Gate resume check) and are NOT re-gathered.
+
+### The `information-gatherer` agent
+
+Each gathering category is delegated to ONE `information-gatherer` subagent via the Task tool — one agent per category, N categories → N agents. The agent receives the category id and the task context and writes that category's findings file itself; this skill only launches the fan and merges the results. Never gather category findings inline in this skill.
 
 ### Determine the gatherer count and categories
 
@@ -47,17 +51,23 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 3. If no gathering strategy: fall back to the default 4 categories — codebase, documentation, configuration, external — and set `source: default`
 4. Update state: `research_context.gathering_strategy`
 
-**CRITICAL: Launch all N agents in ONE message for parallel execution.**
+**CRITICAL: Launch all N `information-gatherer` agents in ONE message for parallel execution.**
 
 **Parallel Execution Pattern**:
 
 ```
 Read gathering strategy from planning/research-plan.md
 For each category in strategy:
-  Use Task tool: source_category=[category_id] → analysis/findings/[prefix]-*.md
+  Use Task tool: information-gatherer with source_category=[category_id] → analysis/findings/[prefix]-*.md
 ```
 
-> **ANTI-PATTERN — never launch the gatherer fan as sequential Task calls or via the Skill tool. Agents go through the Task tool, one call per category, all N calls in ONE message.**
+> **ANTI-PATTERN — never launch the gatherer fan as sequential Task calls or via the Skill tool. The `information-gatherer` agents go through the Task tool, one call per category, all N calls in ONE message.**
+
+### Output artifact & handoff to research-synthesize
+
+The output artifact of this skill is the **findings directory**: `analysis/findings/*.md`, exactly one file per gathering category (`[prefix]-*.md`, e.g. `codebase-*.md`, `docs-*.md`, plus any custom categories). `research_outputs.findings_directory` records that path in state.
+
+`research-synthesize` consumes exactly these files: it reads every `analysis/findings/*.md` (the Entry Gate verifies one file per planned category exists), cross-references them in `analysis/synthesis.md`, and feeds the merged evidence into `outputs/research-report.md`. Nothing else from this skill flows downstream — the findings files ARE the contract.
 
 ### Merge & close (`findings-gathered`)
 

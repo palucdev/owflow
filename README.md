@@ -133,7 +133,7 @@ You can always be explicit when you prefer - arguments and flags simply override
 | Command                | Use When                                    |
 | ---------------------- | ------------------------------------------- |
 | `/owflow:development`  | Features, bug fixes, enhancements           |
-| `/owflow:research`     | Research with synthesis and solution design — split into a dispatcher + standalone `research-*` subskills; alternatively `/owflow:goal-research` runs all steps in one session |
+| `/owflow:research`     | Research with synthesis and solution design |
 | `/owflow:performance`  | Optimizing speed or resource usage          |
 | `/owflow:migration`    | Changing technologies or patterns           |
 

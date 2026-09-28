@@ -1,6 +1,6 @@
 ---
 name: owflow:research-design
-description: Research skill — conditional optional subskill. Asks design preferences (Part A), delegates high-level architecture design to the solution-designer agent (outputs/high-level-design.md + outputs/decision-log.md), then refines diagrams via the diagrams-mermaid Skill — content-preserving (design-generated). Skips itself when design is disabled.
+description: Research skill — optional step. Asks for your design preferences, creates the high-level architecture design together with its decision log, and refines the diagrams. Invoking this step means you chose to design.
 argument-hint: "[task-path-or-identifier]"
 ---
 

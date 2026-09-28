@@ -1,6 +1,6 @@
 ---
 name: owflow:research-brainstorm
-description: Research skill — conditional optional subskill. Delegates multi-perspective solution-alternative generation to the solution-brainstormer agent, producing outputs/solution-exploration.md. Skips itself when brainstorming is disabled (options-resolved decided; --no-brainstorm).
+description: Research skill — optional step. Brainstorms solution alternatives from multiple perspectives and records them for the later convergence step. Invoking this step means you chose to brainstorm.
 argument-hint: "[task-path-or-identifier]"
 ---
 

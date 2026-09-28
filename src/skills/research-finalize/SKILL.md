@@ -9,7 +9,7 @@ user-invocable: true
 
 Terminal step of the research workflow. Presents research results, confirms correctness with the user, and hands off to development (or ends the workflow). No new files — summarizes existing outputs. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
-Related phases: all research subskills (`/owflow:research-plan` → `/owflow:research-gather` → `/owflow:research-synthesize` → `/owflow:research-scope` → the optional chain). This is the terminal skill: its Exit-Gate acceptance is where the goal-research wrapper's loop ends, and where assisted mode suggests development.
+Related phases: all research subskills (`/owflow:research-plan` → `/owflow:research-gather` → `/owflow:research-synthesize` → the optional chain as chosen by the user). This is the terminal skill: its Exit-Gate acceptance is where the goal-research wrapper's loop ends, and where assisted mode suggests development.
 
 ## Entry Gate
 
@@ -22,8 +22,6 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
      - Research brief & plan (`brief-written`, `plan-created`) → `/owflow:research-plan <task-path>`
      - Parallel findings fan (`findings-gathered`) → `/owflow:research-gather <task-path>`
      - Synthesis & research report (`synthesis-complete`) → `/owflow:research-synthesize <task-path>`
-     - Optional-phase decision (`options-resolved`) → `/owflow:research-scope <task-path>`
-     - Optional chain (`alternatives-generated` → `approaches-chosen` → `design-generated`) → `/owflow:research-brainstorm <task-path>` / `/owflow:research-converge <task-path>` / `/owflow:research-design <task-path>` (only when enabled)
   2. List available research-task identifiers (directories under `.owflow/tasks/research/`) to resume from, if any.
   3. Hint: `Run /owflow:research <question> to start a task from scratch, or pass a task path/identifier to resume.`
 
@@ -31,19 +29,15 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 | Required for this skill | Where verified                                                                  | Produced by                                                        |
 | ----------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| State file exists       | `<task-path>/orchestrator-state.yml`                                             | `/owflow:research <question>` or the research-plan quick bootstrap |
+| State file exists       | `<task-path>/orchestrator-state.yml`                                             | `/owflow:research <question>` or `/owflow:research-quick` |
 | Foundation complete     | `synthesis-complete` in `completed_phases` + `outputs/research-report.md` exists | `/owflow:research-synthesize <task-path>`                          |
-| Optional chain resolved | `options-resolved` in `completed_phases` + both flags non-null; every flag still `true` has its slug in `completed_phases` | `/owflow:research-scope <task-path>` (then the enabled chain) |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `research-completed`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
-2. **Prerequisite check**: `synthesis-complete` AND `options-resolved` must be in `completed_phases`, `outputs/research-report.md` must exist, and both `options.*` flags must be non-null. Then enforce the flags still set:
-   - `options.brainstorming_enabled: true` requires `alternatives-generated` AND `approaches-chosen` in `completed_phases` (and `outputs/solution-exploration.md` exists).
-   - `options.design_enabled: true` requires `design-generated` in `completed_phases` (and both design artifacts exist).
-   A flag left `true` with its slug missing is pending work, not a skip — a user-chosen skip flips that flag to `false`. If any of the above is missing → print the blocked block for the earliest missing step, then STOP:
-   - `Run /owflow:research-scope <task-path> first` when the decision is missing (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, `/owflow:research-synthesize`, `/owflow:research-brainstorm`, `/owflow:research-converge`, or `/owflow:research-design`).
+2. **Prerequisite check**: `synthesis-complete` must be in `completed_phases` and `outputs/research-report.md` must exist. The optional chain is settled by the user's own choices — invoking `research-brainstorm`/`research-design` is the decision to run them; skipping straight here settles the chain as skipped. If the foundation is missing → print the blocked block for the earliest missing step, then STOP:
+   - `Run /owflow:research-plan <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-gather` or `/owflow:research-synthesize`).
    - If no task exists yet: `Run /owflow:research <question> to start a task from scratch.`
 3. **Skip/resume**: if `task.status` is `completed`, report the existing finalization (results box from the inventory below) and STOP (dev-finalize terminal pattern).
-4. **Conditional activation**: this skill always runs — every chain (both disabled / design-only / full brainstorm chain) reaches completion here. The optional phases only affect the inventory and the "Phases run" line.
+4. **Always runs**: this skill always runs — every path (no optional steps / design-only / full brainstorm chain) reaches completion here. The optional phases only affect the inventory and the "Phases run" line.
 
 ## Execute (direct — inline-legal finalization)
 
@@ -59,7 +53,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 **Type** — [research type]
 **Confidence** — [confidence level]
-**Phases run** — [executed slug list, e.g. brief-written → plan-created → findings-gathered → synthesis-complete → options-resolved → alternatives-generated → approaches-chosen → design-generated]
+**Phases run** — [executed slug list, e.g. brief-written → plan-created → findings-gathered → synthesis-complete → alternatives-generated → approaches-chosen → design-generated]
 **Key findings** — [2-3 one-line highlights]
 **Decisions** — [count of ADRs, if design ran]
 

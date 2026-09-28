@@ -8,7 +8,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 import path from "node:path";
 import fs from "node:fs";
 
-import { PLUGIN_VERSION } from "./constants.js";
+import { PLUGIN_VERSION } from "./utils/plugin-info.js";
 import type { OpenCodeConfig } from "./types/opencode-types.js";
 import { verify_template } from "./tools/verify_template.js";
 import { rereadOrchestratorState } from "./hooks/session-compaction.js";

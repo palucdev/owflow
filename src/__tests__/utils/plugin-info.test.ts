@@ -4,12 +4,12 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 
-import { PLUGIN_ROOT, PLUGIN_VERSION, readPluginVersion } from "../constants.js";
+import { PLUGIN_ROOT, PLUGIN_VERSION, readPluginVersion } from "../../utils/plugin-info.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.join(__dirname, "../..");
+const repoRoot = path.join(__dirname, "../../..");
 
-describe("constants", () => {
+describe("plugin-info", () => {
   let tmpDir: string;
 
   /** Mirrors the real layout: package.json sits one level above the plugin root. */
@@ -27,7 +27,7 @@ describe("constants", () => {
   };
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-constants-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-plugin-info-test-"));
   });
 
   afterEach(() => {

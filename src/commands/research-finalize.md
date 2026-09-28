@@ -1,6 +1,6 @@
 ---
 name: owflow:research-finalize
-description: Research skill — terminal step. Inventories all research outputs (research report always; brainstorm/design artifacts conditionally), presents the workflow results box, and gets user confirmation that the research is correct. Marks the task research-completed — the Exit-Gate acceptance here is where the goal-research wrapper's loop ends.
+description: Research skill — terminal step. Inventories all research outputs (the research report always, brainstorm and design artifacts when they exist), presents the workflow results, and gets your confirmation that the research is correct. Marks the task complete.
 argument-hint: "[task-path-or-identifier]"
 ---
 

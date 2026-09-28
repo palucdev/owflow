@@ -1,6 +1,6 @@
 ---
 name: owflow:research-synthesize
-description: Research skill — delegates synthesis and evidence-based reporting to the research-synthesizer agent, producing the synthesis document and the comprehensive research report with per-finding confidence. Closes the research foundation (synthesis-complete) at the boundary with the optional-phase evaluation, continuing with research-scope.
+description: Research skill — delegates synthesis and evidence-based reporting to the research-synthesizer agent, producing the synthesis document and the comprehensive research report with per-finding confidence. Closes the research foundation (synthesis-complete) at the boundary with the optional chain (user choice).
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true
 ---
@@ -9,7 +9,7 @@ user-invocable: true
 
 Work phase of the research workflow. Delegates pattern synthesis and evidence-based reporting to the research-synthesizer agent (`analysis/synthesis.md` + `outputs/research-report.md`). This is the research-foundation boundary: the Exit Gate is the pause between the foundation and the optional-phase decision. State lives in `orchestrator-state.yml` — this skill reads it on entry and writes results on exit.
 
-Related phases: `/owflow:research-gather` (produces the merged findings), `/owflow:research-scope` (consumes the synthesis for the enablement decision).
+Related phases: `/owflow:research-gather` (produces the merged findings); the optional chain (`research-brainstorm` / `research-design`) and `/owflow:research-finalize` follow, per the user's choice.
 
 ## Entry Gate
 
@@ -28,8 +28,8 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 | Required for this skill              | Where verified                                                                 | Produced by                          |
 | ------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------ |
-| State file exists                    | `<task-path>/orchestrator-state.yml`                                           | `/owflow:research <question>` or quick bootstrap |
-| Findings exist                       | `findings-gathered` in `completed_phases` + `analysis/findings/` has per-category files | `/owflow:research-gather <task-path>` (or quick mode's condensed gather) |
+| State file exists                    | `<task-path>/orchestrator-state.yml`                                           | `/owflow:research <question>` or `/owflow:research-quick` |
+| Findings exist                       | `findings-gathered` in `completed_phases` + `analysis/findings/` has per-category files | `/owflow:research-gather <task-path>` (or the quick lane's condensed gather) |
 | Research question recorded           | `research_context.research_question` non-null in state                          | `/owflow:research-plan <task-path>`   |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `synthesis-complete`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
@@ -40,7 +40,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 **Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md).
 
-> **ANTI-PATTERN — never write synthesis.md or research-report.md yourself. "The findings are few" is NOT a reason to skip delegation. (Quick mode is the ONLY exception — research-plan's quick pass synthesizes inline and skips this section.)**
+> **ANTI-PATTERN — never write synthesis.md or research-report.md yourself. "The findings are few" is NOT a reason to skip delegation. (The quick lane is the ONLY exception — research-quick synthesizes inline and skips this section.)**
 
 1. **INVOKE NOW**: Task tool - `research-synthesizer` subagent (never the Skill tool — this is an agent). Pass (Pattern 7 — accumulated context): task_path, findings_directory_path, research_question, research_type, methodology (from state).
 
@@ -51,7 +51,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 - Confidence levels for each finding
 - Documented gaps and uncertainties
 
-> **SELF-CHECK on both artifacts**: after the Task tool returns, verify `analysis/synthesis.md` AND `outputs/research-report.md` exist (synthesis documents gaps; report carries confidence per finding). If missing: **STOP. Re-invoke the research-synthesizer with corrected context.** If the second attempt also fails, use `question` to report the failure and ask whether to retry (after targeted re-gathering if the gaps require it) or stop. There is no continue-without-synthesis path — `research-scope` and every later step read these artifacts. On stop, record the failure per the State Update Convention and print the resume command.
+> **SELF-CHECK on both artifacts**: after the Task tool returns, verify `analysis/synthesis.md` AND `outputs/research-report.md` exist (synthesis documents gaps; report carries confidence per finding). If missing: **STOP. Re-invoke the research-synthesizer with corrected context.** If the second attempt also fails, use `question` to report the failure and ask whether to retry (after targeted re-gathering if the gaps require it) or stop. There is no continue-without-synthesis path — every later step reads these artifacts. On stop, record the failure per the State Update Convention and print the resume command.
 
 ### Post-synthesis decision re-cap (direct, condensable)
 
@@ -110,6 +110,8 @@ Use `question` — "Are these results correct?" with options:
 
 Research foundation complete (initialized, planned, gathered, synthesized). Continue to optional-phase evaluation?
 
-- `→ /owflow:research-scope <task-path>` — `required` next: evaluates brainstorming and design value and writes both enablement flags (`options.brainstorming_enabled`, `options.design_enabled`). Remaining after: optional chain (brainstorm → converge, design) → finalize. If the foundation alone was the goal, stop here — the task stays resumable.
+- `→ /owflow:research-brainstorm <task-path>` — when the user wants solution alternatives brainstormed. Remaining after: converge → design (when wanted) → finalize.
+- `→ /owflow:research-design <task-path>` — design-only branch (no brainstorming), seeded from the research report. Remaining after: finalize.
+- `→ /owflow:research-finalize <task-path>` — when neither is wanted: inventories the outputs and completes the task. If the foundation alone was the goal, this is the route — the task stays resumable.
 
 Then STOP.

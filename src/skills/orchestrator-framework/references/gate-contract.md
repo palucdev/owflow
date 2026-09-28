@@ -30,17 +30,25 @@ The Entry Gate runs BEFORE any phase work. It validates that this skill is allow
 
 ### Missing-state bootstrap (mid-pipeline entry)
 
-When a dev-*/research-* subskill is invoked with a task path/identifier whose `orchestrator-state.yml` exists nowhere (no task, no state file) and the ONLY unmet prerequisite is the state file itself, the skill does not blindly send the user back to the full pipeline — the user chose to enter mid-pipeline. Instead:
+When a subskill is invoked with a task path/identifier whose `orchestrator-state.yml` exists nowhere (no task, no state file) and the ONLY unmet prerequisite is the state file itself, the skill does not blindly send the user back to the full pipeline — the user chose to enter mid-pipeline. Instead:
 
-1. **Ask** via `question`: "No task exists at this path. Create a fresh standard task and start at `<this skill's first step slug>`?" (development bootstrap under `.owflow/tasks/development/`, research bootstrap under `.owflow/tasks/research/`).
+1. **Ask** via `question`: "No task exists at this path. Create a fresh standard task and start at `<this skill's first step slug>`?"
 2. **On confirm (bootstrap)**:
    - Create the task directory `.owflow/tasks/<workflow-type>/YYYY-MM-DD-task-name/` (name derived from the argument or the user's input) — mark `orchestrator.entry_point: "<skill> (mid-pipeline bootstrap)"` and `started_phase` with this skill's starting step slug.
-   - Create `orchestrator-state.yml` from the workflow's template (`orchestrator-state-development.yml` / `orchestrator-state-research.yml`), honoring any of the skill's command flags into `options.*`; leave `completed_phases` empty (upstream steps stay unrecorded).
+   - Create `orchestrator-state.yml` from the workflow's template, honoring any of the skill's command flags into their state fields; leave `completed_phases` empty (upstream steps stay unrecorded).
    - Run `verify_template` against the workflow's template.
    - Then continue into Execute. Because bootstrapping creates **state only — never upstream artifacts**, later artifact prerequisites (e.g., `implementation/spec.md` before planning) still block with the normal precondition loop, so an incorrectly early bootstrap cannot silently skip work.
-3. **On decline** — print the blocked block with the fresh-start hint (`Run /owflow:development <description>` / `Run /owflow:research <question> to start a task from scratch.`) and STOP.
+3. **On decline** — print the blocked block with the fresh-start hint and STOP.
 
-Skill starting points (used for the bootstrap question and `started_phase`): dev-analyze → `codebase-analysed`; dev-tdd-red → `tdd-red-proven`; dev-spec → `spec-written`; dev-plan → `plan-created`; dev-implement → `implementation-done`; dev-verify → `options-chosen`; dev-finalize → `e2e-run`; research-plan → `brief-written`; research-gather → `findings-gathered`; research-synthesize → `synthesis-complete`; research-scope → `options-resolved`; research-brainstorm → `alternatives-generated`; research-converge → `approaches-chosen`; research-design → `design-generated`; research-finalize → `research-completed`.
+#### dev-* bootstrap
+
+- Task directory under `.owflow/tasks/development/`; template `orchestrator-state-development.yml`; fresh-start hint: `Run /owflow:development <description> to start a task from scratch.`
+- Skill starting points (used for the bootstrap question and `started_phase`): dev-analyze → `codebase-analysed`; dev-tdd-red → `tdd-red-proven`; dev-spec → `spec-written`; dev-plan → `plan-created`; dev-implement → `implementation-done`; dev-verify → `options-chosen`; dev-finalize → `e2e-run`.
+
+#### research-* bootstrap
+
+- Task directory under `.owflow/tasks/research/`; template `orchestrator-state-research.yml`; fresh-start hint: `Run /owflow:research <question> to start a task from scratch.`
+- Skill starting points (used for the bootstrap question and `started_phase`): research-plan → `brief-written`; research-gather → `findings-gathered`; research-synthesize → `synthesis-complete`; research-brainstorm → `alternatives-generated`; research-converge → `approaches-chosen`; research-design → `design-generated`; research-finalize → `research-completed`.
 
 ### Deterministic entry checks (future)
 

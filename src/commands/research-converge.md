@@ -1,6 +1,6 @@
 ---
 name: owflow:research-converge
-description: Research skill — conditional optional subskill. Presents the brainstorming alternatives for EVERY decision area with identical full detail — one area, one question — records each chosen approach in phase_summaries.converge.decision_areas (approaches-chosen). Skips itself when brainstorming was skipped; never a combined summary-table confirm.
+description: Research skill — optional step after brainstorming. Walks through every decision area one at a time — all alternatives with full detail, one question per area — and records the chosen approach for each.
 argument-hint: "[task-path-or-identifier]"
 ---
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 
 import OwflowPlugin from "../index.js";
-import { PLUGIN_VERSION } from "../constants.js";
+import { PLUGIN_VERSION } from "../utils/plugin-info.js";
 import * as skillsConfig from "../configuration/skills-config.js";
 import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";

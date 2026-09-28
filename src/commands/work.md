@@ -235,7 +235,7 @@ Display:
 
 | Workflow Type | Skill         | Args                                                |
 | ------------- | ------------- | --------------------------------------------------- |
-| development   | `development` | `--resume [path] [--from=PHASE] [--reset-attempts]` |
+| development   | `development` | `--resume [path] [--from=<slug>] [--reset-attempts]` |
 | performance   | `performance` | `--resume [path] [--from=PHASE]`                    |
 | migration     | `migration`   | `--resume [path] [--from=PHASE]`                    |
 | research      | `research`    | `--resume [path] [--from=<slug>]`                   |

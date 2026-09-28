@@ -1,6 +1,6 @@
 ---
 name: owflow:research-converge
-description: Research skill — conditional optional subskill. Presents the brainstorming alternatives for EVERY decision area with identical full detail — one area, one question — records each chosen approach in phase_summaries.converge.decision_areas (approaches-chosen). Skips itself when brainstorming was skipped; never a combined summary-table confirm.
+description: Research skill — optional subskill. Presents the brainstorming alternatives for EVERY decision area with identical full detail — one area, one question — records each chosen approach in phase_summaries.converge.decision_areas (approaches-chosen). Never a combined summary-table confirm.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true
 ---
@@ -30,17 +30,14 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 | Required for this skill | Where verified                                                                             | Produced by                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| State file exists       | `<task-path>/orchestrator-state.yml`                                                        | `/owflow:research <question>` or the research-plan quick bootstrap |
+| State file exists       | `<task-path>/orchestrator-state.yml`                                                        | `/owflow:research <question>` or `/owflow:research-quick` |
 | Foundation complete     | `synthesis-complete` in `completed_phases` + `analysis/synthesis.md` exists                 | `/owflow:research-synthesize <task-path>`                          |
 | Alternatives exist      | `alternatives-generated` in `completed_phases` + `outputs/solution-exploration.md` exists   | `/owflow:research-brainstorm <task-path>`                          |
 
 1. **Read `orchestrator-state.yml`** from the task path. If missing → mid-pipeline bootstrap ([Missing-state Bootstrap](../orchestrator-framework/references/gate-contract.md), starting slug `approaches-chosen`): `question` — create a fresh standard research task starting at this step, or decline → print `No research task found at <path>. Run /owflow:research <question> to start a task from scratch.` and STOP.
-2. **Prerequisite check**: `synthesis-complete` AND `options-resolved` must be in `completed_phases`, and `options.brainstorming_enabled` must be non-null. If missing → print the blocked block, then STOP:
-   - `Run /owflow:research-scope <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, or `/owflow:research-synthesize`).
-   - A null `options.brainstorming_enabled` is undecided → `→ /owflow:research-scope <task-path>`, then STOP.
-3. **Conditional activation**: `options.brainstorming_enabled: false` means brainstorming was skipped (including a user-chosen skip after repeated failures, which flips this flag). Print `Brainstorming was skipped — nothing to converge on.` Then suggest `→ /owflow:research-design <task-path>` when `options.design_enabled: true`, else `→ /owflow:research-finalize <task-path>`, then STOP.
-4. **Brainstorm pending**: `options.brainstorming_enabled: true` but `alternatives-generated` is missing, OR `outputs/solution-exploration.md` is missing → brainstorm has not produced alternatives yet. Print the blocked block (`→ /owflow:research-brainstorm <task-path>`), then STOP. Do NOT treat a missing slug as a skip.
-5. **Skip/resume (per-area partial resume)**: if `approaches-chosen` is in `completed_phases`, validate every `phase_summaries.converge.decision_areas` entry carries `chosen_approach` — all resolve → report the existing chosen combination and route to the Exit Gate; any area unresolved → re-ask ONLY the unresolved areas below. Also — even WITHOUT the slug — skip any area whose `decision_areas` entry already carries `chosen_approach`; only unresolved areas are ever asked.
+2. **Prerequisite check**: `synthesis-complete` AND `alternatives-generated` must be in `completed_phases`, and `outputs/solution-exploration.md` must exist. If missing → print the blocked block, then STOP:
+   - `Run /owflow:research-brainstorm <task-path> first` (or the command for the earliest missing earlier step: `/owflow:research-plan`, `/owflow:research-gather`, or `/owflow:research-synthesize`).
+3. **Skip/resume (per-area partial resume)**: if `approaches-chosen` is in `completed_phases`, validate every `phase_summaries.converge.decision_areas` entry carries `chosen_approach` — all resolve → report the existing chosen combination and route to the Exit Gate; any area unresolved → re-ask ONLY the unresolved areas below. Also — even WITHOUT the slug — skip any area whose `decision_areas` entry already carries `chosen_approach`; only unresolved areas are ever asked.
 
 ## Execute (direct interactive — per-area convergence)
 
@@ -101,7 +98,7 @@ Present results, get user confirmation, then hand off (see [Gate Contract](../or
 **Decision areas** — [N areas resolved]
 **Chosen combination** — [area: choice, one line per area]
 **Deferred ideas** — [one line each / none]
-**Design decision** — [feeds into design as `selected_approach` / design disabled]
+**Design decision** — [feeds into design as `selected_approach` / no design planned]
 
 **Artifacts**
 
@@ -119,7 +116,7 @@ Use `question` — "Are these results correct?" with options:
 
 ### Next steps (after Accept)
 
-- `options.design_enabled: true` → `→ /owflow:research-design <task-path>` — `required` next: Part A asks design preferences, Part B delegates the solution-designer with the chosen combination as `selected_approach`, Part D refines diagrams. Remaining after: finalize.
-- `options.design_enabled: false` → `→ /owflow:research-finalize <task-path>` — `required` next: inventories the research outputs and completes the task (`research-completed`). Remaining after: none.
+- `→ /owflow:research-design <task-path>` — when the user wants high-level design: Part A asks design preferences, Part B delegates the solution-designer with the chosen combination as `selected_approach`, Part D refines diagrams. Remaining after: finalize.
+- `→ /owflow:research-finalize <task-path>` — when no design is wanted: inventories the research outputs and completes the task (`research-completed`). Remaining after: none.
 
 Then STOP.

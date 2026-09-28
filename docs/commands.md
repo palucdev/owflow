@@ -77,18 +77,18 @@ Research is split the same way as development: `/research` is the workflow **dis
 
 | Command                       | Purpose                                                      |
 | ----------------------------- | ------------------------------------------------------------ |
-| `/research [task description \| task-path] [--from=<slug>] [--brainstorm\|--no-brainstorm] [--design\|--no-design] [--type=<type>]` | Start or resume a research task; hands off to the next subskill |
-| `/research-plan [task-path-or-identifier \| "description"] [--quick]` | Research brief, methodology selection, and research plan with a parsable Gathering Strategy |
+| `/research [task description \| task-path] [--from=<slug>] [--type=<type>]` | Start or resume a research task; hands off to the next subskill |
+| `/research-plan [task-path-or-identifier \| "description"]` | Research brief, methodology selection, and research plan with a parsable Gathering Strategy |
 | `/research-gather [task-path-or-identifier]` | Parallel findings fan across multiple source categories |
 | `/research-synthesize [task-path-or-identifier]` | Synthesis and the evidence-based research report with per-finding confidence |
-| `/research-scope [task-path-or-identifier] [--brainstorm\|--no-brainstorm] [--design\|--no-design]` | Optional-phase decision — writes the `--brainstorm` and `--design` enablement flags in state |
-| `/research-brainstorm [task-path-or-identifier]` | Solution-alternative brainstorming (conditional) |
-| `/research-converge [task-path-or-identifier]` | Per-area approach decisions over the alternatives (conditional) |
-| `/research-design [task-path-or-identifier]` | High-level design with decision log (conditional) |
+| `/research-brainstorm [task-path-or-identifier]` | Solution-alternative brainstorming (optional — invoking it IS the decision) |
+| `/research-converge [task-path-or-identifier]` | Per-area approach decisions over the alternatives (after brainstorming) |
+| `/research-design [task-path-or-identifier]` | High-level design with decision log (optional — invoking it IS the decision) |
 | `/research-finalize [task-path-or-identifier]` | Inventory of research outputs, confirmation, completion |
-| `/goal-research [task description \| task-path] [--from=<slug>] [--brainstorm\|--no-brainstorm] [--design\|--no-design] [--type=<type>]` | Autonomous mode — runs every subskill in one session with question gates |
+| `/research-quick "description"` | Quick lane — condensed brief, plan, gather, and synthesis in one pass |
+| `/goal-research [task description \| task-path] [--from=<slug>] [--type=<type>]` | Autonomous mode — runs every subskill in one session with question gates |
 
-Every `research-*` subskill resolves its task from a full path or just the directory identifier under `.owflow/tasks/research/`, validates prerequisites from state, and stops with the ordered prerequisite steps when something is missing — it never auto-picks a task. `--from` takes a step slug (e.g. `/research --from=plan-created .owflow/tasks/research/<task>`), not a phase number; slugs: `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `options-resolved`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. Quick lane starts only via `/research-plan --quick "<description>"` — a condensed pass that fuses brief, plan, gather, and synthesis, continuable by any research subskill.
+Every `research-*` subskill resolves its task from a full path or just the directory identifier under `.owflow/tasks/research/`, validates prerequisites from state, and stops with the ordered prerequisite steps when something is missing — it never auto-picks a task. `--from` takes a step slug (e.g. `/research --from=plan-created .owflow/tasks/research/<task>`), not a phase number; slugs: `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. The optional brainstorm/design chain has no flags — invoking `research-brainstorm` or `research-design` is the decision to run it (`goal-research` asks at the gate after synthesis). Quick lane starts only via `/research-quick "<description>"` — a condensed pass that fuses brief, plan, gather, and synthesis, continuable by any research subskill.
 
 Research output can feed into development: `/development --research=.owflow/tasks/research/...`
 

@@ -1,7 +1,7 @@
 ---
 name: owflow:research
 description: Research workflow dispatcher. Initializes/resumes research tasks, derives the next step from state, and hands off to the matching /owflow:research-* subskill. Handles comprehensive research and analysis — technical, requirements, literature, and mixed research types with adaptive methodology, multi-source gathering, pattern synthesis, and evidence-based artifact outputs (findings documentation). Supports standalone research tasks and embedded research phases feeding development workflows. Use /owflow:goal-research to run all phases in one session.
-argument-hint: "[task description | task-path] [--from=<slug>] [--brainstorm|--no-brainstorm] [--design|--no-design] [--type=<type>]"
+argument-hint: "[task description | task-path] [--from=<slug>] [--type=<type>]"
 user-invocable: true
 ---
 
@@ -9,7 +9,7 @@ user-invocable: true
 
 Entry point for research tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:research-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
 
-Research state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `options-resolved`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. The routing table below maps slugs to subskills.
+Research state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. The routing table below maps slugs to subskills.
 
 For the all-in-one loop with in-session `question` gates, use `/owflow:goal-research`.
 
@@ -46,10 +46,8 @@ Gates follow the shared contract in the [Gate Contract](../orchestrator-framewor
 1. **Create Task Directory**: `.owflow/tasks/research/YYYY-MM-DD-task-name/` (3-5 kebab-case words from the question)
 2. **Initialize State**: create `orchestrator-state.yml` from the research template — `task.title` / `task.description` from the question, `task.status: in_progress`, `orchestrator.task_path`, `orchestrator.entry_point: "research"` (template/bootstrap mechanic)
    - **CRITICAL**: use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-research.yml`.
-3. **Create Task Items**: use `TaskCreate` for the research steps (one item per subskill handoff), then set the execution order with `TaskUpdate addBlockedBy` (plan → gather → synthesize → scope → enabled optional chain → finalize). On resume, refresh the already-evidenced items instead of re-creating them.
-4. **Command flags**: `--brainstorm` / `--no-brainstorm` and `--design` / `--no-design` → write to `options.*` in state; `--type=TYPE` → `research_context.research_type`. Subskills read them from there.
-
-> **In-flight cutover**: tasks initialized before the slug re-key carry `phase-N`-keyed state, which this dispatcher does not parse into step slugs. Resume those tasks from their existing artifacts via `/owflow:research-plan <task-path>` — that skill adds the missing template keys and adopts slugs from artifacts — or start fresh with `/owflow:research <question>`.
+3. **Create Task Items**: use `TaskCreate` for the research steps (one item per subskill handoff), then set the execution order with `TaskUpdate addBlockedBy` (plan → gather → synthesize → optional chain (user choice) → finalize). On resume, refresh the already-evidenced items instead of re-creating them.
+4. **Command flags**: `--type=TYPE` → `research_context.research_type`. Subskills read it from there.
 
 **Output**:
 
@@ -94,25 +92,19 @@ Derive the FIRST step slug not in `completed_phases`, then print the matching co
 | Next step (slug)                                              | Condition (from state)                                                                                          | Handoff command                          | Produces                                                   |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
 | Brief + plan (`brief-written`, `plan-created`)                 | Always (new task or partial foundation)                                                                          | `/owflow:research-plan <task-path>`      | `planning/research-brief.md`, `research-plan.md`, `sources.md` |
-| Gather (`findings-gathered`)                                  | `plan-created` completed (gather parses `## Gathering Strategy`, or falls back to 4 default categories); quick-authored findings count as done | `/owflow:research-gather <task-path>`    | `analysis/findings/*.md`                                    |
+| Gather (`findings-gathered`)                                  | `plan-created` completed (gather parses `## Gathering Strategy`, or falls back to 4 default categories)           | `/owflow:research-gather <task-path>`    | `analysis/findings/*.md`                                    |
 | Synthesize (`synthesis-complete`)                             | `findings-gathered` completed                                                                                    | `/owflow:research-synthesize <task-path>` | `analysis/synthesis.md`, `outputs/research-report.md`       |
-| Optional-phase decision (`options-resolved`)                  | `synthesis-complete` completed                                                                                   | `/owflow:research-scope <task-path>`     | none (writes both `options.*` flags in state)               |
-| Brainstorm (`alternatives-generated`)                         | `options.brainstorming_enabled: true` (after `options-resolved`)                                                 | `/owflow:research-brainstorm <task-path>` | `outputs/solution-exploration.md`                           |
+| Optional chain (user choice)                                  | `synthesis-complete` completed — ask via `question` whether to brainstorm, design, or finalize; hand off to the chosen subskill | `/owflow:research-brainstorm` / `/owflow:research-design` / `/owflow:research-finalize <task-path>` | user's chain decision |
+| Brainstorm (`alternatives-generated`)                         | User chose brainstorming (invoking the skill IS the decision)                                                    | `/owflow:research-brainstorm <task-path>` | `outputs/solution-exploration.md`                           |
 | Converge (`approaches-chosen`)                                | `alternatives-generated` completed (brainstorm ran)                                                              | `/owflow:research-converge <task-path>`  | per-area `chosen_approach` in state (`phase_summaries.converge`) |
-| Design (`design-generated`)                                   | `options.design_enabled: true` (after `approaches-chosen`, or the design-only branch)                            | `/owflow:research-design <task-path>`    | `outputs/high-level-design.md`, `outputs/decision-log.md`   |
-| Finalization (`research-completed`)                           | Foundation complete + optional chain resolved (all enabled parts done)                                           | `/owflow:research-finalize <task-path>`  | task completed (`task.status: completed`)                   |
+| Design (`design-generated`)                                   | User chose design — after `approaches-chosen`, or as the design-only branch (seeded from the research report)     | `/owflow:research-design <task-path>`    | `outputs/high-level-design.md`, `outputs/decision-log.md`   |
+| Finalization (`research-completed`)                           | Foundation complete + optional chain settled (every step the user chose to run is recorded)                      | `/owflow:research-finalize <task-path>`  | task completed (`task.status: completed`)                   |
 
-The optional chain is SKIPPED per its enablement flags — the three remaining-path shapes after `options-resolved`:
-
-- `brainstorming_enabled: true` → brainstorm → converge → design (when `design_enabled: true`) → finalize.
-- `brainstorming_enabled: false` AND `design_enabled: true` (design-only) → skip the brainstorm rows → `/owflow:research-design`.
-- Both disabled → skip to `/owflow:research-finalize`.
-
-**A flag set to `false` means that step is settled, not pending** — including when a subskill flipped its own flag after a user-chosen skip. A row whose enablement flag is `false` never becomes the "first missing slug" again, and no missing slug blocks a terminal step: `research-finalize` accepts a task whose enabled steps are all recorded regardless of the unused ones.
+The optional chain is the user's choice — there is no enablement flag in state and no separate decision step. When the user invokes `research-brainstorm` or `research-design`, that invocation IS the decision to run it; when they skip to `research-finalize`, the chain is settled as skipped. After `synthesis-complete` the dispatcher asks which way to go (brainstorm → converge → design, design-only, or straight to finalize).
 
 `research-completed` already in `completed_phases` → the task is TERMINAL: no handoff.
 
-This dispatcher never starts or forwards `--quick`. An interrupted quick task (`entry_point: "research-plan --quick"`, `synthesis-complete` not yet recorded) resumes at full fidelity for the missing pieces. To finish that pass condensed, the user runs `/owflow:research-plan --quick <task-path>` directly.
+This dispatcher never starts or forwards quick runs. An interrupted quick task (`entry_point: "research-quick"`, `synthesis-complete` not yet recorded) resumes at full fidelity for the missing pieces via the matching subskills. To finish that pass condensed, the user runs `/owflow:research-quick <task-path>` directly.
 
 References moved into their owning subskills (read there, not here): `research-methodologies.md` lives in `research-plan/references/`, `brainstorming-techniques.md` in `research-brainstorm/references/`, `design-techniques.md` in `research-design/references/`.
 
@@ -208,7 +200,7 @@ Other options:
 
 > This is documentation for parent-orchestrator authors, NOT an execution path of this dispatcher: nothing here auto-invokes a parent, and no research subskill chains into development or migration steps.
 
-In the split family, a parent orchestrator (development, migration) that needs research sequences the research subskills directly via the Skill tool — plan → gather → synthesize → scope (+ the enabled optional chain) — and SKIPS `research-finalize`-style completion: the parent handles next steps and keeps control of the flow. Design artifacts feed the parent's specification phase; the research report is saved in the parent task's `analysis/research/` context per the parent's own state setup.
+In the split family, a parent orchestrator (development, migration) that needs research sequences the research subskills directly via the Skill tool — plan → gather → synthesize → the optional chain as chosen by the user — and SKIPS `research-finalize`-style completion: the parent handles next steps and keeps control of the flow. Design artifacts feed the parent's specification phase; the research report is saved in the parent task's `analysis/research/` context per the parent's own state setup.
 
 **Handoff fields the parent reads**: refer to `research_outputs.*` in the template [src/templates/orchestrator-state-research.yml](../../templates/orchestrator-state-research.yml).
 
@@ -228,10 +220,8 @@ Retries are owned by each subskill (each `/owflow:research-*` SKILL.md carries i
 | --------------------------------- | ------------------------------------------------------------------------------------ |
 | `--from=<slug>`                   | Hand off (resume mode) from a specific step slug                                     |
 | `--type=<type>`                   | Force the research type classification ("technical \| requirements \| literature \| mixed") |
-| `--brainstorm` / `--no-brainstorm` | Force/skip the optional brainstorming chain (auto-resolves the scope decision)       |
-| `--design` / `--no-design`        | Force/skip high-level design                                                         |
 
-There is deliberately NO `--quick` on this dispatcher — condensed quick starts go through `/owflow:research-plan --quick`, which this routing table honors on the `research-plan` rows.
+There is deliberately NO quick entry on this dispatcher — condensed quick starts go through `/owflow:research-quick`, whose artifacts this routing table honors on every row.
 
 ---
 
@@ -239,7 +229,7 @@ There is deliberately NO `--quick` on this dispatcher — condensed quick starts
 
 Invoked via:
 
-- `/owflow:research [question] [--type=TYPE] [--brainstorm|--no-brainstorm] [--design|--no-design]` (new)
+- `/owflow:research [question] [--type=TYPE]` (new)
 - `/owflow:research [task-path] [--from=<slug>]` (resume)
 
 Alternative: `/owflow:goal-research <task-path>` — same task lifecycle, all subskills invoked in one session with `question` gates.

@@ -1,6 +1,6 @@
 ---
 name: owflow:research-synthesize
-description: Research skill — delegates synthesis and evidence-based reporting to the research-synthesizer agent, producing the synthesis document and the comprehensive research report with per-finding confidence. Closes the research foundation (synthesis-complete) at the boundary with the optional-phase evaluation, continuing with research-scope.
+description: Research skill — delegates synthesis and evidence-based reporting to the research-synthesizer agent, producing the synthesis document and the comprehensive research report with per-finding confidence. Closes the research foundation (synthesis-complete) at the boundary with the optional chain (user choice).
 argument-hint: "[task-path-or-identifier]"
 ---
 

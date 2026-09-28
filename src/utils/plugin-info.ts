@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const PLUGIN_ROOT = __dirname; // Points to dist/ where skills/commands/agents are copied
+export const PLUGIN_ROOT = path.join(__dirname, ".."); // Points to dist/ where skills/commands/agents are copied
 
 const UNKNOWN_VERSION = "unknown";
 

@@ -1,6 +1,5 @@
 orchestrator:
   started_phase: null
-  entry_point: null
   completed_phases: []
   failed_phases: []
   auto_fix_attempts:
@@ -12,20 +11,18 @@ orchestrator:
     approaches-chosen: 0
     design-generated: 0
     research-completed: 0
-  created: "YYYY-MM-DDTHH:MM:SSZ"
-  updated: "YYYY-MM-DDTHH:MM:SSZ"
+  created: "2026-01-01T00:00:00Z"
+  updated: "2026-01-01T00:00:00Z"
   task_path: null
   task_ids: {}
-
 task:
   title: null
   description: null
   status: pending
   tags: []
   priority: null
-
 research_context:
-  research_type: "technical | requirements | literature | mixed"
+  research_type: technical
   research_question: null
   scope:
     included: []
@@ -33,11 +30,11 @@ research_context:
     constraints: []
   methodology: []
   sources: []
-  confidence_level: "high | medium | low"
+  confidence_level: high
   gathering_strategy:
     categories: []
     count: 0
-    source: "planner | default"
+    source: default
   project_doc_paths: []
   phase_summaries:
     plan:
@@ -57,7 +54,6 @@ research_context:
       summary: null
       architecture_style: null
       decisions_count: 0
-
 research_outputs:
   research_report: null
   findings_directory: null

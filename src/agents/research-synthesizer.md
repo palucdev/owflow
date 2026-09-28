@@ -400,4 +400,4 @@ Combine relevant elements from above frameworks based on research objectives.
 
 **State Update**: The calling subskill records `synthesis-complete`
 
-**Next Step**: `owflow:research-scope` evaluates brainstorming and design value, then the optional chain runs
+**Next Step**: the user chooses the optional chain (brainstorm / design) or `owflow:research-finalize` completes the task
