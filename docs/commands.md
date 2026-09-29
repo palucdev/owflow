@@ -73,7 +73,7 @@ Starts migration workflow (8 phases) with mandatory rollback planning and risk a
 
 ## Research
 
-Research is split the same way as development: `/research` is the workflow **dispatcher** (assisted mode) that initializes/resumes the task, derives the next step from state, and hands off to a standalone `research-*` subskill. Each subskill runs in a fresh context. Research tasks use descriptive step slugs in `completed_phases` (see [Workflow Details](workflows.md) for the full flow).
+Research is split the same way as development: `/research` is the workflow **dispatcher** (assisted mode) that initializes/resumes the task, derives the next step from state, and hands off to a standalone `research-*` subskill. Running a subskill in a fresh context is recommended, but it is up to the user to choose. Research tasks use descriptive step slugs in `completed_phases` (see [Workflow Details](workflows.md) for the full flow).
 
 | Command                       | Purpose                                                      |
 | ----------------------------- | ------------------------------------------------------------ |

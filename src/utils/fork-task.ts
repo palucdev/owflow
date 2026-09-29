@@ -36,7 +36,7 @@ export interface ForkTaskResult {
 export interface ForkStepAssets {
   /** Dot-paths into the state that are reset to their template values when the step is dropped */
   stateResets: string[];
-  /** Task-directory-relative paths (files or directories) excluded from the copy */
+  /** Task-directory-relative paths (files or directories) copied when the step is kept */
   artifacts: string[];
 }
 
@@ -55,11 +55,11 @@ export const RESEARCH_STEP_ORDER = [
 export type ResearchStepSlug = (typeof RESEARCH_STEP_ORDER)[number];
 
 /**
- * Fork contract: what each dropped research step takes with it.
+ * Fork contract: what each research step takes with it when dropped.
  * - state fields are reset to their template values (prevents downstream
  *   skip/resume adoption of pre-fork results — e.g. research-converge's
  *   per-area partial resume reading phase_summaries.converge.decision_areas)
- * - artifacts are excluded from the copy (the source keeps them; the fork starts clean)
+ * - artifacts are not copied (the source keeps them; the fork starts clean)
  */
 export const RESEARCH_STEP_ASSETS: Record<ResearchStepSlug, ForkStepAssets> = {
   "brief-written": {
@@ -139,16 +139,11 @@ export const FORK_TERMINAL_STEP: ResearchStepSlug = "research-completed";
 const asStringList = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 
-const toPosix = (p: string): string => p.split(path.sep).join("/");
-
 const utcTimestamp = (d: Date): string =>
   d.toISOString().replace(/\.\d{3}Z$/, "Z");
 
-/**
- * Resolves a value at a dot path inside an object; undefined when the path
- * does not exist or passes through a non-object node.
- */
-export const valueAtPath = (root: any, fieldPath: string): unknown => {
+/** Reads the value at a dot path; undefined when the path does not exist. */
+const valueAtPath = (root: any, fieldPath: string): unknown => {
   let node = root;
   for (const part of fieldPath.split(".")) {
     if (!node || typeof node !== "object" || Array.isArray(node)) return undefined;
@@ -157,17 +152,7 @@ export const valueAtPath = (root: any, fieldPath: string): unknown => {
   return node;
 };
 
-/**
- * Deduplicated union of state-reset dot paths for the dropped steps.
- */
-export const collectDroppedStateResets = (droppedSteps: string[]): string[] =>
-  droppedSteps
-    .flatMap(
-      (slug) =>
-        RESEARCH_STEP_ASSETS[slug as ResearchStepSlug]?.stateResets ?? [],
-    )
-    .filter((value, index, all) => all.indexOf(value) === index);
-
+/** Writes a value at a dot path; silently skips paths whose parents are missing. */
 const setValueAtPath = (root: any, fieldPath: string, value: unknown): void => {
   const parts = fieldPath.split(".");
   let node = root;
@@ -179,20 +164,9 @@ const setValueAtPath = (root: any, fieldPath: string, value: unknown): void => {
   if (leaf !== undefined) node[leaf] = value;
 };
 
-const walkFiles = (dir: string): string[] => {
-  if (!fs.existsSync(dir)) return [];
-  const out: string[] = [];
-  for (const entry of fs.readdirSync(dir)) {
-    const abs = path.join(dir, entry);
-    if (fs.statSync(abs).isDirectory()) out.push(...walkFiles(abs));
-    else out.push(abs);
-  }
-  return out;
-};
-
 /**
- * Validates the source task and fork point, copies the task while excluding
- * dropped-step artifacts, and rewrites the forked state file.
+ * Validates the source task and fork point, copies the kept-step artifacts
+ * (files or directories, recursively), and rewrites the forked state file.
  */
 export const forkResearchTask = (input: ForkTaskInput): ForkTaskResult => {
   const cwd = input.cwd ?? process.cwd();
@@ -261,6 +235,10 @@ export const forkResearchTask = (input: ForkTaskInput): ForkTaskResult => {
   }
 
   const forkPointIndex = RESEARCH_STEP_ORDER.indexOf(input.from as ResearchStepSlug);
+  const keptSteps = completed.filter((slug) => {
+    const idx = RESEARCH_STEP_ORDER.indexOf(slug as ResearchStepSlug);
+    return idx !== -1 && idx <= forkPointIndex;
+  });
   const droppedSteps = RESEARCH_STEP_ORDER.slice(forkPointIndex + 1).filter(
     (slug) => completed.includes(slug),
   );
@@ -273,28 +251,20 @@ export const forkResearchTask = (input: ForkTaskInput): ForkTaskResult => {
     );
   }
 
-  // Paths NEVER created in the fork: dropped-step artifacts + the source state
-  // file (the fork gets a freshly rewritten state instead).
-  const excludedSourcePaths = new Set<string>([
-    statePath,
-    ...droppedSteps.flatMap(
-      (slug) =>
-        RESEARCH_STEP_ASSETS[slug as ResearchStepSlug].artifacts.map((rel) =>
-          path.join(sourceDir, rel),
-        ),
-    ),
-  ]);
-  const isExcluded = (candidate: string): boolean =>
-    [...excludedSourcePaths].some(
-      (excluded) => candidate === excluded || candidate.startsWith(excluded + path.sep),
-    );
+  // Copy only the kept history: the artifacts of steps up to the fork point,
+  // each copied recursively (files or directories). The state file is written
+  // separately below.
+  fs.mkdirSync(forkPath, { recursive: true });
+  for (const step of keptSteps) {
+    for (const rel of RESEARCH_STEP_ASSETS[step as ResearchStepSlug].artifacts) {
+      const src = path.join(sourceDir, rel);
+      if (fs.existsSync(src)) {
+        fs.cpSync(src, path.join(forkPath, rel), { recursive: true });
+      }
+    }
+  }
 
-  fs.cpSync(sourceDir, forkPath, {
-    recursive: true,
-    filter: (src) => !isExcluded(src),
-  });
-
-  // Rewrite the state from the in-memory source state (never the copied file)
+  // Rewrite the state from the in-memory source state (never a copied file)
   const templatePath = path.join(
     input.templatesPath
       ? path.resolve(cwd, input.templatesPath)
@@ -332,11 +302,6 @@ export const forkResearchTask = (input: ForkTaskInput): ForkTaskResult => {
     );
   }
 
-  const keptSteps = completed.filter((slug) => {
-    const idx = RESEARCH_STEP_ORDER.indexOf(slug as ResearchStepSlug);
-    return idx !== -1 && idx <= forkPointIndex;
-  });
-
   return {
     forkPath,
     forkName,
@@ -356,7 +321,7 @@ const describeExcludedArtifacts = (
       const abs = path.join(sourceDir, rel);
       const isDir =
         fs.existsSync(abs) && fs.statSync(abs).isDirectory();
-      return toPosix(rel) + (isDir ? "/" : "");
+      return rel + (isDir ? "/" : "");
     }),
   );
 
@@ -389,11 +354,14 @@ function rewriteForkedState(
   forkState.orchestrator.task_ids = {};
   forkState.orchestrator.created = now;
   forkState.orchestrator.updated = now;
-  forkState.orchestrator.task_path = toPosix(path.relative(cwd, forkPath));
+  forkState.orchestrator.task_path = path
+    .relative(cwd, forkPath)
+    .split(path.sep)
+    .join("/");
   forkState.orchestrator.options = {
     ...(forkState.orchestrator.options ?? {}),
     fork_information: {
-      forked_from: toPosix(path.relative(cwd, sourceDir)),
+      forked_from: path.relative(cwd, sourceDir).split(path.sep).join("/"),
       fork_point: forkPoint,
       forked_at: now,
       executed_steps: [...forkState.orchestrator.completed_phases],
@@ -404,29 +372,17 @@ function rewriteForkedState(
   const droppedSteps = RESEARCH_STEP_ORDER.slice(forkPointIndex + 1).filter(
     (slug) => completed.includes(slug),
   );
-  for (const [fieldPath, templateValue] of resolveTemplateValues(
-    template,
-    collectDroppedStateResets(droppedSteps),
-  )) {
-    setValueAtPath(forkState, fieldPath, structuredClone(templateValue));
+  const droppedResets = droppedSteps.flatMap(
+    (slug) => RESEARCH_STEP_ASSETS[slug as ResearchStepSlug]?.stateResets ?? [],
+  );
+  for (const fieldPath of droppedResets) {
+    const templateValue = valueAtPath(template, fieldPath);
+    if (templateValue !== undefined) {
+      setValueAtPath(forkState, fieldPath, structuredClone(templateValue));
+    }
   }
 
   // A fork is an in-progress task again — even when research-completed was dropped
   forkState.task.status = "in_progress";
   forkState.task.title = `${forkState.task.title ?? "Research fork"} (fork of ${path.basename(sourceDir)})`;
 }
-
-/**
- * Resolves each state-reset dot path against the state template, producing
- * (path, templateValue) pairs — only paths the template actually defines.
- */
-const resolveTemplateValues = (
-  template: any,
-  resets: string[],
-): Array<[string, unknown]> =>
-  resets.flatMap((fieldPath) => {
-    const templateValue = valueAtPath(template, fieldPath);
-    return templateValue === undefined
-      ? []
-      : [[fieldPath, templateValue] as [string, unknown]];
-  });

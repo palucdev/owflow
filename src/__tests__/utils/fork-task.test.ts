@@ -6,7 +6,6 @@ import yaml from "yaml";
 
 import {
   forkResearchTask,
-  collectDroppedStateResets,
   RESEARCH_STEP_ORDER,
   RESEARCH_STEP_ASSETS,
   RESEARCH_SLUG_PATTERN,
@@ -189,6 +188,14 @@ describe("forkResearchTask", () => {
     expect(fs.existsSync(path.join(forkPath, "_archive"))).toBe(false);
     // source untouched
     expect(fs.existsSync(path.join(source, "outputs", "solution-exploration.md"))).toBe(true);
+  });
+
+  test("whitelist copy: stray files in the source task are not copied", () => {
+    const source = createSourceTask(baseState({}));
+    fs.writeFileSync(path.join(source, "stray-notes.txt"), "junk", "utf8");
+
+    const result = fork({});
+    expect(fs.existsSync(path.join(result.forkPath, "stray-notes.txt"))).toBe(false);
   });
 
   test("forked state file: merged rewrite + dropped-step resets + template structure + preserved research-type", () => {
@@ -408,20 +415,6 @@ describe("forkResearchTask", () => {
 });
 
 describe("fork contract helpers", () => {
-  test("collectDroppedStateResets deduplicates and honors the full dropped chain", () => {
-    const resets = collectDroppedStateResets([
-      "alternatives-generated",
-      "approaches-chosen",
-      "design-generated",
-      "research-completed",
-    ]);
-    expect(resets).toContain("research_context.phase_summaries.brainstorm");
-    expect(resets).toContain("research_context.phase_summaries.converge.decision_areas");
-    expect(resets).toContain("research_outputs.decision_log");
-    const unique = new Set(resets);
-    expect(unique.size).toBe(resets.length);
-  });
-
   test("step assets cover every research step", () => {
     for (const slug of RESEARCH_STEP_ORDER) {
       expect(RESEARCH_STEP_ASSETS[slug]).toBeDefined();

@@ -7,11 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("verify_template tool", () => {
   const templatesDir = path.join(__dirname, "../../templates");
-  // Static fixtures committed to the repo: mock target files live in
-  // fixtures/verify-template/, mock reference templates in its templates/ subdir.
   const fixturesDir = path.join(__dirname, "../fixtures/verify-template");
-  // Reference templates resolve relative to src/templates; the traversal keeps
-  // the test-only mock templates out of the shipped dist/templates.
   const testTemplateName = "../__tests__/fixtures/verify-template/templates/test-template.yml";
 
   describe("general tool behavior", () => {
@@ -37,11 +33,11 @@ describe("verify_template tool", () => {
 
     test("should return error if target file has invalid YAML syntax", async () => {
       const result = await verify_template.execute(
-        { filePath: "invalid-target.yml", templateName: testTemplateName },
+        { filePath: "templates/invalid-template.yml", templateName: testTemplateName },
         { directory: fixturesDir } as any,
       );
       expect((result as any).output).toContain(
-        "YAML Syntax Error in invalid-target.yml",
+        "YAML Syntax Error in templates/invalid-template.yml",
       );
     });
 
