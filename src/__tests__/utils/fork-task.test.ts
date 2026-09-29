@@ -4,16 +4,10 @@ import path from "node:path";
 import os from "node:os";
 import yaml from "yaml";
 
-import {
-  forkResearchTask,
-  RESEARCH_STEP_ORDER,
-  RESEARCH_STEP_ASSETS,
-  RESEARCH_SLUG_PATTERN,
-} from "../../utils/fork-task.js";
+import { forkTask, RESEARCH_SLUG_PATTERN } from "../../utils/fork-task.js";
 
 let tmpDir: string;
 let taskRoot: string;
-let templatesPath: string;
 
 const writeState = (dir: string, state: any): void => {
   fs.mkdirSync(path.dirname(path.join(dir, "orchestrator-state.yml")), {
@@ -31,8 +25,6 @@ const baseState = (overrides: {
   status?: string;
   title?: string;
   entryPoint?: string;
-  converge?: any;
-  outputs?: any;
 }) => {
   const completed = overrides.completed ?? [
     "brief-written",
@@ -50,9 +42,7 @@ const baseState = (overrides: {
       entry_point: overrides.entryPoint ?? "research",
       completed_phases: completed,
       failed_phases: ["plan-created"],
-      auto_fix_attempts: Object.fromEntries(
-        RESEARCH_STEP_ORDER.map((slug) => [slug, slug === "plan-created" ? 2 : 0]),
-      ),
+      auto_fix_attempts: { "plan-created": 2 },
       options: {},
       created: "2026-01-01T00:00:00Z",
       updated: "2026-01-01T00:00:00Z",
@@ -63,7 +53,7 @@ const baseState = (overrides: {
       title: overrides.title ?? "Evaluate caching strategies",
       description: "Research question",
       status: overrides.status ?? "completed",
-      tags: [research_tag()],
+      tags: ["research"],
       priority: "high",
     },
     research_context: {
@@ -84,7 +74,7 @@ const baseState = (overrides: {
         gather: { summary: "gathered" },
         synthesize: { summary: "synthesized" },
         brainstorm: { summary: "brainstormed" },
-        converge: overrides.converge ?? {
+        converge: {
           summary: "converged",
           decision_areas: [
             { area: "cache-topology", chosen_approach: "write-through" },
@@ -94,7 +84,7 @@ const baseState = (overrides: {
         design: { summary: "designed", architecture_style: "layered", decisions_count: 3 },
       },
     },
-    research_outputs: overrides.outputs ?? {
+    research_outputs: {
       research_report: "outputs/research-report.md",
       findings_directory: "analysis/findings",
       solution_exploration: "outputs/solution-exploration.md",
@@ -105,18 +95,14 @@ const baseState = (overrides: {
   };
 };
 
-const research_tag = (): string => "research";
-
 const createSourceTask = (state: any): string => {
   const source = path.join(taskRoot, "research", "2026-01-01-source-task");
   fs.mkdirSync(source, { recursive: true });
   writeState(source, state);
-  // Keep-step artifacts
   fs.mkdirSync(path.join(source, "planning"), { recursive: true });
   fs.writeFileSync(path.join(source, "planning", "research-brief.md"), "brief", "utf8");
   fs.writeFileSync(path.join(source, "planning", "research-plan.md"), "plan", "utf8");
   fs.writeFileSync(path.join(source, "planning", "sources.md"), "sources", "utf8");
-  // Dropped-step artifacts beyond synthesis
   fs.mkdirSync(path.join(source, "analysis", "findings"), { recursive: true });
   fs.writeFileSync(path.join(source, "analysis", "findings", "codebase-cache.md"), "f", "utf8");
   fs.writeFileSync(path.join(source, "analysis", "synthesis.md"), "s", "utf8");
@@ -125,170 +111,88 @@ const createSourceTask = (state: any): string => {
   fs.writeFileSync(path.join(source, "outputs", "solution-exploration.md"), "se", "utf8");
   fs.writeFileSync(path.join(source, "outputs", "high-level-design.md"), "hld", "utf8");
   fs.writeFileSync(path.join(source, "outputs", "decision-log.md"), "dl", "utf8");
+  fs.writeFileSync(path.join(source, "stray-notes.txt"), "junk", "utf8");
   return source;
 };
+
+const readForkState = (forkPath: string): any =>
+  yaml.parse(fs.readFileSync(path.join(forkPath, "orchestrator-state.yml"), "utf8"));
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-fork-test-"));
   taskRoot = path.join(tmpDir, ".owflow", "tasks");
-  templatesPath = path.resolve(__dirname, "../../templates");
 });
 
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-const fork = (overrides: Partial<Parameters<typeof forkResearchTask>[0]>) =>
-  forkResearchTask({
+const fork = (overrides: Partial<Parameters<typeof forkTask>[0]>) =>
+  forkTask({
     taskRoot: path.join(".owflow", "tasks"),
     source: "2026-01-01-source-task",
     slug: "fork-cache-alternative",
     from: "synthesis-complete",
-    templatesPath,
     cwd: tmpDir,
     ...overrides,
   });
 
-describe("forkResearchTask", () => {
-  test("fork at synthesis-complete keeps up-to-fork-point artifacts and drops the optional-chain ones", () => {
+describe("forkTask", () => {
+  test("copies the whole source directory verbatim and trims completed_phases at the fork point", () => {
     const source = createSourceTask(baseState({}));
     const result = fork({});
 
     expect(result.forkPoint).toBe("synthesis-complete");
-    expect(result.keptSteps).toEqual([
-      "brief-written",
-      "plan-created",
-      "findings-gathered",
-      "synthesis-complete",
-    ]);
-    expect(result.droppedSteps).toEqual([
-      "alternatives-generated",
-      "approaches-chosen",
-      "design-generated",
-      "research-completed",
-    ]);
-    expect(result.excludedArtifacts).toEqual([
-      "outputs/solution-exploration.md",
-      "outputs/high-level-design.md",
-      "outputs/decision-log.md",
-    ]);
+    expect(result.forkName).toBe(
+      `${new Date().toISOString().slice(0, 10)}-fork-cache-alternative`,
+    );
+    expect(result.forkPath).toBe(path.join(taskRoot, "research", result.forkName));
 
     const forkPath = result.forkPath;
-    // kept artifacts
     expect(fs.existsSync(path.join(forkPath, "planning", "research-brief.md"))).toBe(true);
     expect(fs.existsSync(path.join(forkPath, "planning", "research-plan.md"))).toBe(true);
     expect(fs.existsSync(path.join(forkPath, "planning", "sources.md"))).toBe(true);
     expect(fs.existsSync(path.join(forkPath, "analysis", "findings", "codebase-cache.md"))).toBe(true);
     expect(fs.existsSync(path.join(forkPath, "analysis", "synthesis.md"))).toBe(true);
     expect(fs.existsSync(path.join(forkPath, "outputs", "research-report.md"))).toBe(true);
-    // dropped artifacts are NOT copied (no archive dir either)
-    expect(fs.existsSync(path.join(forkPath, "outputs", "solution-exploration.md"))).toBe(false);
-    expect(fs.existsSync(path.join(forkPath, "outputs", "high-level-design.md"))).toBe(false);
-    expect(fs.existsSync(path.join(forkPath, "outputs", "decision-log.md"))).toBe(false);
-    expect(fs.existsSync(path.join(forkPath, "_archive"))).toBe(false);
+    expect(fs.existsSync(path.join(forkPath, "outputs", "solution-exploration.md"))).toBe(true);
+    expect(fs.existsSync(path.join(forkPath, "outputs", "high-level-design.md"))).toBe(true);
+    expect(fs.existsSync(path.join(forkPath, "outputs", "decision-log.md"))).toBe(true);
+    expect(fs.existsSync(path.join(forkPath, "stray-notes.txt"))).toBe(true);
+
     // source untouched
     expect(fs.existsSync(path.join(source, "outputs", "solution-exploration.md"))).toBe(true);
-  });
+    expect(fs.existsSync(path.join(source, "stray-notes.txt"))).toBe(true);
 
-  test("whitelist copy: stray files in the source task are not copied", () => {
-    const source = createSourceTask(baseState({}));
-    fs.writeFileSync(path.join(source, "stray-notes.txt"), "junk", "utf8");
-
-    const result = fork({});
-    expect(fs.existsSync(path.join(result.forkPath, "stray-notes.txt"))).toBe(false);
-  });
-
-  test("forked state file: merged rewrite + dropped-step resets + template structure + preserved research-type", () => {
-    createSourceTask(baseState({}));
-    const result = fork({});
-
-    const state = yaml.parse(
-      fs.readFileSync(path.join(result.forkPath, "orchestrator-state.yml"), "utf8"),
-    );
-
+    const state = readForkState(forkPath);
     expect(state.orchestrator.completed_phases).toEqual([
       "brief-written",
       "plan-created",
       "findings-gathered",
       "synthesis-complete",
     ]);
-    expect(state.orchestrator.entry_point).toBe("research-fork");
     expect(state.orchestrator.started_phase).toBeNull();
-    expect(state.orchestrator.task_path).toBe(result.forkPath.replace(/\\/g, "/").startsWith(tmpDir) ? path.relative(tmpDir, result.forkPath).split(path.sep).join("/") : state.orchestrator.task_path);
-    expect(state.orchestrator.task_ids).toEqual({});
-    expect(state.orchestrator.failed_phases).toEqual([]);
-    expect(state.orchestrator.auto_fix_attempts).toEqual(
-      Object.fromEntries(RESEARCH_STEP_ORDER.map((slug) => [slug, 0])),
-    );
-    expect(state.orchestrator.options.fork_information).toEqual({
-      forked_from: ".owflow/tasks/research/2026-01-01-source-task",
-      fork_point: "synthesis-complete",
-      forked_at: expect.any(String),
-      executed_steps: state.orchestrator.completed_phases,
-    });
+    expect(state.orchestrator.task_path).toBe(`.owflow/tasks/research/${result.forkName}`);
     expect(state.task.status).toBe("in_progress");
     expect(state.task.title).toContain("(fork of 2026-01-01-source-task)");
-
-    // dropped-step state fields reset to template values
-    expect(state.research_context.phase_summaries.brainstorm).toEqual({ summary: null });
-    expect(state.research_context.phase_summaries.converge).toEqual({
-      summary: null,
-      decision_areas: [],
-      deferred_ideas: [],
-    });
-    expect(state.research_context.phase_summaries.design).toEqual({
-      summary: null,
-      architecture_style: null,
-      decisions_count: 0,
-    });
-    expect(state.research_outputs.solution_exploration).toBeNull();
-    expect(state.research_outputs.high_level_design).toBeNull();
-    expect(state.research_outputs.decision_log).toBeNull();
-
-    // kept-step state fields preserved
-    expect(state.research_context.research_type).toBe("mixed");
-    expect(state.research_context.research_question).toBe(
-      "Which cache invalidation approach fits our API?",
-    );
-    expect(state.research_context.gathering_strategy.count).toBe(2);
-    expect(state.research_outputs.research_report).toBe("outputs/research-report.md");
   });
 
-  test("fork at plan-created drops gather/synthesis/optional-chain state and artifacts", () => {
+  test("state beyond the fork point is carried verbatim — the resumed step overwrites it", () => {
     createSourceTask(baseState({}));
     const result = fork({ from: "plan-created" });
 
-    expect(result.droppedSteps).toEqual([
-      "findings-gathered",
-      "synthesis-complete",
-      "alternatives-generated",
-      "approaches-chosen",
-      "design-generated",
-      "research-completed",
-    ]);
-    expect(result.excludedArtifacts).toContain("analysis/findings/");
-    expect(result.excludedArtifacts).toContain("analysis/synthesis.md");
-    expect(result.excludedArtifacts).toContain("outputs/research-report.md");
-
-    const state = yaml.parse(
-      fs.readFileSync(path.join(result.forkPath, "orchestrator-state.yml"), "utf8"),
-    );
+    const state = readForkState(result.forkPath);
     expect(state.orchestrator.completed_phases).toEqual(["brief-written", "plan-created"]);
-    expect(state.research_context.gathering_strategy.categories).toEqual([]);
-    expect(state.research_outputs.synthesis).toBeNull();
-    expect(fs.existsSync(path.join(result.forkPath, "analysis", "findings"))).toBe(false);
-    expect(fs.existsSync(path.join(result.forkPath, "analysis", "synthesis.md"))).toBe(false);
+    expect(state.research_context.phase_summaries.converge.decision_areas).toHaveLength(1);
+    expect(state.research_outputs.synthesis).toBe("analysis/synthesis.md");
+    expect(fs.existsSync(path.join(result.forkPath, "analysis", "synthesis.md"))).toBe(true);
   });
 
-  test("late fork at design-generated keeps ALL artifacts including design outputs", () => {
+  test("fork at design-generated keeps the full chain minus research-completed", () => {
     createSourceTask(baseState({}));
     const result = fork({ from: "design-generated" });
 
-    expect(result.droppedSteps).toEqual(["research-completed"]);
-    expect(result.excludedArtifacts).toEqual([]);
-    const state = yaml.parse(
-      fs.readFileSync(path.join(result.forkPath, "orchestrator-state.yml"), "utf8"),
-    );
+    const state = readForkState(result.forkPath);
     expect(state.orchestrator.completed_phases).toEqual([
       "brief-written",
       "plan-created",
@@ -298,49 +202,22 @@ describe("forkResearchTask", () => {
       "approaches-chosen",
       "design-generated",
     ]);
-    // converge decisions were kept (chosen_approach intact for the design lineage)
-    expect(state.research_context.phase_summaries.converge.decision_areas).toHaveLength(1);
-    expect(state.research_outputs.decision_log).toBe("outputs/decision-log.md");
-    expect(fs.existsSync(path.join(result.forkPath, "outputs", "decision-log.md"))).toBe(true);
   });
 
-  test("fork at alternatives-generated resets converge AND design state but keeps brainstorm artifact", () => {
-    createSourceTask(baseState({}));
-    const result = fork({ from: "alternatives-generated" });
-
-    const state = yaml.parse(
-      fs.readFileSync(path.join(result.forkPath, "orchestrator-state.yml"), "utf8"),
-    );
-    expect(state.orchestrator.completed_phases).toEqual([
-      "brief-written",
-      "plan-created",
-      "findings-gathered",
-      "synthesis-complete",
-      "alternatives-generated",
-    ]);
-    expect(state.research_context.phase_summaries.converge.decision_areas).toEqual([]);
-    expect(state.research_outputs.solution_exploration).toBe(
-      "outputs/solution-exploration.md",
-    );
-    expect(fs.existsSync(path.join(result.forkPath, "outputs", "solution-exploration.md"))).toBe(true);
-    expect(fs.existsSync(path.join(result.forkPath, "outputs", "high-level-design.md"))).toBe(false);
-  });
-
-  test("fork on a fresh-looking source (no artifacts for dropped steps) still succeeds", () => {
+  test("source without synthesis-complete still forks at a completed step", () => {
     createSourceTask(
       baseState({
-        completed: [
-          "brief-written",
-          "plan-created",
-          "findings-gathered",
-          "synthesis-complete",
-        ],
+        completed: ["brief-written", "plan-created", "findings-gathered"],
         status: "in_progress",
       }),
     );
-    const result = fork({});
-    expect(result.droppedSteps).toEqual([]);
-    expect(result.excludedArtifacts).toEqual([]);
+    const result = fork({ from: "findings-gathered" });
+
+    expect(readForkState(result.forkPath).orchestrator.completed_phases).toEqual([
+      "brief-written",
+      "plan-created",
+      "findings-gathered",
+    ]);
   });
 
   test("identifier-only source resolves under .owflow/tasks/research/", () => {
@@ -349,23 +226,24 @@ describe("forkResearchTask", () => {
     expect(fs.existsSync(result.forkPath)).toBe(true);
   });
 
-  test("UNKNOWN_STEP: invalid slug and non-completed slug both blocked", () => {
+  test("UNKNOWN_STEP: invalid slug, terminal step, and non-completed slug all blocked", () => {
     createSourceTask(baseState({}));
 
     expect(() => fork({ from: "bogus-slug" })).toThrow(/UNKNOWN_STEP/);
-    // plan-created completed? yes — but research-completed always invalid
     expect(() => fork({ from: "research-completed" })).toThrow(/UNKNOWN_STEP/);
-    // not completed in source
-    const source = path.join(taskRoot, "research", "2026-01-01-source-task");
-    const state = baseState({
-      completed: [
-        "brief-written",
-        "plan-created",
-        "findings-gathered",
-        "synthesis-complete",
-      ],
-    });
-    writeState(source, state);
+
+    // not completed in the source
+    writeState(
+      path.join(taskRoot, "research", "2026-01-01-source-task"),
+      baseState({
+        completed: [
+          "brief-written",
+          "plan-created",
+          "findings-gathered",
+          "synthesis-complete",
+        ],
+      }),
+    );
     expect(() => fork({ from: "alternatives-generated" })).toThrow(/UNKNOWN_STEP/);
   });
 
@@ -380,7 +258,7 @@ describe("forkResearchTask", () => {
     );
   });
 
-  test("INVALID_SOURCE: missing dir, non-research dir, missing state, no synthesis", () => {
+  test("INVALID_SOURCE: missing dir, non-research dir, missing state", () => {
     createSourceTask(baseState({}));
 
     expect(() => fork({ source: "2026-01-01-does-not-exist" })).toThrow(
@@ -393,37 +271,17 @@ describe("forkResearchTask", () => {
     writeState(devTask, baseState({}));
     expect(() => fork({ source: path.join(devTask) })).toThrow(/INVALID_SOURCE/);
 
-    // directory without a state file (extra dir under research/ is fine for
-    // path resolution, but state check must fail)
+    // directory without a state file
     const emptyTask = path.join(taskRoot, "research", "2026-01-01-empty-task");
     fs.mkdirSync(emptyTask, { recursive: true });
     expect(() => fork({ source: "2026-01-01-empty-task" })).toThrow(
       /INVALID_SOURCE/,
     );
-
-    // completed without synthesis-complete
-    const halfTask = path.join(taskRoot, "research", "2026-01-01-half-task");
-    fs.mkdirSync(halfTask, { recursive: true });
-    writeState(
-      halfTask,
-      baseState({ completed: ["brief-written", "plan-created", "findings-gathered"] }),
-    );
-    expect(() => fork({ source: "2026-01-01-half-task" })).toThrow(
-      /INVALID_SOURCE.*synthesis-complete/,
-    );
   });
 });
 
-describe("fork contract helpers", () => {
-  test("step assets cover every research step", () => {
-    for (const slug of RESEARCH_STEP_ORDER) {
-      expect(RESEARCH_STEP_ASSETS[slug]).toBeDefined();
-      expect(Array.isArray(RESEARCH_STEP_ASSETS[slug].stateResets)).toBe(true);
-      expect(Array.isArray(RESEARCH_STEP_ASSETS[slug].artifacts)).toBe(true);
-    }
-  });
-
-  test("slug pattern matches Task Name Generation shape", () => {
+describe("slug pattern", () => {
+  test("matches Task Name Generation shape", () => {
     expect(RESEARCH_SLUG_PATTERN.test("compare-caching-strategies")).toBe(true);
     expect(RESEARCH_SLUG_PATTERN.test("fork-cache-alternative")).toBe(true);
     expect(RESEARCH_SLUG_PATTERN.test("Too-Caps")).toBe(false);

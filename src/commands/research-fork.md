@@ -1,6 +1,6 @@
 ---
 name: owflow:research-fork
-description: Utility command for the research workflow — fork an existing research task by copying its directory into a new task that diverges at a chosen completed step (state fields of dropped steps reset, their artifacts not copied; the source stays untouched).
+description: Utility command for the research workflow — fork an existing research task by copying its directory into a new task that diverges at a chosen completed step (the copied state is trimmed so the fork continues from that step onwards; the source stays untouched).
 argument-hint: "<task-path-or-identifier> [--from=<slug>] [--name=\"...\"]"
 ---
 
@@ -25,7 +25,7 @@ and present the fork summary.
 
 ## About This Workflow
 
-Utility skill of the research workflow — NOT a pipeline step. Copies a research task directory to a new task that diverges from the previous run at a chosen fork point (`--from=<slug>`); steps past it are dropped. See `skills/research-fork/SKILL.md` for complete documentation.
+Utility skill of the research workflow — NOT a pipeline step. Copies a research task directory wholesale into a new task that diverges from the previous run at a chosen fork point (`--from=<slug>`); the copied state is trimmed to continue from the fork point onwards. See `skills/research-fork/SKILL.md` for complete documentation.
 
 Related entry points:
 

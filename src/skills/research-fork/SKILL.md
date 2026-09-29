@@ -1,19 +1,19 @@
 ---
 name: owflow:research-fork
-description: Research utility — forks a research task by copying its directory to a NEW task that diverges from the previous run at a chosen completed step (fork point). Steps past the fork point are dropped (state fields reset, artifacts not copied); everything up to it is kept verbatim. The source task is never modified.
+description: Research utility — forks a research task by copying its directory wholesale into a NEW task named from the given slug, then trimming the copied state so the fork continues from a chosen completed step (fork point) onwards. The source task is never modified.
 argument-hint: "<task-path-or-identifier> [--from=<slug>] [--name=\"...\"]"
 user-invocable: true
 ---
 
 # Research Fork — Task Divergence Copy (utility, no phases)
 
-Utility skill for the research workflow. Copies an existing research task directory (`.owflow/tasks/research/<name>`) into a new task so it can **diverge from the previously run one** — e.g. re-run synthesis or the optional chain (brainstorm → converge → design) with different choices while the original stays intact.
+Utility skill for the research workflow. Copies an existing research task directory (`.owflow/tasks/research/<name>`) **wholesale** into a new task so it can **diverge from the previously run one** — e.g. re-run synthesis or the optional chain (brainstorm → converge → design) with different choices while the original stays intact.
 
-The fork keeps everything up to the **fork point** (a completed step slug, default: the latest completed reviewable step `synthesis-complete` unless `--from` says otherwise) verbatim — kept steps' state fields AND artifacts. Steps **after** the fork point are DROPPED in the fork: their `completed_phases` slugs removed, their owned state fields reset to template values, and their owned artifacts NOT copied (`_archive`-less exclusion at copy time — the source keeps the full audit trail). The fork then continues at full fidelity from the fork point with every research subskill.
+The copy is verbatim — every artifact, including outputs of steps after the fork point (the source keeps them too; the resumed step overwrites its outputs). The fork's `orchestrator-state.yml` is then trimmed: `completed_phases` cut at the **fork point** (a completed step slug, default: `synthesis-complete` unless `--from` says otherwise), so the fork **continues from the point onwards**. The fork then continues at full fidelity from the fork point with every research subskill.
 
 Copy mechanics live in the deterministic `fork_task` tool (delegation anti-pattern does not apply — this is a file-copy utility, NOT research work; never perform the copy with bash `cp` yourself). State lives in `orchestrator-state.yml` — this skill reads source state on entry; the tool writes the forked state.
 
-This is NOT a pipeline step: it creates a task, stops at its Exit Gate, and never chains into other skills. Fork anytime — including on `task.status: completed` tasks (research-completed is reset inside the fork).
+This is NOT a pipeline step: it creates a task, stops at its Exit Gate, and never chains into other skills. Fork anytime — including on `task.status: completed` tasks (`research-completed` is trimmed from the fork's `completed_phases`).
 
 ## Entry Gate
 
@@ -40,9 +40,9 @@ then STOP (never guess or auto-pick a task). For a fresh research question inste
 | Required for this skill | Where verified                                             | Produced by                                    |
 | ----------------------- | ---------------------------------------------------------- | ---------------------------------------------- |
 | State file exists       | `<task-path>/orchestrator-state.yml`                       | `/owflow:research <question>` or `/owflow:research-quick` |
-| Forkable research       | `synthesis-complete` in `completed_phases`                  | `/owflow:research-synthesize <task-path>`      |
+| Forkable research       | at least one completed step in `completed_phases`           | any research subskill                          |
 
-1. **Read `orchestrator-state.yml`** from the task path. Missing / unreadable → print the blocked block (as above, plus quality gate: forkable research needs `synthesis-complete` — run `/owflow:research-plan <task-path>`, then `/owflow:research-gather <task-path>`, then `/owflow:research-synthesize <task-path>` first) and STOP.
+1. **Read `orchestrator-state.yml`** from the task path. Missing / unreadable → print the blocked block (as above, plus quality gate: forkable research needs at least one completed step — run `/owflow:research-plan <task-path>`, then `/owflow:research-gather <task-path>`, then `/owflow:research-synthesize <task-path>` first) and STOP.
 
 ## Fork point (decision, interactive per gate contract)
 
@@ -60,7 +60,7 @@ Valid fork points are completed step slugs only. Re-run:
 
 then STOP. Never fall through to the question.
 
-- `--from` missing → `question` — "Where should the fork diverge?" — with each completed slug (minus `research-completed`) as an option (mark `synthesis-complete` "(Recommended)" by default; a slug is only recommended as the latest kept step when the user says the fork should plant its own feet — see the modelling note), each option's description = what the fork keeps ("keeps up to <slug>; drops <downstream slugs>"). WAIT.
+- `--from` missing → `question` — "Where should the fork diverge?" — with each completed slug (minus `research-completed`) as an option (mark `synthesis-complete` "(Recommended)" by default), each option's description = where the fork resumes ("resumes at the step after <slug>"). WAIT.
 
 ## Name (prompt, agent-derived slug)
 
@@ -86,25 +86,17 @@ If the fork_name check reports `NAME_TAKEN`, suggest a 1-word variation and re-a
 Fork created:            <fork-path>
 Forked from:             <source-name> (task untouched)
 Fork point:              <slug>
-Kept (state + artifacts): <kept slugs>
-Dropped (reset + not copied): <dropped slugs or 'none'>
-Next resume slug:        <first dropped slug, else none — fork is terminal-complete>
+Copied:                  everything from the source (verbatim)
+State trimmed:           completed_phases cut at <slug> — resumes at the step after <slug>
 ```
 
-## Fork contract reference (what the tool does)
+## Fork mechanics reference (what the tool does)
 
-| Dropped slug            | State fields reset                                                                                                     | Artifacts NOT copied                        |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `plan-created`           | `research_context.methodology`, `.sources`, `.phase_summaries.plan`                                                     | `planning/research-plan.md`, `planning/sources.md` |
-| `findings-gathered`      | `research_context.gathering_strategy.{categories,count,source}`, `research_outputs.findings_directory`, `.phase_summaries.gather` | `analysis/findings/` (whole dir)            |
-| `synthesis-complete`     | `research_context.confidence_level`, `.phase_summaries.synthesize`, `research_outputs.synthesis`, `.research_report`     | `analysis/synthesis.md`, `outputs/research-report.md` |
-| `alternatives-generated` | `.phase_summaries.brainstorm`, `research_outputs.solution_exploration`                                                  | `outputs/solution-exploration.md`             |
-| `approaches-chosen`      | `research_context.phase_summaries.converge {summary, decision_areas → [], deferred_ideas}` — no orphan plan summaries    | — (state-only)                                |
-| `design-generated`       | `.phase_summaries.design {summary, architecture_style, decisions_count}`, `research_outputs.{high_level_design,decision_log}` | `outputs/high-level-design.md`, `outputs/decision-log.md` |
-| `research-completed`     | (dropped only when past the fork point) task stays `in_progress`                                                        | — (state-only)                                |
-| `brief-written`          | never dropped (upstream of the forkable anchor `synthesis-complete`)                                                    | —                                             |
+1. Copies the whole source task directory recursively into `<taskRoot>/research/YYYY-MM-DD-<slug>/` — all artifacts, verbatim.
+2. Rewrites only the copied `orchestrator-state.yml`: `orchestrator.completed_phases` sliced up to and including the fork point, `orchestrator.started_phase: null`, `orchestrator.task_path` → fork dir, `task.status: in_progress`, `task.title` suffixed `(fork of <source-name>)`.
+3. Everything else — `entry_point`, `research_context`, `research_outputs`, timestamps — is carried verbatim from the source; the resumed step overwrites its own outputs.
 
-Rewrites in the fork's state (in addition to the resets above): `orchestrator.entry_point: "research-fork"`, `orchestrator.task_path` → fork dir, `task.status: in_progress`, `task_ids` cleared, `failed_phases` cleared, `auto_fix_attempts` zeroed, fresh `created`/`updated`, `task.title` suffixed `(fork of <source-name>)`, and an `orchestrator.options.fork_information` stamp: `{forked_from, fork_point, forked_at, executed_steps}`. `project_doc_paths` and all kept-step data are preserved verbatim.
+Validation errors surfaced by the tool: `INVALID_NAME` (slug pattern), `INVALID_SOURCE` (no research task directory / no parseable state file), `UNKNOWN_STEP` (fork point not in `completed_phases`, or `research-completed` — nothing diverges after completion), `NAME_TAKEN` (fork directory already exists).
 
 ## Exit Gate
 
@@ -117,14 +109,14 @@ Utility skill: confirm-or-revise only ([Confirm-or-Revise Exception](../orchestr
 
 **Source** — <source-name> (task untouched)
 **Fork point** — <fork-point slug>
-**Kept steps** — <kept slugs>
-**Dropped steps** — <dropped slugs> (state reset; artifacts not copied)
+**Copied** — full source directory (verbatim)
+**State trim** — completed_phases cut at <fork-point slug>
 **Fork directory** — `<fork-path>`
 
 **Fork state**
 
-- `orchestrator-state.yml` (entry_point: research-fork, fork_information stamped)
-- kept `planning/`, `analysis/`, `outputs/` artifacts up to <fork-point slug>
+- `orchestrator-state.yml` (completed_phases trimmed at <fork-point slug>, status in_progress)
+- all source artifacts, verbatim
 
 **Next ▸** `/owflow:research --from=<next-slug> <fork-path>` (resume the fork at the first step after the fork point)
 ```
@@ -140,5 +132,5 @@ Use `question` — "Are these results correct?" with options:
 ## Integration
 
 - The fork is a normal research task from here on: `/owflow:research <fork-path>` routes it, `/owflow:goal-research <fork-path>` chains it, optional-chain choice gates apply as usual.
-- Forking a FORK works (fork_information then shows the new source; lineage chains through `forked_from`).
+- Forking a FORK works — the title suffix chains (`(fork of <fork-name>)`).
 - Development and migration tasks are NOT forkable — this skill is research-only by design.

@@ -144,7 +144,7 @@ Task type (feature/bug/enhancement) is auto-detected from context. Override with
 | Command                       | Use When                                                                        |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `/owflow:research-quick "<description>"` | Condensed research: brief → plan → gather → synthesis in one pass     |
-| `/owflow:research-fork <task-path> [--from=<slug>] [--name="..."]` | Branch a completed research task and re-run from the fork point with different choices |
+| `/owflow:research-fork <task-path> [--from=<slug>] [--name="..."]` | Branch a research task and re-run from the fork point with different choices |
 
 ### Quick Commands
 

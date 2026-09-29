@@ -77,6 +77,8 @@ const createSourceTask = (): string => {
     "utf8",
   );
   fs.writeFileSync(path.join(source, "keep-me.md"), "x", "utf8");
+  fs.mkdirSync(path.join(source, "analysis"), { recursive: true });
+  fs.writeFileSync(path.join(source, "analysis", "synthesis.md"), "s", "utf8");
   return source;
 };
 
@@ -86,7 +88,7 @@ const execute = (args: Record<string, string>) =>
   fork_task.execute(args as any, context());
 
 describe("fork_task tool", () => {
-  test("creates the fork and reports kept/dropped steps", async () => {
+  test("creates the fork with a verbatim copy and trimmed state", async () => {
     createSourceTask();
     const result = await execute({
       taskRoot: ".owflow/tasks",
@@ -97,19 +99,25 @@ describe("fork_task tool", () => {
 
     expect(result.output).toContain("FORK CREATED");
     expect(result.output).toContain("Fork point: plan-created");
-    expect(result.output).toContain("Kept steps: brief-written, plan-created");
-    expect(result.output).toContain("Dropped steps");
-    expect(
-      fs.existsSync(
-        path.join(
-          tmpDir,
-          ".owflow",
-          "tasks",
-          "research",
-          `${new Date().toISOString().slice(0, 10)}-diverge-cache-choice`,
-        ),
-      ),
-    ).toBe(true);
+
+    const forkDir = path.join(
+      tmpDir,
+      ".owflow",
+      "tasks",
+      "research",
+      `${new Date().toISOString().slice(0, 10)}-diverge-cache-choice`,
+    );
+    expect(fs.existsSync(forkDir)).toBe(true);
+    // verbatim copy — including the post-fork-point artifact
+    expect(fs.existsSync(path.join(forkDir, "keep-me.md"))).toBe(true);
+    expect(fs.existsSync(path.join(forkDir, "analysis", "synthesis.md"))).toBe(true);
+
+    const state = yaml.parse(
+      fs.readFileSync(path.join(forkDir, "orchestrator-state.yml"), "utf8"),
+    );
+    expect(state.orchestrator.completed_phases).toEqual(["brief-written", "plan-created"]);
+    expect(state.task.status).toBe("in_progress");
+    expect(state.task.title).toContain("(fork of 2026-01-01-source-task)");
   });
 
   test("reports tool errors as output instead of throwing", async () => {
