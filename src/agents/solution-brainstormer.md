@@ -228,18 +228,18 @@ warnings: ["any non-critical observations"]
 
 ## Integration
 
-**Invoked by**: research orchestrator (Phase 3)
+**Invoked by**: the `owflow:research-brainstorm` subskill (Task tool)
 
 **Prerequisites**:
 - Task directory exists with `analysis/` and `outputs/` subdirectories
-- `analysis/synthesis.md` exists (Phase 1 output)
-- `outputs/research-report.md` exists (Phase 1 output)
+- `analysis/synthesis.md` exists (research-synthesize output)
+- `outputs/research-report.md` exists (research-synthesize output)
 
 **Input**: Task path, research artifacts, accumulated context (no user preferences — alternatives are generated purely from evidence)
 
 **Output**: `outputs/solution-exploration.md` + structured result
 
-**Next Phase**: Orchestrator presents alternatives to user for convergence (Phase 4: Solution Convergence), then feeds chosen approach into solution-designer (Phase 5)
+**Next**: `owflow:research-converge` presents the alternatives to the user for per-area convergence, then `owflow:research-design` consumes the chosen approach.
 
 ---
 

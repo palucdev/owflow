@@ -4,12 +4,14 @@ import path from "node:path";
 import os from "node:os";
 
 import OwflowPlugin from "../index.js";
+import { PLUGIN_VERSION } from "../utils/plugin-info.js";
 import * as skillsConfig from "../configuration/skills-config.js";
 import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";
 import * as sessionCompaction from "../hooks/session-compaction.js";
 import * as beforeTool from "../hooks/before-tool.js";
 import { verify_template } from "../tools/verify_template.js";
+import { fork_task } from "../tools/fork_task.js";
 
 const mockPluginInput = (directory: string) =>
   ({
@@ -40,6 +42,7 @@ describe("OwflowPlugin index", () => {
     expect(plugin).toBeDefined();
     expect(plugin.tool).toBeDefined();
     expect(plugin.tool!.verify_template).toBe(verify_template);
+    expect(plugin.tool!.fork_task).toBe(fork_task);
     expect(typeof plugin.config).toBe("function");
     expect(typeof plugin["experimental.session.compacting"]).toBe("function");
     expect(typeof plugin["chat.message"]).toBe("function");
@@ -75,10 +78,10 @@ describe("OwflowPlugin index", () => {
           "test-haiku",
         );
         expect(consoleLogSpy).toHaveBeenCalledWith(
-          "[owflow] Starting plugin installation...",
+          `[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`,
         );
         expect(consoleLogSpy).toHaveBeenCalledWith(
-          "[owflow] Plugin installation completed successfully.",
+          `[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`,
         );
       } finally {
         skillsSpy.mockRestore();

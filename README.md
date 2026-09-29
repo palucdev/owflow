@@ -139,6 +139,13 @@ You can always be explicit when you prefer - arguments and flags simply override
 
 Task type (feature/bug/enhancement) is auto-detected from context. Override with `--type=feature|bug|enhancement` if needed. Or use `/owflow:work` as a single entry point that routes to the right workflow.
 
+### Research Utility
+
+| Command                       | Use When                                                                        |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `/owflow:research-quick "<description>"` | Condensed research: brief → plan → gather → synthesis in one pass     |
+| `/owflow:research-fork <task-path> ["<what this fork should explore>"]` | Branch a research task and re-run from the fork point with different choices |
+
 ### Quick Commands
 
 For smaller tasks that don't need a full workflow:
@@ -220,6 +227,21 @@ You can also append additional instructions to narrow scope or guide the workflo
 ```bash
 /owflow:development .owflow/tasks/research/2026-01-12-oauth-research Implement only phase 1
 ```
+
+**Fork a research task to diverge from it.** If you want to re-run part of a completed research with different choices while keeping the original intact, fork it. Passing the task path is enough — the skill reads that research, then asks what the fork should explore, where it should diverge, and what to call it, with suggestions drawn from the research itself:
+
+```bash
+/owflow:research-fork .owflow/tasks/research/2026-01-12-oauth-research
+```
+
+Answer the three questions (or supply the answers up front — each one then gets skipped):
+
+```bash
+/owflow:research-fork .owflow/tasks/research/2026-01-12-oauth-research "compare scoping alternatives" \
+  --from=synthesis-complete --name="compare-scoping-alternatives"
+```
+
+The copy is verbatim (all artifacts, including those from after the fork point) and only the fork's `completed_phases` is trimmed at the fork point, so the fork resumes at the step after it. The source task is never modified.
 
 ## Known Issues
 

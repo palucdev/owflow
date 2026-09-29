@@ -1,0 +1,10 @@
+orchestrator:
+  started_phase: null
+  completed_phases: []
+  failed_phases: []
+  auto_fix_attempts: {}
+  options: {}
+  created: "2026-01-01"
+  updated: "2026-01-01"
+  task_path: null
+  task_ids: {}

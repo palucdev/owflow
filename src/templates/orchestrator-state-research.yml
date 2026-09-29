@@ -1,17 +1,17 @@
 orchestrator:
   started_phase: null
+  entry_point: null
   completed_phases: []
   failed_phases: []
   auto_fix_attempts:
-    phase-1: 0
-    phase-2: 0
-    phase-3: 0
-    phase-4: 0
-    phase-5: 0
-    phase-6: 0
-  options:
-    brainstorming_enabled: null
-    design_enabled: null
+    brief-written: 0
+    plan-created: 0
+    findings-gathered: 0
+    synthesis-complete: 0
+    alternatives-generated: 0
+    approaches-chosen: 0
+    design-generated: 0
+    research-completed: 0
   created: "YYYY-MM-DDTHH:MM:SSZ"
   updated: "YYYY-MM-DDTHH:MM:SSZ"
   task_path: null
@@ -38,17 +38,22 @@ research_context:
     categories: []
     count: 0
     source: "planner | default"
+  project_doc_paths: []
   phase_summaries:
-    phase-1:
+    plan:
       summary: null
       steps_completed: []
-    phase-3:
+    gather:
       summary: null
-    phase-4:
+    synthesize:
+      summary: null
+    brainstorm:
+      summary: null
+    converge:
       summary: null
       decision_areas: []
       deferred_ideas: []
-    phase-5:
+    design:
       summary: null
       architecture_style: null
       decisions_count: 0
@@ -59,3 +64,4 @@ research_outputs:
   solution_exploration: null
   high_level_design: null
   decision_log: null
+  synthesis: null

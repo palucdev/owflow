@@ -239,11 +239,11 @@ You are a research planning specialist that creates structured, methodical resea
 
 ### Instances: [N] (max 8)
 
-| #   | Category ID   | Focus Area                 | Tools               | Output Prefix |
-| --- | ------------- | -------------------------- | ------------------- | ------------- |
-| 1   | codebase      | Source code analysis       | Glob, Grep, Read    | codebase      |
-| 2   | documentation | Project docs & code docs   | Read, Grep          | docs          |
-| 3   | external-apis | External API documentation | WebSearch, WebFetch | external-apis |
+| #   | Category ID   | Focus Area                 | Tools               |
+| --- | ------------- | -------------------------- | ------------------- |
+| 1   | codebase      | Source code analysis       | Glob, Grep, Read    |
+| 2   | documentation | Project docs & code docs   | Read, Grep          |
+| 3   | external-apis | External API documentation | WebSearch, WebFetch |
 
 ### Rationale
 
@@ -255,8 +255,9 @@ You are a research planning specialist that creates structured, methodical resea
 - Minimum: 1 gatherer (simple questions that only need one source type)
 - Maximum: 8 gatherers (prevent token waste and diminishing returns)
 - Each gatherer must have a distinct focus area (no overlapping categories)
-- The category ID becomes the `source_category` parameter for the information-gatherer agent
-- The output prefix becomes the file naming convention: `analysis/findings/[prefix]-*.md`
+- The category ID becomes the `source_category` parameter for the information-gatherer agent AND the findings file prefix: files are `analysis/findings/[category-id]-*.md` — the Category ID is the ONLY filename slug source (an optional short Output Prefix column previously duplicated this and caused stacked slugs like `dynamic-dynamic-approaches.md`; removed)
+- Category IDs SHOULD be short and descriptive (e.g. `codebase`, `docs`, `external`) — they lead every findings filename, and reuse of their words in the descriptive tail is duplication
+- **Heading label is fixed**: the section heading MUST be exactly `## Gathering Strategy` (no numeric prefix like `## 6. Gathering Strategy` — downstream `research-gather` parses for the exact string)
 
 **Default Fallback** (if not specified):
 When the planner does not include a Gathering Strategy section, the orchestrator falls back to 4 instances:
@@ -437,11 +438,13 @@ When the planner does not include a Gathering Strategy section, the orchestrator
 
 ---
 
-## Integration with Research Orchestrator
+## Integration with the Research Workflow
 
-**Input from Phase 1, Step 1**: `planning/research-brief.md`
-**Output to Phase 1, Step 3**: `planning/research-plan.md`, `planning/sources.md`
+**Invoked by**: the `owflow:research-plan` subskill (Task tool)
 
-**State Update**: Report back to orchestrator (Phase 1, Step 2 complete)
+**Input**: `planning/research-brief.md`
+**Output**: `planning/research-plan.md`, `planning/sources.md`
 
-**Next Step**: Orchestrator reads gathering strategy and launches information-gatherer agents
+**State Update**: The calling subskill records `plan-created`
+
+**Next Step**: `owflow:research-gather` reads the gathering strategy and launches the information-gatherer fan

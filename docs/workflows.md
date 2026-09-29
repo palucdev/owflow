@@ -241,7 +241,11 @@ Resume phases: `analysis`, `target`, `spec`, `plan`, `execute`, `verify`, `docs`
 
 ## Research
 
-Multi-source research with synthesis, optional solution brainstorming, and high-level design.
+Multi-source research with synthesis, optional solution brainstorming, and high-level design. Research runs through a pipeline of standalone **`research-*` subskills**, coordinated by a shared task state file (`orchestrator-state.yml`) — the same split as development:
+
+- **Assisted mode** — `/owflow:research` initializes/resumes the task, derives the next step from state, prints the matching subskill command, and stops. Each subskill runs in a fresh context.
+- **Autonomous mode** — `/owflow:goal-research` runs the same subskills back-to-back in one session, pausing at gates between them. Tasks can mix both modes freely.
+- **Quick lane** — `/owflow:research-quick "<description>"` bootstraps a standard research task and fuses brief, plan, gather, and synthesis into one condensed pass, continuable by any research subskill.
 
 ```
 /owflow:research
@@ -250,30 +254,33 @@ Multi-source research with synthesis, optional solution brainstorming, and high-
 
 **Research types**: `technical`, `requirements`, `literature`, `mixed`
 
-**Flags**: `--brainstorm` (force brainstorming phases), `--no-brainstorm` (skip them)
+**Flags** (dispatcher and `goal-research`): `--from=<slug>` (resume from a step), `--type=<type>` (force the methodology classification)
 
-### Phases
+### Pipeline Steps
 
-| #   | Phase                                                                                                    |
-| --- | -------------------------------------------------------------------------------------------------------- |
-| 1   | Research foundation: initialize → plan methodology → gather information (parallel) → synthesize findings |
-| 2   | Brainstorming decision (evaluate value)                                                                  |
-| 3   | Solution brainstorming (HMW questions + user preferences)                                                |
-| 4   | High-level design (C4 diagrams + ADR documentation)                                                      |
-| 5   | Review outputs                                                                                           |
-| 6   | Verification (optional)                                                                                  |
-| 7   | Integration (optional)                                                                                   |
-| 8   | Spawn development workflow (optional)                                                                    |
+Progress is tracked as descriptive step slugs in `completed_phases`: `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`.
+
+| Step slug(s)                             | Description                              | Subskill                       | Produces                                                        |
+| ---------------------------------------- | ---------------------------------------- | ------------------------------ | --------------------------------------------------------------- |
+| `brief-written`, `plan-created`           | Research brief, methodology, plan + sources | `/owflow:research-plan`        | `planning/research-brief.md`, `research-plan.md`, `sources.md`   |
+| `findings-gathered`                       | Parallel gathering across source categories | `/owflow:research-gather`     | `analysis/findings/*.md`                                        |
+| `synthesis-complete`                      | Synthesis + evidence-based research report | `/owflow:research-synthesize` | `analysis/synthesis.md`, `outputs/research-report.md`           |
+| `alternatives-generated`                  | Solution-alternative brainstorming (optional — invoked at the user's choice) | `/owflow:research-brainstorm` | `outputs/solution-exploration.md`                            |
+| `approaches-chosen`                       | Per-area approach decisions (after brainstorming) | `/owflow:research-converge`   | chosen approach per decision area (state)                       |
+| `design-generated`                        | High-level design + decision log (optional — invoked at the user's choice, or after convergence) | `/owflow:research-design` | `outputs/high-level-design.md`, `outputs/decision-log.md`       |
+| `research-completed`                      | Output inventory, confirmation, completion | `/owflow:research-finalize`  | task completed                                                  |
+
+The optional chain is the user's choice — there is no enablement flag and no separate decision step. Invoking `research-brainstorm` or `research-design` IS the decision to run it; skipping straight to `research-finalize` settles the chain as skipped. In `goal-research` mode the choice is asked at the gate after synthesis.
 
 Information gathering runs parallel subagents across multiple source categories (codebase, docs, config, external).
 
 ### Resume
 
-```
-/owflow:research [task-path] [--from=PHASE] [--reset-attempts]
+```bash
+/owflow:research [task-path] [--from=<slug>]
 ```
 
-Resume phases: `foundation`, `brainstorming-decision`, `brainstorming`, `design`, `outputs`, `verification`, `integration`
+Resume derives from state: the first step slug not in `completed_phases` determines the next subskill; `--from` overrides with a step slug — `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed` (prerequisites are validated). Works across assisted and autonomous modes, including tasks started by the `research-quick` lane.
 
 ---
 

@@ -1,0 +1,4 @@
+key1: different_value
+key2:
+  subKey1: different_sub_value
+extraKey: this is fine

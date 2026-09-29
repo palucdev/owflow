@@ -146,7 +146,7 @@ Use Skill tool:
 Examples:
 
 - Resume development: `skill: "owflow:development"` with `args: "--resume .owflow/tasks/development/2025-10-23-fix"`
-- Restart from step: `skill: "owflow:development"` with `args: "--resume .owflow/tasks/development/2025-10-26-auth --from=verification-done"` (dev tasks use descriptive step slugs in `completed_phases`; other workflows use `phase-N`)
+- Restart from step: `skill: "owflow:development"` with `args: "--resume .owflow/tasks/development/2025-10-26-auth --from=verification-done"` (dev tasks use descriptive step slugs in `completed_phases`; performance and migration are the remaining `phase-N` holdouts — research uses the descriptive slugs in `templates/orchestrator-state-research.yml`)
 - Fresh attempts: `skill: "owflow:migration"` with `args: "--resume .owflow/tasks/migrations/2025-10-20-redux --reset-attempts"`
 
 ### Step 3: Classify & Route New Task
@@ -235,10 +235,10 @@ Display:
 
 | Workflow Type | Skill         | Args                                                |
 | ------------- | ------------- | --------------------------------------------------- |
-| development   | `development` | `--resume [path] [--from=PHASE] [--reset-attempts]` |
+| development   | `development` | `--resume [path] [--from=<slug>] [--reset-attempts]` |
 | performance   | `performance` | `--resume [path] [--from=PHASE]`                    |
 | migration     | `migration`   | `--resume [path] [--from=PHASE]`                    |
-| research      | `research`    | `--resume [path] [--from=PHASE]`                    |
+| research      | `research`    | `--resume [path] [--from=<slug>]`                   |
 
 ---
 

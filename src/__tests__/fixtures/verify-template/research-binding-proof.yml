@@ -1,0 +1,64 @@
+orchestrator:
+  started_phase: null
+  entry_point: "/owflow:research"
+  completed_phases: [brief-written]
+  failed_phases: []
+  auto_fix_attempts:
+    brief-written: 1
+    plan-created: 0
+    findings-gathered: 0
+    synthesis-complete: 0
+    alternatives-generated: 0
+    approaches-chosen: 0
+    design-generated: 0
+    research-completed: 0
+  created: "2026-09-26T00:00:00Z"
+  updated: "2026-09-26T00:00:00Z"
+  task_path: ".owflow/tasks/research/2026-09-26-binding-proof"
+  task_ids: {}
+task:
+  title: "Binding proof instance"
+  description: null
+  status: in-progress
+  tags: ["research"]
+  priority: null
+research_context:
+  research_type: technical
+  research_question: "Does the re-keyed vocabulary bind to the co-landed template?"
+  scope:
+    included: []
+    excluded: []
+    constraints: []
+  methodology: []
+  sources: []
+  confidence_level: medium
+  gathering_strategy:
+    categories: []
+    count: 0
+    source: default
+  project_doc_paths: []
+  phase_summaries:
+    plan:
+      summary: "Brief written; research stated."
+      steps_completed: []
+    gather:
+      summary: null
+    synthesize:
+      summary: null
+    brainstorm:
+      summary: null
+    converge:
+      summary: null
+      decision_areas: []
+      deferred_ideas: []
+    design:
+      summary: null
+      architecture_style: null
+      decisions_count: 0
+research_outputs:
+  research_report: null
+  findings_directory: null
+  solution_exploration: null
+  high_level_design: null
+  decision_log: null
+  synthesis: null

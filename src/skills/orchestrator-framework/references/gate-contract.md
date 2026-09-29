@@ -30,17 +30,25 @@ The Entry Gate runs BEFORE any phase work. It validates that this skill is allow
 
 ### Missing-state bootstrap (mid-pipeline entry)
 
-When a dev-* subskill is invoked with a task path/identifier whose `orchestrator-state.yml` exists nowhere (no task, no state file) and the ONLY unmet prerequisite is the state file itself, the skill does not blindly send the user back to the full pipeline — the user chose to enter mid-pipeline. Instead:
+When a subskill is invoked with a task path/identifier whose `orchestrator-state.yml` exists nowhere (no task, no state file) and the ONLY unmet prerequisite is the state file itself, the skill does not blindly send the user back to the full pipeline — the user chose to enter mid-pipeline. Instead:
 
-1. **Ask** via `question`: "No development task exists at this path. Create a fresh standard development task and start at `<this skill's first step slug>`?"
+1. **Ask** via `question`: "No task exists at this path. Create a fresh standard task and start at `<this skill's first step slug>`?"
 2. **On confirm (bootstrap)**:
-   - Create the task directory `.owflow/tasks/development/YYYY-MM-DD-task-name/` (name derived from the argument or the user's input) — mark `orchestrator.entry_point: "<skill> (mid-pipeline bootstrap)"` and `started_phase` with this skill's starting step slug.
-   - Create `orchestrator-state.yml` from `orchestrator-state-development.yml`, honoring any of the skill's command flags into `options.*`; leave `completed_phases` empty (upstream steps stay unrecorded).
-   - Run `verify_template` against `orchestrator-state-development.yml`.
+   - Create the task directory `.owflow/tasks/<workflow-type>/YYYY-MM-DD-task-name/` (name derived from the argument or the user's input) — mark `orchestrator.entry_point: "<skill> (mid-pipeline bootstrap)"` and `started_phase` with this skill's starting step slug.
+   - Create `orchestrator-state.yml` from the workflow's template, honoring any of the skill's command flags into their state fields; leave `completed_phases` empty (upstream steps stay unrecorded).
+   - Run `verify_template` against the workflow's template.
    - Then continue into Execute. Because bootstrapping creates **state only — never upstream artifacts**, later artifact prerequisites (e.g., `implementation/spec.md` before planning) still block with the normal precondition loop, so an incorrectly early bootstrap cannot silently skip work.
-3. **On decline** — print the blocked block with the fresh-start hint (`Run /owflow:development <description> to start a task from scratch.`) and STOP.
+3. **On decline** — print the blocked block with the fresh-start hint and STOP.
 
-Skill starting points (used for the bootstrap question and `started_phase`): dev-analyze → `codebase-analysed`; dev-tdd-red → `tdd-red-proven`; dev-spec → `spec-written`; dev-plan → `plan-created`; dev-implement → `implementation-done`; dev-verify → `options-chosen`; dev-finalize → `e2e-run`.
+#### dev-* bootstrap
+
+- Task directory under `.owflow/tasks/development/`; template `orchestrator-state-development.yml`; fresh-start hint: `Run /owflow:development <description> to start a task from scratch.`
+- Skill starting points (used for the bootstrap question and `started_phase`): dev-analyze → `codebase-analysed`; dev-tdd-red → `tdd-red-proven`; dev-spec → `spec-written`; dev-plan → `plan-created`; dev-implement → `implementation-done`; dev-verify → `options-chosen`; dev-finalize → `e2e-run`.
+
+#### research-* bootstrap
+
+- Task directory under `.owflow/tasks/research/`; template `orchestrator-state-research.yml`; fresh-start hint: `Run /owflow:research <question> to start a task from scratch.`
+- Skill starting points (used for the bootstrap question and `started_phase`): research-plan → `brief-written`; research-gather → `findings-gathered`; research-synthesize → `synthesis-complete`; research-brainstorm → `alternatives-generated`; research-converge → `approaches-chosen`; research-design → `design-generated`; research-finalize → `research-completed`.
 
 ### Deterministic entry checks (future)
 
@@ -99,6 +107,6 @@ The Exit Gate runs after all phase work and state updates are final. It presents
 
 ## Exceptions
 
-- **Dispatchers** (`development`): the Exit Gate's acceptance question is adapted — the results box is the handoff block, and the question asks how to proceed (hand off to the suggested subskill / switch to autonomous mode / adjust / stop).
+- **Dispatchers** (`development`, `research`): the Exit Gate's acceptance question is adapted — the results box is the handoff block, and the question asks how to proceed (hand off to the suggested subskill / switch to autonomous mode / adjust / stop).
 - **Utility skills with explicit no-follow-up contracts** (`agents-md-generator`, `rule-reviewer`): the acceptance question is confirm-or-revise only; follow-up suggestions stay prohibited unless the user asks. See [confirm-or-revise exception](confirm-or-revise-exception.md).
-- **Orchestrated mode** (`goal-development`): the subskill's own Exit Gate acceptance question IS the loop gate — Accept means "continue to the next subskill". The wrapper MUST NOT add a second consecutive `question`.
+- **Orchestrated mode** (`goal-development`, `goal-research`): the subskill's own Exit Gate acceptance question IS the loop gate — Accept means "continue to the next subskill". The wrapper MUST NOT add a second consecutive `question`.

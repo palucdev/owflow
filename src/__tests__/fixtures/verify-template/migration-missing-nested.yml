@@ -1,0 +1,6 @@
+orchestrator: {}
+task: {}
+migration_context:
+  migration_type: code
+external_research: {}
+verification_context: {}

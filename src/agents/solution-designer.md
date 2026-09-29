@@ -336,24 +336,24 @@ warnings: ["any non-critical observations"]
 
 ## Integration
 
-**Invoked by**: research orchestrator (Phase 5)
+**Invoked by**: the `owflow:research-design` subskill (Task tool)
 
 **Prerequisites**:
 - Task directory exists with `analysis/` and `outputs/` subdirectories
-- `outputs/solution-exploration.md` exists (Phase 3 output)
-- `analysis/synthesis.md` exists (Phase 1 output)
-- `outputs/research-report.md` exists (Phase 1 output)
+- `analysis/synthesis.md` exists (research-synthesize output)
+- `outputs/research-report.md` exists (research-synthesize output)
+- `outputs/solution-exploration.md` exists — only when brainstorming ran; on the design-only branch `selected_approach` comes from the research report instead
 
 **Input**: Task path, solution exploration, research artifacts, selected approach, design preferences, accumulated context
 
 **Output**: `outputs/high-level-design.md` + `outputs/decision-log.md` + structured result
 
-**Next Phase**: Design documents feed into Phase 6 (Completion) and are later consumed by the development orchestrator's specification phase when development starts from research
+**Next**: `owflow:research-finalize` inventories the outputs and completes the task; the design documents are later consumed by development's specification phase.
 
 **Downstream consumption**:
 - `specification-creator` reads `high-level-design.md` as primary architectural input
 - `specification-creator` references `decision-log.md` to avoid re-deciding settled questions
-- Development orchestrator Phase 5 (Specification) incorporates architecture decisions, which can be lighter when comprehensive ADRs exist
+- Development's specification phase incorporates architecture decisions, which can be lighter when comprehensive ADRs exist
 
 ---
 
