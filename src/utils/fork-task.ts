@@ -12,6 +12,8 @@ export interface ForkTaskInput {
   slug: string;
   /** Fork point: completed step slug up to which completed_phases are kept */
   from: string;
+  /** Short description of what the fork should explore (stamped into the fork state) */
+  intent?: string;
   /** Working directory used to resolve relative paths (defaults to process.cwd()) */
   cwd?: string;
 }
@@ -96,10 +98,20 @@ export const forkTask = (input: ForkTaskInput): ForkTaskResult => {
     0,
     completed.indexOf(input.from) + 1,
   );
+  forkState.orchestrator.entry_point = "research-fork";
   forkState.orchestrator.task_path = path
     .relative(cwd, forkPath)
     .split(path.sep)
     .join("/");
+  forkState.orchestrator.options = {
+    ...(forkState.orchestrator.options ?? {}),
+    fork_information: {
+      forked_from: path.basename(sourceDir),
+      fork_point: input.from,
+      forked_at: new Date().toISOString(),
+      ...(input.intent ? { intent: input.intent } : {}),
+    },
+  };
   forkState.task = {
     ...forkState.task,
     status: "in_progress",

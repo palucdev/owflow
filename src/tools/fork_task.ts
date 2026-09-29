@@ -10,6 +10,7 @@ export const fork_task = tool({
     source: tool.schema.string().describe("Source task path or identifier under .owflow/tasks/research/"),
     slug: tool.schema.string().describe("Lowercase-kebab-case slug for the fork name, 3-5 words, WITHOUT the date prefix (derived by the agent from a short descriptive name)"),
     from: tool.schema.string().describe("Fork point: a completed step slug from the source task's completed_phases (e.g. 'synthesis-complete'); the fork continues from the step after it"),
+    intent: tool.schema.string().optional().describe("Optional one-line description of what the fork should explore; stamped into the fork's orchestrator.options.fork_information.intent"),
   },
   async execute(args, context) {
     try {
@@ -18,6 +19,7 @@ export const fork_task = tool({
         source: args.source,
         slug: args.slug,
         from: args.from,
+        intent: args.intent,
         cwd: context.directory,
       });
       return {
@@ -25,6 +27,7 @@ export const fork_task = tool({
           `FORK CREATED`,
           `Fork path: ${path.relative(context.directory, result.forkPath).split(path.sep).join("/")}`,
           `Fork point: ${result.forkPoint}`,
+          ...(args.intent ? [`Intent: ${args.intent}`] : []),
         ].join("\n"),
       };
     } catch (error: any) {

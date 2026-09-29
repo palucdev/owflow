@@ -120,6 +120,33 @@ describe("fork_task tool", () => {
     expect(state.task.title).toContain("(fork of 2026-01-01-source-task)");
   });
 
+  test("passes the optional intent through to the fork state and output", async () => {
+    createSourceTask();
+    const result = await execute({
+      taskRoot: ".owflow/tasks",
+      source: "2026-01-01-source-task",
+      slug: "diverge-cache-choice",
+      from: "plan-created",
+      intent: "re-synthesis from a different angle",
+    });
+
+    expect(result.output).toContain("Intent: re-synthesis from a different angle");
+
+    const forkDir = path.join(
+      tmpDir,
+      ".owflow",
+      "tasks",
+      "research",
+      `${new Date().toISOString().slice(0, 10)}-diverge-cache-choice`,
+    );
+    const state = yaml.parse(
+      fs.readFileSync(path.join(forkDir, "orchestrator-state.yml"), "utf8"),
+    );
+    expect(state.orchestrator.options.fork_information.intent).toBe(
+      "re-synthesis from a different angle",
+    );
+  });
+
   test("reports tool errors as output instead of throwing", async () => {
     createSourceTask();
     const invalidName = await execute({

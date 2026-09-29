@@ -226,6 +226,47 @@ describe("forkTask", () => {
     expect(fs.existsSync(result.forkPath)).toBe(true);
   });
 
+  test("stamps fork_information with the intent, entry point and fork lineage", () => {
+    createSourceTask(baseState({}));
+    const result = fork({ intent: "compare caching strategies instead" });
+
+    const state = readForkState(result.forkPath);
+    expect(state.orchestrator.entry_point).toBe("research-fork");
+    expect(state.orchestrator.options.fork_information).toEqual({
+      forked_from: "2026-01-01-source-task",
+      fork_point: "synthesis-complete",
+      forked_at: expect.any(String),
+      intent: "compare caching strategies instead",
+    });
+  });
+
+  test("fork_information omits the intent when none is given and preserves existing options", () => {
+    const sourceState = baseState({});
+    sourceState.orchestrator.options = { spec_audit_enabled: false };
+    createSourceTask(sourceState);
+    const result = fork({});
+
+    const state = readForkState(result.forkPath);
+    expect(state.orchestrator.options.spec_audit_enabled).toBe(false);
+    expect(state.orchestrator.options.fork_information).toEqual({
+      forked_from: "2026-01-01-source-task",
+      fork_point: "synthesis-complete",
+      forked_at: expect.any(String),
+    });
+  });
+
+  test("stamps fork_information when the source state has no options key", () => {
+    const sourceState = baseState({});
+    delete sourceState.orchestrator.options;
+    createSourceTask(sourceState);
+    const result = fork({ intent: "narrow the scope to mobile" });
+
+    const state = readForkState(result.forkPath);
+    expect(state.orchestrator.options.fork_information.intent).toBe(
+      "narrow the scope to mobile",
+    );
+  });
+
   test("UNKNOWN_STEP: invalid slug, terminal step, and non-completed slug all blocked", () => {
     createSourceTask(baseState({}));
 

@@ -35,7 +35,7 @@ Run `/owflow:goal-research` instead for autonomous mode (all subskills in one se
 
 Quick lane: starts only via `/owflow:research-quick "<description>"` — a condensed research task that fuses brief, plan, gather, and synthesis into one pass, continuable by any research subskill.
 
-Forking: `/owflow:research-fork <task-path> [--from=<slug>]` copies a research task to a new task diverging at a chosen completed step (dropped steps reset, artifacts not copied) — original task untouched.
+Forking: `/owflow:research-fork <task-path> ["<what this fork should explore>"] [--from=<slug>]` copies a research task to a new task diverging at a chosen completed step (directory copied verbatim, `completed_phases` trimmed) — original task untouched. A bare task path is enough: the skill asks for the intent, fork point, and name with suggestions taken from that research.
 
 Entry points:
 

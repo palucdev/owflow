@@ -108,7 +108,7 @@ Use `question` — "Are these results correct?" with options:
 - **Accept** — research is complete; print next steps (below).
 - **Adjust** — re-run the affected phase (re-gather → `/owflow:research-gather <task-path>`, re-brainstorm → `/owflow:research-brainstorm <task-path>`, re-design → `/owflow:research-design <task-path>`) with the user's corrections, then re-present the results box.
 - **Discuss** — walk through specific findings or decisions in more depth; then re-ask.
-- **Fork** — branch instead of re-running here: `/owflow:research-fork <task-path> [--from=<slug>]` copies this task to a new one diverging at a chosen completed step (source untouched).
+- **Fork** — branch instead of re-running here: `/owflow:research-fork <task-path>` copies this task to a new one diverging at a chosen completed step (source untouched); pass a description to skip the intent question.
 - **Stop here** — print the resume command (`/owflow:research-finalize <task-path>`) and end.
 
 ### Next steps (after Accept)
