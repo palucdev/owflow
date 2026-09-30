@@ -1,6 +1,6 @@
 {
   "name": "owflow",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
   "main": "dist/index.js",

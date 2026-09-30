@@ -256,9 +256,9 @@ describe("forkTask", () => {
   });
 
   test("stamps fork_information when the source state has no options key", () => {
-    const sourceState = baseState({});
-    delete sourceState.orchestrator.options;
-    createSourceTask(sourceState);
+    const base = baseState({});
+    const { options: _dropped, ...orchestrator } = base.orchestrator;
+    createSourceTask({ ...base, orchestrator });
     const result = fork({ intent: "narrow the scope to mobile" });
 
     const state = readForkState(result.forkPath);

@@ -224,7 +224,23 @@ Skills live in `src/skills/<name>/SKILL.md` — read the frontmatter `descriptio
 
 ## Available Commands
 
-Slash commands are thin wrappers over skills; full usage lives in `commands/` and `skills/*/SKILL.md`. All slash commands are namespaced `owflow:<name>` (frontmatter `name: owflow:<name>` in `src/commands/*.md`; skill `name:` fields are also `owflow:`-prefixed — Skill-tool invocations use prefixed skill names). Documented commands: `/owflow:goal-development`, `/owflow:development`, `/owflow:performance`, `/owflow:migration`, `/owflow:goal-research`, `/owflow:research` (workflow), `/owflow:dev-*` (development subskills: dev-analyze, dev-tdd-red, dev-spec, dev-plan, dev-implement, dev-verify, dev-finalize), `/owflow:dev-bugfix` (quick bug lane; `dev-spec --quick`, `dev-plan --quick`, and `dev-implement --quick` are the quick development lanes), `/owflow:research-*` (research subskills: research-plan, research-gather, research-synthesize, research-brainstorm, research-converge, research-design, research-finalize; `/owflow:research-quick` is the quick research lane and `/owflow:research-fork` the task-divergence fork utility), `/owflow:flow-init`, `/owflow:standards-update`, `/owflow:standards-discover` (setup/standards), `/owflow:reviews-*` (review & audit), plus content & visualization commands. Auto-generated OpenCode commands are built from `user-invocable: true` skill frontmatter; the `work`, `quick-*`, `reviews-*`, `dev-*`, and `research-*` commands are manually maintained — edit the source command files, not this list.
+Slash commands are thin wrappers over skills; full usage lives in `commands/` and `skills/*/SKILL.md`. All slash commands are namespaced `owflow:<name>` (frontmatter `name: owflow:<name>` in `src/skills/*/SKILL.md` and in the maintained `src/commands/*.md`; skill `name:` fields are also `owflow:`-prefixed — Skill-tool invocations use prefixed skill names). Auto-generated OpenCode commands are built from `user-invocable: true` skill frontmatter; the `work` and `reviews-*` commands are maintained in `src/commands/*.md` — edit the source file, not this list.
+
+Commands by workflow (outer) and its steps (inner):
+
+- **Development** — `/owflow:goal-development` runs every step in one session; `/owflow:development` hands off one step per invocation.
+  - Steps: `/owflow:dev-analyze`, `/owflow:dev-tdd-red`, `/owflow:dev-spec`, `/owflow:dev-plan`, `/owflow:dev-implement`, `/owflow:dev-verify`, `/owflow:dev-finalize`.
+  - Quick lanes: `/owflow:dev-bugfix` (bug lane) and the `--quick` variants of `dev-spec`, `dev-plan`, and `dev-implement`.
+- **Research** — `/owflow:goal-research` runs every step in one session; `/owflow:research` is the dispatcher.
+  - Steps: `/owflow:research-plan`, `/owflow:research-gather`, `/owflow:research-synthesize`, `/owflow:research-finalize`.
+  - Optional steps: `/owflow:research-brainstorm`, `/owflow:research-converge`, `/owflow:research-design`.
+  - Quick lane `/owflow:research-quick`; fork utility `/owflow:research-fork`.
+- **Performance** — `/owflow:performance`.
+- **Migration** — `/owflow:migration`.
+- **Setup & standards** — `/owflow:flow-init`, `/owflow:standards-update`, `/owflow:standards-discover`.
+- **Review & audit** — `/owflow:reviews-code`, `/owflow:reviews-spec-audit`, `/owflow:reviews-pragmatic`, `/owflow:reviews-production-readiness`, `/owflow:reviews-reality-check`.
+- **Routing** — `/owflow:work` (auto-classifies a task and routes it to the matching workflow).
+- **Content & visualization** — `/owflow:agents-md-generator`, `/owflow:diagrams-mermaid`, `/owflow:html-renderer`, `/owflow:rule-reviewer`.
 
 Key usage rules:
 

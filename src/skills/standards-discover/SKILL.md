@@ -1,6 +1,7 @@
 ---
 name: owflow:standards-discover
 description: Discover coding standards from project configuration files, code patterns, documentation, and external sources (PRs, CI/CD)
+argument-hint: "[task description]"
 user-invocable: true
 ---
 

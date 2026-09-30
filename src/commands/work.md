@@ -53,12 +53,12 @@ Auto-classifies tasks and routes to the appropriate workflow orchestrator. Suppo
 
 ## Workflow Type Routing
 
-| Classification | Routes To (Skill) |
-| -------------- | ----------------- |
-| development    | `development`     |
-| performance    | `performance`     |
-| migration      | `migration`       |
-| research       | `research`        |
+| Classification | Routes To (Skill)     |
+| -------------- | --------------------- |
+| development    | `owflow:development`  |
+| performance    | `owflow:performance`  |
+| migration      | `owflow:migration`    |
+| research       | `owflow:research`     |
 
 ---
 

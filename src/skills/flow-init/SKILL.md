@@ -1,7 +1,7 @@
 ---
 name: owflow:flow-init
 description: Initialize AI SDLC framework with intelligent project analysis and documentation generation
-argument-hint: [--standards-from=PATH]
+argument-hint: "[--standards-from=PATH]"
 user-invocable: true
 ---
 
