@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 
-import { PLUGIN_ROOT, PLUGIN_VERSION, readPluginVersion } from "../../utils/plugin-info.js";
+import { PLUGIN_VERSION, readPluginVersion } from "../../utils/plugin-info.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../../..");
@@ -17,11 +17,7 @@ describe("plugin-info", () => {
     const root = path.join(tmpDir, "dist");
     fs.mkdirSync(root, { recursive: true });
     if (packageJson !== null) {
-      fs.writeFileSync(
-        path.join(tmpDir, "package.json"),
-        packageJson,
-        "utf8",
-      );
+      fs.writeFileSync(path.join(tmpDir, "package.json"), packageJson, "utf8");
     }
     return root;
   };
@@ -72,12 +68,12 @@ describe("plugin-info", () => {
     });
 
     test("should return 'unknown' when the version field is not a non-empty string", () => {
-      expect(readPluginVersion(makePluginRoot(JSON.stringify({ version: 123 })))).toBe(
-        "unknown",
-      );
-      expect(readPluginVersion(makePluginRoot(JSON.stringify({ version: "" })))).toBe(
-        "unknown",
-      );
+      expect(
+        readPluginVersion(makePluginRoot(JSON.stringify({ version: 123 }))),
+      ).toBe("unknown");
+      expect(
+        readPluginVersion(makePluginRoot(JSON.stringify({ version: "" }))),
+      ).toBe("unknown");
     });
   });
 });

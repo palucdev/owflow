@@ -84,8 +84,13 @@ const createSourceTask = (): string => {
 
 const context = () => ({ directory: tmpDir }) as any;
 
-const execute = (args: Record<string, string>) =>
-  fork_task.execute(args as any, context());
+const execute = async (args: Record<string, string>) => {
+  const result = await fork_task.execute(args as any, context());
+  if (typeof result === "string") {
+    throw new Error(`expected a tool output object, got: ${result}`);
+  }
+  return result;
+};
 
 describe("fork_task tool", () => {
   test("creates the fork with a verbatim copy and trimmed state", async () => {

@@ -1,230 +1,240 @@
 # Command Reference
 
-## Unified Entry Point
+Every owflow command is invoked as `/owflow:<name>`. The `owflow:` prefix is part of the name — OpenCode does not add a plugin namespace for you, so the bare `<name>` does not resolve.
 
-### `/work [input]`
+This page is the **command surface**: what each command is for, what arguments it takes, which flags it reads, and where its text comes from. For how a workflow actually runs — steps, gates, artifacts, task-directory layout — see [Workflow Details](workflows.md).
 
-Auto-classifies your task and routes to the appropriate workflow. Accepts:
+## How Commands Are Registered
 
-- **No arguments**: Extracts the task from your current conversation context
-- Task description: `/work "Add user profile page"`
-- Task folder path: `/work .owflow/tasks/new-features/2026-02-17-user-profile` (resumes)
-- GitHub issue URL: `/work https://github.com/org/repo/issues/42`
+Commands come in **two kinds**, and the kind tells you where the text you see when you invoke one comes from.
 
-The plugin classifies the task type with confidence scoring, asks for confirmation, then launches the matching orchestrator.
+| Kind | Where its text comes from | To change it, edit |
+| --- | --- | --- |
+| **Maintained content command** | A markdown file in `src/commands/`, one file per command. The whole body is authored there: which subagent or skill to invoke, how to read the user's arguments, and worked examples. | `src/commands/<name>.md` |
+| **Synthesized wrapper** | Generated at config time from a `SKILL.md` frontmatter block — one wrapper per skill marked `user-invocable: true`. The body holds no workflow logic; it is an instruction to invoke the skill. | that skill's `SKILL.md` frontmatter |
+
+The plugin registers **6 maintained** commands and **30 synthesized** wrappers. Both numbers follow from the rules above rather than being independent facts: one file per maintained command, one wrapper per invocable skill. What registers is read from disk at config time, and `bun test src` asserts only the resulting totals — 36 commands, of which 30 are synthesized. The suite does not pin the exact name set, so renaming a skill's `name` frontmatter renames its command without failing a test.
+
+### The maintained content commands
+
+`/owflow:work` and the five `/owflow:reviews-*` commands. They exist as files because each one routes to or delegates to a subagent directly and owns logic no skill holds — classification and routing for `work`, argument dispatch for the reviews.
+
+### What a synthesized command contains
+
+Every synthesized body is the same fixed shape, built by `renderCommandTemplate` in `src/configuration/commands-config.ts`. The only per-command part is the skill name:
+
+```text
+CRITICAL INSTRUCTION: You MUST invoke the owflow:<name> skill immediately as your FIRST action.
+
+Use the Skill tool with these exact parameters:
+name: "owflow:<name>"
+prompt: "$ARGUMENTS"
+```
+
+Two consequences follow from that split:
+
+- **The `/help` line you pick a command from is the skill's own `description`.** Changing a command's palette text means editing the skill's `description`, not a command file.
+- **No command carries an "About this workflow" section.** The palette line and the skill body are the documentation. If you want the detail, invoke the command or read the skill.
+
+A wrapper forwards `$ARGUMENTS` verbatim, so the arguments a synthesized command accepts are the ones its skill parses — described by that skill's `argument-hint` frontmatter, and repeated per command below.
+
+## Picking a Command
+
+| If you want to… | Use |
+| --- | --- |
+| Let the plugin classify the work and route it to the right workflow | `/owflow:work` |
+| Build a feature, fix a bug, improve existing code | `/owflow:development` (one step per invocation) or `/owflow:goal-development` (the whole loop in one session) |
+| Fix an isolated bug with a TDD red/green gate | `/owflow:dev-bugfix` |
+| Enter or re-enter the development pipeline at a specific step | the matching `/owflow:dev-*` subskill |
+| Speed something up | `/owflow:performance` |
+| Move a technology, platform, or architecture pattern | `/owflow:migration` |
+| Investigate a question and document the findings | `/owflow:research` (one step per invocation) or `/owflow:goal-research` (the whole loop) |
+| Branch a research task to explore different choices | `/owflow:research-fork` |
+| Review code quality, whether the work is really done, a spec, or production readiness | the `/owflow:reviews-*` commands |
+| Set up the framework in a project | `/owflow:flow-init` |
+| Discover or refine coding standards | `/owflow:standards-discover`, `/owflow:standards-update` |
+| Generate an agent onboarding file, a Mermaid diagram, a shareable HTML page, or a rules-file score | `/owflow:agents-md-generator`, `/owflow:diagrams-mermaid`, `/owflow:html-renderer`, `/owflow:rule-reviewer` |
+
+---
+
+## `/owflow:work [input]`
+
+The single entry point. Auto-classifies a task and routes it to the matching workflow, or resumes an existing task.
+
+Accepted input: a task folder path, a bare folder name (searched across all task types), a task description, a GitHub / Jira / Azure DevOps issue identifier or URL, or nothing at all — with no argument it asks what you want to work on.
+
+Classification runs through the `task-classifier` subagent, which can fetch the issue's details, weighs the codebase context, scores confidence, and confirms with you when needed. If it cannot classify, it offers the four workflow types instead. After that the command invokes the matching orchestrator skill with your description; for an existing task it resumes, offering restart-from-step, retry, or a fresh-attempt resume (`--reset-attempts`) when the task has failed phases.
+
+Task folders are read from `.owflow/tasks/<type>/` — the type is taken from the folder it sits in.
 
 ---
 
 ## Development
 
-### `/development [description | task-path]`
+### `/owflow:development [task description | task-path]`
 
-Starts the unified development workflow (14 adaptive phases) or resumes an existing one. All arguments are optional — when run without a description, the plugin extracts it from your current conversation. Pass an existing task path to resume. Task type (bug/enhancement/feature) is auto-detected from context when `--type` is omitted.
+The development **dispatcher**: initializes or resumes a task, derives the next pending step from the task's state, prints the subskill command that handles it, and stops. One invocation, one step — each `dev-*` subskill runs in a fresh context.
 
-| Flag                               | Description                                             |
-| ---------------------------------- | ------------------------------------------------------- |
-| `--type=bug\|enhancement\|feature` | Specify task type (auto-detected if omitted)            |
-| `--e2e`                            | Include E2E testing phase                               |
-| `--user-docs`                      | Generate user documentation phase                       |
-| `--code-review`                    | Include code review phase                               |
-| `--research=PATH`                  | Start development informed by a completed research task |
-| `--from=PHASE`                     | Start from or resume at a specific phase                |
-| `--reset-attempts`                 | Reset failed attempt counters (resume)                  |
+Pass a description to start a task, or a task path to resume one. `/owflow:goal-development` runs the same task lifecycle with every subskill invoked for you, one after another, in a single session.
 
-**Task directory**: `.owflow/tasks/development/`
-**Resume phases**: `analysis`, `gap`, `spec`, `plan`, `implement`, `verify`
+| Flag | Effect |
+| --- | --- |
+| `--from=<step-slug>` | Hand off from a specific step |
+| `--research=PATH` | Link to a completed research task |
+| `--audit` / `--no-audit` | Force/skip the specification audit |
+| `--e2e` / `--no-e2e` | Force/skip E2E testing |
+| `--user-docs` / `--no-user-docs` | Force/skip user documentation |
+| `--reset-attempts` | Reset failed attempt counters (resume) |
 
----
+The phase flags are written into the task's state as options and the subskills read them from there; `--research=PATH` instead records the linked research task in state. `--reset-attempts` is a development-dispatch flag — `/owflow:performance` and `/owflow:migration` resume on `--from=PHASE` and do not read it.
 
-## Performance
+Starting from a completed research task is either naming the research folder as the sole argument or passing `--research=PATH` alongside a description. Either way the research context informs every subskill; it never skips one.
 
-### `/performance [description | task-path]`
+### `/owflow:goal-development [task description | task-path]`
 
-Starts performance optimization with static bottleneck analysis (9 phases) or resumes an existing one. Can be run without arguments — the plugin extracts the optimization target from your conversation. Detects N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, and memory leak patterns.
+Autonomous mode. Same task lifecycle and same state file as `/owflow:development`, but it invokes every required `dev-*` subskill back to back, using each subskill's own exit gate as the loop gate. Accepts the same flags, minus `--reset-attempts`. Interruptible at any gate: answering "stop" ends the session and prints the resume command, and the task picks up later in either mode.
 
-| Flag               | Description                              |
-| ------------------ | ---------------------------------------- |
-| `--from=PHASE`     | Start from or resume at a specific phase |
-| `--reset-attempts` | Reset failed attempt counters (resume)   |
+### The `/owflow:dev-*` subskills
 
-You can optionally provide profiling data (flame graphs, APM screenshots) — the workflow creates a directory for these.
+Each is standalone and resolves its task from a full path or the directory name under `.owflow/tasks/development/`. It never auto-picks a task. Invoked with a step it cannot yet take, it stops and prints the ordered prerequisite commands instead.
 
-**Task directory**: `.owflow/tasks/performance/`
-**Resume phases**: `analysis`, `specification`, `planning`, `implementation`, `verification`
+| Command | Arguments | What it does |
+| --- | --- | --- |
+| `/owflow:dev-analyze` | `[task-path-or-identifier]` | Codebase analysis with clarifications, then gap analysis with scope decisions |
+| `/owflow:dev-tdd-red` | `[task-path-or-identifier]` | TDD Red Gate — a failing test that reproduces the defect, written before any implementation work |
+| `/owflow:dev-spec` | `[task-path-or-identifier \| "description"] [--quick]` | Technical approach, requirements, specification, and the optional specification audit |
+| `/owflow:dev-plan` | `[task-path-or-identifier \| "description"] [--quick]` | Breaks the approved specification into a grouped, dependency-ordered implementation plan |
+| `/owflow:dev-implement` | `[task-path-or-identifier \| "description"] [--quick]` | Executes the plan by delegation, then the TDD Green Gate when a red gate exists |
+| `/owflow:dev-verify` | `[task-path-or-identifier]` | Verification options, comprehensive verification, and a user-driven fix loop |
+| `/owflow:dev-finalize` | `[task-path-or-identifier]` | Conditional E2E testing and user documentation, then finalization with commit guidance |
+| `/owflow:dev-bugfix` | `[bug description \| task-path-or-identifier]` | Quick TDD-driven bug fix, with escalation when the bug turns out not to be simple |
 
----
+### Quick lanes
 
-## Migration
+Quick lanes are **flags, not commands**, and every one of them creates a standard development task with the lane recorded as `orchestrator.entry_point`, so any subskill can pick it up afterwards. The flag is optional — a description with no existing task lets the skill bootstrap and then ask whether to run the condensed lane or escalate to the full pipeline.
 
-### `/migration [description | task-path]`
+| Lane | Reaches | Stops at |
+| --- | --- | --- |
+| `/owflow:dev-spec --quick "<description>"` | A standards-aware, resumable specification | the `dev-spec` exit gate |
+| `/owflow:dev-plan --quick "<description>"` | A standards-aware implementation plan | the `dev-plan` exit gate |
+| `/owflow:dev-implement --quick "<description>"` | Direct implementation in the main agent, with the standards already read | the `dev-implement` exit gate |
+| `/owflow:dev-bugfix "<description>"` | A fixed bug, red gate to green gate | the fix-run summary, then `/owflow:dev-verify` or a commit |
 
-Starts migration workflow (8 phases) with mandatory rollback planning and risk assessment, or resumes an existing one. Can be run without arguments — the plugin extracts migration details from your conversation.
+`/owflow:dev-bugfix` has two invocation modes: a bug description bootstraps a fresh task, while a task path or identifier fixes a problem that emerged on an existing development task — the fix is appended and the downstream verification steps are reset so verification re-runs.
 
-| Flag                                       | Description                              |
-| ------------------------------------------ | ---------------------------------------- |
-| `--type=code\|data\|architecture\|general` | Migration type (affects risk focus)      |
-| `--from=PHASE`                             | Start from or resume at a specific phase |
-| `--reset-attempts`                         | Reset failed attempt counters (resume)   |
+The quick lanes skip delegation and audit, not discipline. A bug-shaped description with a reproducible defect still goes through the TDD red gate; `--quick` never bypasses it, and the skill points you at `/owflow:dev-bugfix` instead.
 
-**Task directory**: `.owflow/tasks/migrations/`
-**Resume phases**: `analysis`, `target`, `spec`, `plan`, `execute`, `verify`, `docs`
+### Code review inside the development workflow
+
+Whether the code-review subagent runs is a **state option, not a command flag**. `code_review_enabled` lives in the task's `orchestrator-state.yml` and ships as `true` in the development state template; the verification step reads it and delegates to the `code-reviewer` subagent when it is set, writing `verification/code-review-report.md`. `/owflow:performance` carries the same option and asks which additional checks to run at its verification-options phase. To run that review on its own at any time, use `/owflow:reviews-code` on any path.
 
 ---
 
 ## Research
 
-Research is split the same way as development: `/research` is the workflow **dispatcher** (assisted mode) that initializes/resumes the task, derives the next step from state, and hands off to a standalone `research-*` subskill. Running a subskill in a fresh context is recommended, but it is up to the user to choose. Research tasks use descriptive step slugs in `completed_phases` (see [Workflow Details](workflows.md) for the full flow).
+### `/owflow:research [task description | task-path] [--from=<slug>] [--type=<type>]`
 
-| Command                       | Purpose                                                      |
-| ----------------------------- | ------------------------------------------------------------ |
-| `/research [task description \| task-path] [--from=<slug>] [--type=<type>]` | Start or resume a research task; hands off to the next subskill |
-| `/research-plan [task-path-or-identifier \| "description"]` | Research brief, methodology selection, and research plan with a parsable Gathering Strategy |
-| `/research-gather [task-path-or-identifier]` | Parallel findings fan across multiple source categories |
-| `/research-synthesize [task-path-or-identifier]` | Synthesis and the evidence-based research report with per-finding confidence |
-| `/research-brainstorm [task-path-or-identifier]` | Solution-alternative brainstorming (optional — invoking it IS the decision) |
-| `/research-converge [task-path-or-identifier]` | Per-area approach decisions over the alternatives (after brainstorming) |
-| `/research-design [task-path-or-identifier]` | High-level design with decision log (optional — invoking it IS the decision) |
-| `/research-finalize [task-path-or-identifier]` | Inventory of research outputs, confirmation, completion |
-| `/research-quick "description"` | Quick lane — condensed brief, plan, gather, and synthesis in one pass |
-| `/goal-research [task description \| task-path] [--from=<slug>] [--type=<type>]` | Autonomous mode — runs every subskill in one session with question gates |
+The research **dispatcher**: initializes or resumes a research task, derives the next step from state, and hands off to the matching `research-*` subskill. `/owflow:goal-research` runs the same lifecycle with every subskill invoked for you, in one session. Both take:
 
-Every `research-*` subskill resolves its task from a full path or just the directory identifier under `.owflow/tasks/research/`, validates prerequisites from state, and stops with the ordered prerequisite steps when something is missing — it never auto-picks a task. `--from` takes a step slug (e.g. `/research --from=plan-created .owflow/tasks/research/<task>`), not a phase number; slugs: `brief-written`, `plan-created`, `findings-gathered`, `synthesis-complete`, `alternatives-generated`, `approaches-chosen`, `design-generated`, `research-completed`. The optional brainstorm/design chain has no flags — invoking `research-brainstorm` or `research-design` is the decision to run it (`goal-research` asks at the gate after synthesis). Quick lane starts only via `/research-quick "<description>"` — a condensed pass that fuses brief, plan, gather, and synthesis, continuable by any research subskill.
+| Flag | Effect |
+| --- | --- |
+| `--from=<slug>` | Hand off from a specific step slug |
+| `--type=<type>` | Force the methodology classification: `technical`, `requirements`, `literature`, or `mixed` |
 
-Research output can feed into development: `/development --research=.owflow/tasks/research/...`
+`--type` is written to the task's `research_context.research_type`; the subskills read it from there. The optional brainstorm and design chain has no flag — invoking the subskill **is** the decision to run it, and `goal-research` asks at the gate after synthesis.
 
-**Task directory**: `.owflow/tasks/research/`
+### The `/owflow:research-*` subskills
 
----
+Each is standalone, resolves its task from a full path or the directory name under `.owflow/tasks/research/`, and stops with the ordered prerequisite steps when something is missing.
 
-## Reviews & Audits
+| Command | Arguments | What it does |
+| --- | --- | --- |
+| `/owflow:research-plan` | `[task-path-or-identifier \| "description"] [--quick]` | Research brief, methodology selection, and the plan with a parsable Gathering Strategy |
+| `/owflow:research-gather` | `[task-path-or-identifier]` | The parallel findings fan across source categories, merged per category |
+| `/owflow:research-synthesize` | `[task-path-or-identifier]` | Synthesis and the evidence-based research report, with per-finding confidence |
+| `/owflow:research-brainstorm` | `[task-path-or-identifier]` | Multi-perspective solution alternatives (optional) |
+| `/owflow:research-converge` | `[task-path-or-identifier]` | One approach decision per decision area, presented in full detail each time |
+| `/owflow:research-design` | `[task-path-or-identifier]` | High-level architecture design plus a decision log (optional) |
+| `/owflow:research-finalize` | `[task-path-or-identifier]` | Output inventory, results confirmation, completion |
+| `/owflow:research-quick` | `[task-path-or-identifier \| "description"] [--quick]` | The quick lane: brief, plan, gather, and synthesis condensed into one pass |
 
-Standalone review commands that can be run anytime, independent of workflows.
+`/owflow:research-quick` produces the same standard artifacts and state as the full lane and is continuable at full fidelity by any research subskill.
 
-### `/reviews-code [path]`
+### `/owflow:research-fork <task-path-or-identifier> ["<what this fork should explore>"] [--from=<slug>] [--name="..."]`
 
-Automated code quality, security, and performance analysis.
-
-| Flag                                          | Description                 |
-| --------------------------------------------- | --------------------------- |
-| `--scope=quality\|security\|performance\|all` | Focus area (default: `all`) |
-
-Analyzes complexity, duplication, code smells, security vulnerabilities, and performance issues. Generates report with severity levels (Critical/Warning/Info).
-
-### `/reviews-pragmatic [path]`
-
-Detects over-engineering and ensures code matches project scale. Identifies excessive abstraction, enterprise patterns in simple code, infrastructure overkill. Recommends specific simplifications with before/after examples.
-
-### `/reviews-reality-check [task-path]`
-
-Validates that completed work actually solves the intended problem. Runs tests, checks end-to-end workflows, and evaluates error scenarios. Returns deployment decision: Ready / Issues Found / Not Ready.
-
-### `/reviews-spec-audit [spec-path]`
-
-Independent specification audit with senior auditor perspective.
-
-| Flag                    | Description                                                         |
-| ----------------------- | ------------------------------------------------------------------- |
-| `--post-implementation` | Compare spec vs actual implementation (default: pre-implementation) |
-
-Identifies ambiguities, missing details, and gaps. Uses external tools (GitHub CLI, Azure CLI) for verification.
-
-### `/reviews-production-readiness [path]`
-
-Pre-deployment verification across 7 dimensions: configuration, monitoring, error handling, performance, security, deployment, and GO/NO-GO recommendation.
-
-| Flag                     | Description                                          |
-| ------------------------ | ---------------------------------------------------- |
-| `--target=prod\|staging` | Target environment (default: `prod` with full rigor) |
+Copies a research task directory wholesale into a new task, then trims the copy's state so it continues from a chosen completed step. A bare task path is enough: the skill reads the source research and asks for the fork's intent, fork point, and name, with suggestions. The source task is never modified, and the copy is a plain research task from then on.
 
 ---
 
-## Standards
+## Performance and Migration
 
-### `/flow-init [--standards-from=PATH]`
+### `/owflow:performance [task description | task-path]`
 
-Initialize the Owflow framework. Scans your codebase with a project-analyzer subagent, presents findings for confirmation, then generates:
+Static-analysis-first optimization: reads the code to find bottlenecks — N+1 queries, missing indexes, O(n²) algorithms, blocking I/O, memory leaks — then runs the standard specification, planning, implementation, and verification phases. Given nothing, it asks what is slow and what profiling data you have; the workflow provides a directory for flame graphs and APM screenshots. Resume with `--from=PHASE`. At its verification-options phase it asks which additional checks to run and records the answer in state.
 
-- `.owflow/docs/` with INDEX.md, project docs (vision, roadmap, tech-stack), and coding standards
-- `.owflow/tasks/` directory structure
-- AGENTS.md integration
+### `/owflow:migration [task description | task-path]`
 
-| Flag                    | Description                                                                                                                                                                                  |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--standards-from=PATH` | Copy standards from another project's `.owflow/docs/standards/` instead of built-in defaults. Useful when starting a new project that should follow the same conventions as an existing one. |
+Technology, platform, and architecture-pattern migrations with risk assessment, incremental execution, and mandatory rollback planning. Given nothing, it asks what is being migrated and to what. Classifies the migration as `code`, `data`, or `architecture`, which sets the risk focus and the execution strategy; data migrations add integrity checks and a dual-run. Resume with `--from=PHASE`.
 
-If `.owflow/` already exists, offers to backup, update, or cancel.
-
-### `/standards-discover [--scope=SCOPE]`
-
-Auto-discovers coding standards from multiple sources in parallel: config files, source code patterns, documentation, pull requests, and CI/CD pipelines.
-
-| Flag                                                      | Description                                         |
-| --------------------------------------------------------- | --------------------------------------------------- |
-| `--scope=full\|quick\|frontend\|backend\|testing\|custom` | Discovery scope (default: `full`)                   |
-| `--confidence=N`                                          | Minimum confidence threshold, 0-100 (default: `60`) |
-| `--auto-apply`                                            | Auto-apply standards with 90%+ confidence           |
-| `--skip-external`                                         | Skip PR and CI/CD analysis                          |
-| `--pr-count=N`                                            | Number of PRs to analyze (default: `10`, max: `20`) |
-
-Presents findings in confidence tiers (high/medium/low) for review before applying.
-
-### `/standards-update [description] [--from=PATH]`
-
-Update or create standards from conversation context or explicit description. When run without arguments, scans your current conversation for standards patterns like "we should always...", "our convention is...", "prefer X over Y" and proposes them as new standards.
-
-| Flag          | Description                                                                                                                                |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--from=PATH` | Sync standards from another project. Analyzes differences, shows what's missing or changed, and lets you select which standards to import. |
+| Flag | Effect |
+| --- | --- |
+| `--type=TYPE` | Set the migration type — `code`, `data`, or `architecture` |
 
 ---
 
-## Quick Commands
+## Reviews and Audits
 
-Lightweight options for small tasks that don't need a full orchestrator workflow.
+Standalone: run them anytime, on any path or task, independent of a workflow. Each delegates straight to a subagent and writes its report beside what it reviewed.
 
-### `/dev-spec --quick ["task description"]`
+| Command | Delegates to | Optional flags |
+| --- | --- | --- |
+| `/owflow:reviews-code [path]` | `code-reviewer` | `--scope=quality\|security\|performance\|all` (default: complete analysis) |
+| `/owflow:reviews-pragmatic [path]` | `code-quality-pragmatist` | — |
+| `/owflow:reviews-reality-check [task-path]` | `reality-assessor` | `--production` |
+| `/owflow:reviews-spec-audit [spec-path]` | `spec-auditor` | `--post-implementation` (default: pre-implementation), `--focus=<area>` |
+| `/owflow:reviews-production-readiness [path]` | `production-readiness-checker` | `--target=prod\|staging` (default: `prod` with full rigor) |
 
-The spec-only quick lane — a condensed subset of the development pipeline, run inside `/dev-spec`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-spec --quick"`), discovers and reads applicable standards, runs a brief codebase analysis, gathers condensed requirements, then writes the condensed specification directly on the fly — no `specification-creator` subagent (that delegation stays reserved for the full pipeline). Diagrams are optional and gated by a question; the specification audit is skipped (Exit Gate acceptance substitutes; `/reviews-spec-audit` stays available later). Bug-shaped work (proven defect) still requires the TDD red gate — it is never bypassed by `--quick`; use `/dev-bugfix` for the quick TDD lane.
+They are all read-only — no source is modified. `/owflow:reviews-reality-check` re-runs the tests itself rather than trusting the existing reports, exercises end-to-end flows and error scenarios, and returns a deployment verdict. `/owflow:reviews-production-readiness` covers configuration, monitoring, error handling, performance, security, and deployment, and ends in a GO/NO-GO recommendation.
 
-**When to use**: You want a standards-aware, resumable spec before any plan — but the spec alone is enough for now.
+---
 
-**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
-**Artifacts**: `analysis/requirements.md`, `analysis/quick-analysis.md`, `implementation/spec.md`
+## Setup and Standards
 
-After the spec it stops at the dev-spec exit gate — continue the pipeline with `/dev-plan` (or `/development <task-path>`), or stop there if the spec is enough.
+### `/owflow:flow-init [--standards-from=PATH]`
 
-### `/dev-plan --quick ["task description"]`
+Initializes `.owflow/docs/` and `.owflow/tasks/` in a project: analyzes the codebase, presents its findings for confirmation, and generates project documentation and coding standards. Pass `--standards-from=PATH` to copy the standards from another project instead of the built-in defaults — the referenced project must have `.owflow/docs/standards/`. If `.owflow/` already exists, the pre-flight phase offers to back it up, update it, or cancel.
 
-The plan-only quick lane — a condensed subset of the development pipeline, run inside `/dev-plan`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-plan --quick"`), discovers and reads applicable standards, writes a brief analysis and a condensed spec, then writes the implementation plan directly on the fly — no `implementation-planner` subagent (that delegation stays reserved for the full pipeline). The on-the-fly plan stays lean and grounded: key discoveries with `file:line` references, an explicit out-of-scope list, intent + contract per step, automated vs manual acceptance criteria, and no open questions. Adding an execution diagram is optional and gated by a question.
+### `/owflow:standards-discover [task description]`
 
-**When to use**: You want a standards-aware, resumable plan before coding — but the plan alone is enough for now.
+Discovers coding standards from project configuration files, code patterns, documentation, and external sources — pull requests and CI/CD pipelines — then presents the findings in confidence tiers for review before applying them.
 
-**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
-**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`
+| Flag | Effect |
+| --- | --- |
+| `--scope=SCOPE` | `full`, `quick`, or a category such as `frontend`, `backend`, `testing` (default: `full`) |
+| `--confidence=N` | Minimum confidence threshold, 0-100 (default: `60`) |
+| `--auto-apply` | Apply findings at 90%+ confidence without asking |
+| `--skip-external` | Skip the PR and CI/CD sources |
+| `--pr-count=N` | How many recent merged PRs to analyze |
 
-After planning it stops at the dev-plan exit gate — continue the pipeline with `/dev-implement` (or `/development <task-path>`), or stop there if the plan is enough.
+### `/owflow:standards-update [description of standard/convention] [--from=PATH]`
 
-### `/dev-implement --quick ["task description"]`
+Creates or updates a standard from conversation context or an explicit description; with no arguments it scans the current conversation for convention statements and proposes them as new standards. `--from=PATH` switches to sync mode — analyzing what differs between this project's standards and another project's, and letting you select which to import. Note that `--from` means a **step slug** on the development and research commands, a **phase** on performance and migration, and a **project path** here.
 
-The quick development lane — a condensed subset of the development pipeline, run inside `/dev-implement`. Bootstraps a standard development task (`orchestrator-state.yml` with `orchestrator.entry_point: "dev-implement --quick"`), discovers and reads applicable standards, writes a condensed spec + implementation plan, and asks for approval before implementing. Execution is delegated like any other development task.
+---
 
-**When to use**: Task is clear, no architectural decisions needed, you know what needs doing.
+## Content and Utility Commands
 
-**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure)
-**Artifacts**: `analysis/quick-analysis.md`, `implementation/spec.md`, `implementation/implementation-plan.md`, `implementation/work-log.md`
+Independent of the workflow families; each takes a path or a topic and does one job.
 
-After implementation it stops at the dev-implement exit gate — continue the pipeline with `/dev-verify` (or `/development <task-path>`), or stop there if the results are enough.
+| Command | Arguments | What it does |
+| --- | --- | --- |
+| `/owflow:agents-md-generator` | `[directory or file path]` | Inspects the repository and writes a concise, reference-heavy agent onboarding guide (repo-level or directory-level scope) |
+| `/owflow:diagrams-mermaid` | `[diagram description]` | Mermaid diagrams for planning flows, component communication, and architecture views, with adaptive detail selection including C4 levels |
+| `/owflow:html-renderer` | `[path to markdown file]` | Renders a plan, idea, RFC, or design note into a self-contained, share-ready HTML file, written next to the source `.md` |
+| `/owflow:rule-reviewer` | `[path/to/rules.md]` | Scores a rule-for-AI file (`AGENTS.md`, `CLAUDE.md`, or any rules file) on five axes and returns concrete, actionable fixes |
 
-### `/dev-bugfix [bug description | task-path]`
+---
 
-Quick TDD-driven bug fix — an alternative entry point into the dev-* workflow with a standard `orchestrator-state.yml`. Analyzes the bug, presents a fix plan for approval, writes a failing test, implements the fix, and verifies the test passes.
+## Task Artifacts
 
-**When to use**: Simple, isolated bugs where you can quickly identify the root cause. If the bug is too complex (multiple files, unclear root cause, architectural impact), the skill suggests escalating to `/development`.
-
-**Task directory**: `.owflow/tasks/development/YYYY-MM-DD-task-name/` (standard structure, `entry_point: "dev-bugfix"`)
-**Artifacts**: `analysis/findings.md`, `implementation/fix-plan.md`, `implementation/tdd-red-gate.md`, `implementation/tdd-green-gate.md`, `implementation/work-log.md`, `summary.md`
-
-**Two invocation modes**:
-
-- **Standalone** — bug description (or nothing: reads the conversation or prompts) bootstraps a fresh standard development task. After the fix, continue with `/dev-verify <task-path>` or commit.
-- **Consecutive run** — a task path/identifier under `.owflow/tasks/development/` fixes a newly emerging problem on an existing development task (after implementation or verification); the fix is appended to the task and downstream verification slugs are reset so the pipeline re-runs `/dev-verify`.
+Every workflow writes into `.owflow/tasks/<type>/YYYY-MM-DD-task-name/`, keyed by an `orchestrator-state.yml` that holds the step slugs, the options, and the accumulated phase summaries. The directory layout and which step writes which artifact are in [Workflow Details](workflows.md).

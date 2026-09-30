@@ -191,10 +191,10 @@ Static code analysis to detect bottlenecks, followed by standard spec/plan/imple
 ### Resume
 
 ```
-/owflow:performance [task-path] [--from=PHASE] [--reset-attempts]
+/owflow:performance [task-path] [--from=PHASE]
 ```
 
-Resume phases: `analysis`, `specification`, `planning`, `implementation`, `verification`
+Resume phases are the `phase-N` slugs recorded in the task's `orchestrator-state.yml` (`completed_phases`).
 
 ---
 
@@ -232,10 +232,10 @@ Technology, data, and architecture migrations with rollback planning and risk as
 ### Resume
 
 ```
-/owflow:migration [task-path] [--from=PHASE] [--reset-attempts]
+/owflow:migration [task-path] [--from=PHASE]
 ```
 
-Resume phases: `analysis`, `target`, `spec`, `plan`, `execute`, `verify`, `docs`
+Resume phases are the `phase-N` slugs recorded in the task's `orchestrator-state.yml` (`completed_phases`).
 
 ---
 

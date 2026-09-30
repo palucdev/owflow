@@ -1,6 +1,6 @@
 ---
 name: owflow:rule-reviewer
-description: Score an AI rules file on 5 axes and return concrete actionable fixes
+description: "Score a rule-for-AI markdown file (CLAUDE.md, AGENTS.md, or any rules file) on 5 axes and return concrete actionable fixes"
 argument-hint: "[path/to/rules.md]"
 user-invocable: true
 ---

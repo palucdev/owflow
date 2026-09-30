@@ -1,0 +1,18 @@
+{
+  // Test project. The root tsconfig.json excludes src/__tests__ so the build
+  // never emits test files into dist, which leaves these files outside any
+  // configured project: editors fall back to an inferred project (target ES5,
+  // no `types`, no NodeNext resolution) and cannot resolve "bun:test" →
+  // ts(2307). This nested config is picked up by the nearest-config lookup, so
+  // tests get the same compiler options as src/ without changing build output.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "fixtures"
+  ]
+}

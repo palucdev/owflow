@@ -27,7 +27,7 @@ owflow/
 └── src/                    # Source code
     ├── __tests__/          # Test suites
     ├── agents/             # Agent definitions and prompts (.md)
-    ├── commands/           # OpenCode slash commands (.md)
+    ├── commands/           # Maintained content commands (.md); the rest are generated from skill frontmatter
     ├── configuration/      # Handlers for agent, command, and skill configurations
     ├── hooks/              # OpenCode lifecycle hooks (tool execution, compaction)
     ├── skills/             # Workflows, orchestrators, and reusable skills
@@ -137,7 +137,7 @@ You can always be explicit when you prefer - arguments and flags simply override
 | `/owflow:performance`  | Optimizing speed or resource usage          |
 | `/owflow:migration`    | Changing technologies or patterns           |
 
-Task type (feature/bug/enhancement) is auto-detected from context. Override with `--type=feature|bug|enhancement` if needed. Or use `/owflow:work` as a single entry point that routes to the right workflow.
+Use `/owflow:work` as a single entry point — it classifies the task with the `task-classifier` subagent and routes to the right workflow.
 
 ### Research Utility
 
