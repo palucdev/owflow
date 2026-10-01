@@ -46,27 +46,19 @@ These standards apply across the entire codebase, regardless of frontend/backend
 
 #### Error Handling (`standards/global/error-handling.md`)
 
-Clear user-facing messages without internal details, fail-fast precondition checks, typed exceptions, centralized handling at boundaries, graceful degradation, retry with exponential backoff, resource cleanup; plugin contracts use machine-readable error prefixes (`INVALID_NAME:`, `Blocked:`), never throw from `tool()` handlers (return `{ output }` instead), and carry actionable `Hint:` guidance when an error is meant to drive agent behavior.
-
-#### Validation (`standards/global/validation.md`)
-
-Server-side validation always, client-side for feedback, validate early, specific field-level errors, allowlists over blocklists, type/format/range checks, input sanitization against injection, business-rule validation at the appropriate layer, consistent enforcement across all entry points (forms, APIs, background jobs).
+Plugin contracts use machine-readable error prefixes (`INVALID_NAME:`, `Blocked:`), never throw from `tool()` handlers (return `{ output }` instead), degrade gracefully on optional or external input, and carry actionable `Hint:` guidance when an error is meant to drive agent behavior.
 
 #### Development Conventions (`standards/global/conventions.md`)
 
-Predictable file/directory structure, up-to-date READMEs, clean version control (clear commits, feature branches, meaningful PRs), configuration via environment variables, minimal dependencies, consistent code reviews, defined test coverage expectations, feature flags over long-lived branches, changelog upkeep; project-specific: ESM import discipline (`node:` prefix, explicit `.js` extensions, `import type`), `[owflow]` logging prefix, pinned runtime dependency surface (`typescript` as peerDependency), dependency injection for testability, documentation-first with INDEX maintenance, task-directory artifact anchoring, no plan mode with workflows, destructive-command protection whitelist, and user-confirmed rollback only.
+ESM import discipline (`node:` prefix, explicit `.js` extensions, `import type`), `[owflow]` logging prefix, pinned runtime dependency surface (`typescript` as peerDependency), dependency injection for testability, documentation-first with INDEX maintenance, task-directory artifact anchoring, no plan mode with workflows, destructive-command protection whitelist, and user-confirmed rollback only.
 
 #### Coding Style (`standards/global/coding-style.md`)
 
-Naming consistency, automated formatting, descriptive names, focused single-purpose functions, uniform indentation, no dead code, no backward-compatibility paths unless required, DRY; TypeScript specifics: `strict` with `noFallthroughCasesInSwitch`/`noImplicitOverride`/`noUncheckedIndexedAccess`, ESNext target for Node ^25, kebab-case filenames (snake_case MCP tool exceptions), two-space/double-quote/semicolon/trailing-comma formatting, and `const` arrow-function exports with no function declarations.
+TypeScript specifics: `strict` with `noFallthroughCasesInSwitch`/`noImplicitOverride`/`noUncheckedIndexedAccess`, ESNext target for Node ^25, kebab-case filenames (snake_case MCP tool exceptions), two-space/double-quote/semicolon/trailing-comma formatting, and `const` arrow-function exports with no function declarations.
 
 #### Commenting (`standards/global/commenting.md`)
 
-Self-explanatory code first, comment sparingly and only for non-obvious logic, no changelog/change comments; sparse (~10% of lines) rationale-only comments, no TODO/FIXME/HACK markers, no commented-out code.
-
-#### Minimal Implementation (`standards/global/minimal-implementation.md`)
-
-Build only what is called, every method must serve a purpose, delete exploration artifacts, no future stubs, no speculative abstractions (factories/strategies/adapters), review before commit, unused code is debt; question every addition — negligible-value tests, self-evident documentation, and unused exports fail the same bar.
+Sparse (~10% of lines) rationale-only comments, no TODO/FIXME/HACK markers, no commented-out code.
 
 ---
 
@@ -96,7 +88,7 @@ These standards apply to all testing code (unit, integration, E2E).
 
 #### Test Writing (`standards/testing/test-writing.md`)
 
-Test behavior not implementation, descriptive `should …` names, mock external dependencies, fast unit tests, risk-based prioritization, balanced coverage vs velocity, critical user workflows well-tested, edge-case depth matched to risk; TDD red gate before any fix (quick lanes included), incremental verification of only new tests after each task group, and full suite plus verification report before commit.
+TDD red gate before any fix (quick lanes included), incremental verification of only new tests after each task group, full suite plus verification report before commit with per-subskill retry budgets (dev-verify: 3, dev-finalize: 3), and behavior-descriptive `should …` test names.
 
 #### Test Organization (`standards/testing/test-organization.md`)
 

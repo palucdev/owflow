@@ -53,22 +53,29 @@ Two modes share one state file per workflow: an assisted dispatcher (`/owflow:de
 - **Key Files**: `package.json`, `tsconfig.json`, `bunfig.toml`, `scripts/copy-markdowns.js`
 
 ## Visual Architecture Context
-**Type**: `C4Context` — system-level view: who uses owflow, what it registers into, and how it is distributed. Detail level is intentionally system-level; component internals are described in "System Structure" above.
+**Type**: `flowchart` — system-level view: who uses owflow, what it registers into, and how it is distributed. Flowchart rather than `C4Context` so each relationship has its own edge and the label stays readable. Component internals stay in "System Structure" above.
 
 ```mermaid
-C4Context
-  Person(developer, "Developer / Task Author", "Runs structured workflows through OpenCode slash commands")
-  Person(maintainer, "Plugin Maintainer", "Develops, builds, and publishes the plugin")
-  System(owflow, "owflow Plugin", "Registers skills, subagents, commands, hooks, and tools; drives spec-driven SDLC workflows with task state")
-  System_Ext(opencode, "OpenCode Host", "Loads the plugin, interprets skills, and runs subagent tasks")
-  System_Ext(npm, "npm Registry", "Distributes the owflow package")
+flowchart TB
+  subgraph dist["Distribution"]
+    direction TB
+    maintainer["Plugin Maintainer"]
+    npm["npm Registry"]
+    maintainer -->|"Publishes package"| npm
+  end
 
-  Rel(developer, npm, "Installs owflow from")
-  Rel(developer, opencode, "Works through")
-  Rel(opencode, owflow, "Loads dist/index.js and executes workflows")
-  Rel(owflow, opencode, "Registers skills, commands, agents, hooks, tools")
-  Rel(owflow, developer, "Returns phase-gate results and task artifacts")
-  Rel(maintainer, npm, "Publishes dist + README + LICENSE")
+  subgraph runtime["Runtime"]
+    direction TB
+    developer["Developer"]
+    opencode["OpenCode Host"]
+    owflow["owflow Plugin"]
+    developer -->|"Invokes workflows"| opencode
+    opencode -->|"Returns phase results"| developer
+    opencode -->|"Loads plugin"| owflow
+    owflow -->|"Registers skills, commands,<br/>hooks, and tools"| opencode
+  end
+
+  npm -->|"Distributes package"| developer
 ```
 
 ## Data Flow

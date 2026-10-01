@@ -8,9 +8,9 @@
 ## Planned Enhancements (Next 3-6 Months)
 
 ### High Priority
+- [ ] **OpenCode v2 support** — port the plugin to the V2 plugin API (`Plugin.define` + `setup(ctx)`, domain hooks and transforms) while keeping the V1 entrypoint working for `^1.18.x`; verify hooks, both custom tools, and registration end-to-end on V2
 - [ ] **Deterministic entry-gate checks** — implement the state-query script + lifecycle hook noted as the future direction in the orchestrator framework docs; today entry-gate prerequisite checks are agent-executed prose and can be skipped or misread
 - [ ] **New workflow capabilities** — continue growing the feature set per project goal: extend quick lanes, deepen subskill composition, and add richer standards automation
-- [ ] **Integration smoke test** — boot `dist/index.js` against a config object and assert registered command/skill/agent totals (the registration contract tests already assert counts at unit level)
 - [ ] **Qualify recently split workflows** — stabilize and document the migration/performance subskill splits end-to-end
 
 ### Medium Priority
@@ -23,7 +23,6 @@
 - [ ] **`.gitattributes` + formatter** — committed blobs are LF while the working tree is CRLF with no normalization; add `* text=auto eol=lf` and consider Prettier/ESLint
 - [ ] **Dual lockfiles** — `bun.lock` and `package-lock.json` are both committed; clarify the canonical package manager or drop one
 - [ ] **Hook hardening** — log swallowed non-`Blocked:` hook errors behind a debug flag; bound or clean the per-session agent map in `chat.message`
-- [ ] **Repo hygiene** — stale `.owflow/docs` entries remain staged in the git index as added-but-deleted
 
 ## Future Considerations
 - **Feature Ideas**: additional workflow types, richer fork/merge utilities for research trees, generated docs counts to prevent prose drift, ADR records for major design choices (markdown-defined workflows, runtime command synthesis, skill-vs-agent delegation)
