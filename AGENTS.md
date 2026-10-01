@@ -38,7 +38,7 @@ All workflows in this plugin follow this pattern when failures occur:
 
 ## Key Workflow Principles
 
-1. **Documentation First**: Always check docs/INDEX.md before and during work
+1. **Documentation First**: Always check @.owflow/docs/INDEX.md before and during work
 2. **Specification Before Implementation**: A spec.md approved by the user must exist in the task directory before the implementation-planner subagent is invoked
 3. **Planning Before Execution**: Break implementation into manageable steps
 4. **Test-Driven Approach**: Write tests first, implement, then verify
@@ -83,12 +83,13 @@ This plugin supports 4 workflow types that route to specialized orchestrators:
 
 ### Project Documentation Structure
 
-The plugin splits reference documentation (`.owflow/docs/`, stable) from development tasks (`.owflow/tasks/`, organized by workflow type: `development/`, `performance/`, `migrations/`, `research/`, plus quick-\* dirs). See `.owflow/docs/INDEX.md` for the full layout, and `.owflow/tasks/` for the actual structure.
+The plugin splits reference documentation (`.owflow/docs/`, stable) from development tasks (`.owflow/tasks/`, organized by workflow type: `development/`, `performance/`, `migrations/`, `research/`, plus quick-\* dirs). See @.owflow/docs/INDEX.md for the full layout, and `.owflow/tasks/` for the actual structure.
 
 **Core Principle**:
 
 - Reference documentation in `.owflow/docs/` is the source of truth for understanding the project
-- Full layout: `@.owflow/docs/INDEX.md`
+- Full layout: @.owflow/docs/INDEX.md
+- Project context: @.owflow/docs/project/vision.md (purpose, goals), @.owflow/docs/project/roadmap.md (planned work, technical debt), @.owflow/docs/project/tech-stack.md (stack, build flow), @.owflow/docs/project/architecture.md (plugin lifecycle, workflow engine)
 - Development tasks live separately in `.owflow/tasks/` for better organization and scalability
 
 ### Base Task Structure
