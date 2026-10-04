@@ -1,10 +1,10 @@
 orchestrator:
-  started_phase: null
+  started_phase: state-analysed
   entry_point: "migration"
-  completed_phases: []
+  completed_phases: [state-analysed]
   failed_phases: []
   auto_fix_attempts:
-    state-analysed: 0
+    state-analysed: 1
     target-planned: 0
     strategy-specified: 0
     plan-created: 0
@@ -24,14 +24,45 @@ orchestrator:
     reality_check_enabled: null
   created: "2026-10-01T00:00:00Z"
   updated: "2026-10-01T00:00:00Z"
-  task_path: ".owflow/tasks/migrations/2026-10-01-missing-context"
+  task_path: ".owflow/tasks/migrations/2026-10-01-binding-proof"
   task_ids: {}
 task:
-  title: "Missing-context fixture"
+  title: "Binding proof instance"
   description: null
-  status: pending
+  status: in_progress
   tags: ["migration"]
   priority: null
+migration_context:
+  migration_type: "code"
+  current_system:
+    description: "Legacy CLI application"
+    technologies: []
+  target_system:
+    description: "Bun-native CLI"
+    technologies: []
+  migration_strategy:
+    approach: "incremental"
+    phases: []
+  risk_level: "medium"
+  breaking_changes: []
+  rollback_plan_created: false
+  dual_run_configured: false
+  clarifications_resolved: true
+  phase_summaries:
+    analyze:
+      summary: "Current state analysed; re-keyed vocabulary bound to the co-landed template."
+    target:
+      summary: null
+    spec:
+      summary: null
+    plan:
+      summary: null
+    implement:
+      summary: null
+    verify:
+      summary: null
+    fix:
+      summary: null
 external_research:
   performed: false
   category: null
@@ -45,8 +76,8 @@ verification_context:
   decisions_made: []
   reverify_count: 0
 migration_outputs:
-  current_state_analysis: null
-  clarifications: null
+  current_state_analysis: "analysis/current-state-analysis.md"
+  clarifications: "analysis/clarifications.md"
   target_state_plan: null
   requirements: null
   spec: null

@@ -129,7 +129,7 @@ Orchestrators add domain-specific fields using `[domain]_context`:
 | ----------- | --------------------- | -------------------------------------------------- |
 | Development | `task_context`        | risk_level, ui_heavy, architecture_decision        |
 | Performance | `performance_context` | baseline_p95, target_p95, optimizations_completed  |
-| Migration   | `migration_context`   | migration_type, steps_completed                    |
+| Migration   | `migration_context`   | migration_type, risk_level                         |
 | Research    | `research_context`    | research_type, research_question, confidence_level |
 
 See each orchestrator's SKILL.md "Domain Context" section for full schema.

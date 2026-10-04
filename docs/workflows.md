@@ -200,7 +200,11 @@ Resume phases are the `phase-N` slugs recorded in the task's `orchestrator-state
 
 ## Migration
 
-Technology, data, and architecture migrations with rollback planning and risk assessment.
+Technology, data, and architecture migrations with rollback planning and risk assessment. Migration runs through a pipeline of standalone **`migration-*` subskills**, coordinated by a shared task state file (`orchestrator-state.yml`) — the same split as development and research:
+
+- **Assisted mode** — `/owflow:migration` initializes/resumes the task, derives the next step from state, prints the matching subskill command, and stops. Each subskill runs in a fresh context.
+- **Autonomous mode** — `/owflow:goal-migration` runs the same subskills back-to-back in one session, pausing at gates between them. Tasks can mix both modes freely.
+- **No quick lane** — every migration runs the full pipeline.
 
 ```
 /owflow:migration
@@ -209,33 +213,37 @@ Technology, data, and architecture migrations with rollback planning and risk as
 
 **Migration types**: `code`, `data`, `architecture`, `general`
 
-### Phases
+**Flags** (dispatcher and `goal-migration`): `--from=<slug>` (resume from a step), `--type=<type>` (default classification — `migration-target` still confirms on low confidence), `--no-web-research` (skip the external research step)
 
-| #   | Phase                                                                    |
-| --- | ------------------------------------------------------------------------ |
-| 1   | Current state analysis                                                   |
-| 2   | Target state planning + gap identification                               |
-| 3   | Migration requirements + strategy specification (includes rollback plan) |
-| 4   | Implementation planning                                                  |
-| 5   | Migration execution                                                      |
-| 6   | Verification + compatibility testing                                     |
-| 7   | Issue resolution (conditional, halts on data integrity issues)           |
-| 8   | Documentation (optional)                                                 |
+### Pipeline Steps
+
+Progress is tracked as descriptive step slugs in `completed_phases`: `state-analysed`, `target-planned`, `strategy-specified`, `plan-created`, `migration-executed`, `options-chosen`, `verification-done`, `issues-resolved`, `docs-generated`, `task-completed`.
+
+| Step slug(s) | Description | Subskill | Produces |
+| --- | --- | --- | --- |
+| `state-analysed` | Current-state analysis + clarifications | `/owflow:migration-analyze` | `analysis/current-state-analysis.md`, `analysis/clarifications.md` |
+| `target-planned` | Target state + gap inventory + risk lock | `/owflow:migration-target` | `analysis/target-state-plan.md` |
+| `strategy-specified` | Requirements + strategy + rollback/dual-run plans | `/owflow:migration-spec` | `analysis/requirements.md`, `implementation/spec.md`, `analysis/rollback-plan.md`, `analysis/dual-run-plan.md` (conditional) |
+| `plan-created` | Implementation planning with per-group rollback steps | `/owflow:migration-plan` | `implementation/implementation-plan.md` |
+| `migration-executed` | Migration execution | `/owflow:migration-implement` | implemented changes, `implementation/work-log.md` |
+| `options-chosen`, `verification-done` | Verification + compatibility testing | `/owflow:migration-verify` | `verification/implementation-verification.md`, `verification/compatibility-test-results.md` |
+| `issues-resolved` | Issue resolution (conditional — halts on data integrity) | `/owflow:migration-fix` | fixes applied, `verification_context.fixes_applied` |
+| `docs-generated`, `task-completed` | Optional migration guide + finalization | `/owflow:migration-finalize` | `documentation/migration-guide.md` (optional), completed task |
 
 **Key behaviors**:
 
-- Rollback planning is mandatory
+- Rollback planning is mandatory; every task group in the plan carries a rollback/checkpoint step
 - Dual-run support for zero-downtime migrations
-- Halts on data integrity issues (no automatic recovery)
-- External research for version upgrades via web search
+- Halts on data integrity issues (no automatic recovery; user-confirmed rollback only)
+- External research for version upgrades via web search, unless `--no-web-research`
 
 ### Resume
 
 ```
-/owflow:migration [task-path] [--from=PHASE]
+/owflow:migration [task-path] [--from=<slug>]
 ```
 
-Resume phases are the `phase-N` slugs recorded in the task's `orchestrator-state.yml` (`completed_phases`).
+Resume derives from state: the first step slug not in `completed_phases` determines the next subskill; `--from` overrides with a step slug — `state-analysed`, `target-planned`, `strategy-specified`, `plan-created`, `migration-executed`, `options-chosen`, `verification-done`, `issues-resolved`, `docs-generated`, `task-completed` (prerequisites are validated). Works across assisted and autonomous modes.
 
 ---
 
@@ -292,7 +300,7 @@ All workflows create structured directories in `.owflow/tasks/`:
 .owflow/tasks/
 ├── development/           # All development tasks (features, bugs, enhancements)
 ├── performance/           # Performance optimization
-├── migrations/            # Migrations
+├── migrations/            # Migration tasks (dispatcher + migration-* subskills)
 ├── research/              # Research
 ```
 

@@ -2,8 +2,8 @@
 
 ## Current State
 - **Version**: 0.4.3 (pre-1.0)
-- **Key Features**: 4 workflow types (development, research, performance, migration); 35 skills (30 user-invocable); 23 subagents; 36 commands (6 maintained, 30 synthesized from skill frontmatter); 2 custom tools (`verify_template`, `fork_task`); destructive-command guard; task state machine with resume semantics; `.owflow/docs/` standards management
-- **Recent Updates**: split research, migration, and performance orchestrators into standalone subskills; dynamic command wrappers from skill frontmatter; entry-gate hooks for dev skills (git history, Sep 2026)
+- **Key Features**: 4 workflow types (development, research, performance, migration); 44 skills (39 user-invocable); 23 subagents; 45 commands (6 maintained, 39 synthesized from skill frontmatter); 2 custom tools (`verify_template`, `fork_task`); destructive-command guard; task state machine with resume semantics; `.owflow/docs/` standards management
+- **Recent Updates**: split the research and migration orchestrators into standalone subskills (performance still runs on phase slugs); dynamic command wrappers from skill frontmatter; entry-gate hooks for dev skills (git history, Sep 2026)
 
 ## Planned Enhancements (Next 3-6 Months)
 
@@ -11,7 +11,7 @@
 - [ ] **OpenCode v2 support** — port the plugin to the V2 plugin API (`Plugin.define` + `setup(ctx)`, domain hooks and transforms) while keeping the V1 entrypoint working for `^1.18.x`; verify hooks, both custom tools, and registration end-to-end on V2
 - [ ] **Deterministic entry-gate checks** — implement the state-query script + lifecycle hook noted as the future direction in the orchestrator framework docs; today entry-gate prerequisite checks are agent-executed prose and can be skipped or misread
 - [ ] **New workflow capabilities** — continue growing the feature set per project goal: extend quick lanes, deepen subskill composition, and add richer standards automation
-- [ ] **Qualify recently split workflows** — stabilize and document the migration/performance subskill splits end-to-end
+- [ ] **Split and qualify the performance workflow** — decompose the performance orchestrator into standalone subskills and document it end-to-end, following development, research, and migration
 
 ### Medium Priority
 - [ ] **CI pipeline** — run `bun run build` (type-check + tests + coverage) on push/PR for the GitHub/Codeberg remotes

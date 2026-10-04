@@ -13,7 +13,7 @@ Commands come in **two kinds**, and the kind tells you where the text you see wh
 | **Maintained content command** | A markdown file in `src/commands/`, one file per command. The whole body is authored there: which subagent or skill to invoke, how to read the user's arguments, and worked examples. | `src/commands/<name>.md` |
 | **Synthesized wrapper** | Generated at config time from a `SKILL.md` frontmatter block — one wrapper per skill marked `user-invocable: true`. The body holds no workflow logic; it is an instruction to invoke the skill. | that skill's `SKILL.md` frontmatter |
 
-The plugin registers **6 maintained** commands and **30 synthesized** wrappers. Both numbers follow from the rules above rather than being independent facts: one file per maintained command, one wrapper per invocable skill. What registers is read from disk at config time, and `bun test src` asserts only the resulting totals — 36 commands, of which 30 are synthesized. The suite does not pin the exact name set, so renaming a skill's `name` frontmatter renames its command without failing a test.
+The plugin registers **6 maintained** commands and **39 synthesized** wrappers. Both numbers follow from the rules above rather than being independent facts: one file per maintained command, one wrapper per invocable skill. What registers is read from disk at config time, and `bun test src` asserts only the resulting totals — 45 commands, of which 39 are synthesized. The suite does not pin the exact name set, so renaming a skill's `name` frontmatter renames its command without failing a test.
 
 ### The maintained content commands
 
@@ -86,7 +86,7 @@ Pass a description to start a task, or a task path to resume one. `/owflow:goal-
 | `--user-docs` / `--no-user-docs` | Force/skip user documentation |
 | `--reset-attempts` | Reset failed attempt counters (resume) |
 
-The phase flags are written into the task's state as options and the subskills read them from there; `--research=PATH` instead records the linked research task in state. `--reset-attempts` is a development-dispatch flag — `/owflow:performance` and `/owflow:migration` resume on `--from=PHASE` and do not read it.
+The phase flags are written into the task's state as options and the subskills read them from there; `--research=PATH` instead records the linked research task in state. `--reset-attempts` is a development-dispatch flag — `/owflow:performance` resumes on `--from=PHASE` and `/owflow:migration` on `--from=<slug>`, and neither reads it.
 
 Starting from a completed research task is either naming the research folder as the sole argument or passing `--research=PATH` alongside a description. Either way the research context informs every subskill; it never skips one.
 
@@ -174,11 +174,30 @@ Static-analysis-first optimization: reads the code to find bottlenecks — N+1 q
 
 ### `/owflow:migration [task description | task-path]`
 
-Technology, platform, and architecture-pattern migrations with risk assessment, incremental execution, and mandatory rollback planning. Given nothing, it asks what is being migrated and to what. Classifies the migration as `code`, `data`, or `architecture`, which sets the risk focus and the execution strategy; data migrations add integrity checks and a dual-run. Resume with `--from=PHASE`.
+Technology, platform, and architecture-pattern migrations with risk assessment, incremental execution, and mandatory rollback planning. Given nothing, it asks what is being migrated and to what. `/owflow:goal-migration` runs the same lifecycle with every subskill invoked for you, in one session.
+
+The migration **dispatcher** derives the next step from state and hands off to the matching `migration-*` subskill. `--type` is written to `migration_context.migration_type` as a default — `migration-target` still confirms a low-confidence classification. Data migrations add integrity checks and a dual-run.
 
 | Flag | Effect |
 | --- | --- |
-| `--type=TYPE` | Set the migration type — `code`, `data`, or `architecture` |
+| `--from=<slug>` | Hand off from a specific step slug |
+| `--type=TYPE` | Set the migration type — `code`, `data`, `architecture`, or `general` |
+| `--no-web-research` | Skip the external web research step (recorded as not performed) |
+
+#### The `/owflow:migration-*` subskills
+
+Each is standalone, resolves its task from a full path or the directory name under `.owflow/tasks/migrations/`, and stops with the ordered prerequisite steps when something is missing.
+
+| Command | Arguments | What it does |
+| --- | --- | --- |
+| `/owflow:migration-analyze` | `[task-path-or-identifier]` | Current-state analysis and migration-scoped clarifications |
+| `/owflow:migration-target` | `[task-path-or-identifier] [--type=TYPE] [--no-web-research]` | Target-state plan, type classification, and the risk lock |
+| `/owflow:migration-spec` | `[task-path-or-identifier]` | Requirements, strategy specification, and rollback/dual-run plans |
+| `/owflow:migration-plan` | `[task-path-or-identifier]` | Implementation plan with per-group rollback steps |
+| `/owflow:migration-implement` | `[task-path-or-identifier]` | Plan execution and the work log |
+| `/owflow:migration-verify` | `[task-path-or-identifier]` | Verification options, verification, and compatibility testing |
+| `/owflow:migration-fix` | `[task-path-or-identifier]` | Conditional issue resolution (halts on data integrity) |
+| `/owflow:migration-finalize` | `[task-path-or-identifier]` | Optional migration guide and task completion |
 
 ---
 
@@ -218,7 +237,7 @@ Discovers coding standards from project configuration files, code patterns, docu
 
 ### `/owflow:standards-update [description of standard/convention] [--from=PATH]`
 
-Creates or updates a standard from conversation context or an explicit description; with no arguments it scans the current conversation for convention statements and proposes them as new standards. `--from=PATH` switches to sync mode — analyzing what differs between this project's standards and another project's, and letting you select which to import. Note that `--from` means a **step slug** on the development and research commands, a **phase** on performance and migration, and a **project path** here.
+Creates or updates a standard from conversation context or an explicit description; with no arguments it scans the current conversation for convention statements and proposes them as new standards. `--from=PATH` switches to sync mode — analyzing what differs between this project's standards and another project's, and letting you select which to import. Note that `--from` means a **step slug** on the development, research, and migration commands, a **phase** on performance, and a **project path** here.
 
 ---
 

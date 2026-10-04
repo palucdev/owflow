@@ -4,7 +4,7 @@
 
 **Purpose:** Pattern guide for the three migration types: Code, Data, and Architecture
 
-This reference provides characteristics, detection patterns, and workflow adaptations for each migration type supported by the migration orchestrator.
+This reference provides characteristics, detection patterns, and workflow adaptations for each migration type supported by the migration workflow.
 
 ---
 
@@ -91,27 +91,27 @@ Different types require different:
 
 ### Workflow Adaptations
 
-**Phase 1 (Current State Analysis)**:
+**`migration-analyze` (Current State Analysis)**:
 
 - Focus: Locate all source files using old framework/library
 - Analyze: Dependency tree, API usage patterns, deprecated features used
 
-**Phase 2 (Target State Planning)**:
+**`migration-target` (Target State Planning)**:
 
 - Focus: Breaking changes between versions, API equivalents
 - Output: Breaking changes list, API migration map
 
-**Phase 3 (Specification)**:
+**`migration-spec` (Specification)**:
 
 - Include: Compatibility shim requirements (if needed)
 - Rollback: Simple (revert code via git)
 
-**Phase 5 (Execution)**:
+**`migration-implement` (Execution)**:
 
 - Strategy: Incremental (by module/component)
 - Testing: Functional tests per module
 
-**Phase 6 (Verification)**:
+**`migration-verify` (Verification)**:
 
 - Focus: Functional equivalence (behavior unchanged)
 - Tests: Full test suite, manual testing of critical flows
@@ -176,28 +176,28 @@ Different types require different:
 
 ### Workflow Adaptations
 
-**Phase 1 (Current State Analysis)**:
+**`migration-analyze` (Current State Analysis)**:
 
 - Focus: Database schema, row counts, data volume, stored procedures
 - Analyze: Data relationships, foreign keys, indexes, constraints
 
-**Phase 2 (Target State Planning)**:
+**`migration-target` (Target State Planning)**:
 
 - Focus: Data transformation requirements, data mapping (old → new schema)
 - Output: Data transformation specification, estimated migration time
 
-**Phase 3 (Specification)**:
+**`migration-spec` (Specification)**:
 
 - Include: Data validation procedures, integrity checks, rollback procedures
 - Rollback: Complex (requires backup/restore strategies)
 - Dual-Run: Often required (zero-downtime)
 
-**Phase 5 (Execution)**:
+**`migration-implement` (Execution)**:
 
 - Strategy: Incremental + Dual-Run (high confidence in strategy choice)
 - Testing: Data integrity checks after each batch
 
-**Phase 6 (Verification)**:
+**`migration-verify` (Verification)**:
 
 - Focus: Data integrity (100% row count match, checksums, data validation)
 - Tests: Full test suite + data integrity tests + performance benchmarks
@@ -271,28 +271,28 @@ Different types require different:
 
 ### Workflow Adaptations
 
-**Phase 1 (Current State Analysis)**:
+**`migration-analyze` (Current State Analysis)**:
 
 - Focus: System components, communication patterns, dependencies between components
 - Analyze: Coupling/cohesion, service boundaries, data flow
 
-**Phase 2 (Target State Planning)**:
+**`migration-target` (Target State Planning)**:
 
 - Focus: New architecture structure, component boundaries, communication patterns
 - Output: Architecture diagram, component mapping (old → new)
 
-**Phase 3 (Specification)**:
+**`migration-spec` (Specification)**:
 
 - Include: Strangler fig pattern (if applicable), component interaction diagrams
 - Rollback: Moderate to complex (depends on dual-run feasibility)
 - Dual-Run: Often required (old and new architectures in parallel)
 
-**Phase 5 (Execution)**:
+**`migration-implement` (Execution)**:
 
 - Strategy: Incremental (by component/service) + Dual-Run (if possible)
 - Testing: Integration tests, end-to-end tests, performance tests
 
-**Phase 6 (Verification)**:
+**`migration-verify` (Verification)**:
 
 - Focus: System-level behavior (end-to-end flows work), performance comparison
 - Tests: Full test suite + integration tests + E2E tests
@@ -333,7 +333,7 @@ Different types require different:
 
 ### Workflow Adaptations
 
-**Phase 1-2 (Analysis + Planning)**:
+**`migration-analyze` → `migration-target` (Analysis + Target Planning)**:
 
 - Spend extra time clarifying scope
 - Prompt user to specify what's changing (code, data, architecture, or all)
@@ -423,7 +423,7 @@ Terms: "refactor to", "architecture", "pattern", "system design", "restructure"
 
 ## Web Research Requirements by Type
 
-External research is automatically triggered by the gap-analyzer during Phase 2 (Target State Planning). The level of research depends on migration type.
+External research runs inline in `migration-target` — the `gap-analyzer` agent performs the gap inventory only and has no web access. The level of research depends on migration type, and the outcome is recorded in `external_research.*` (including `performed: false` when skipped).
 
 | Migration Type             | External Research | Query Focus                                       | Priority Sources                                  |
 | -------------------------- | ----------------- | ------------------------------------------------- | ------------------------------------------------- |
@@ -482,9 +482,8 @@ External research is automatically triggered by the gap-analyzer during Phase 2 
 3. **Architecture**: Focus on system-level behavior, strangler fig pattern, high risk
 4. **General**: Conservative defaults, extra clarification with user
 
-**References in SKILL.md**:
+**Read by**:
 
-- Initialization (Step 2): Type detection algorithm
-- Phase 1 (Analysis): Type-specific analysis focus
-- Phase 2 (Target Planning): Type-specific gap analysis + external research
-- Phase 6 (Verification): Type-specific verification requirements
+- `migration-target`: type detection algorithm (with confidence scoring), type-specific gap analysis, external research requirements
+- `migration-analyze`: type-specific analysis focus
+- `migration-verify`: type-specific verification requirements

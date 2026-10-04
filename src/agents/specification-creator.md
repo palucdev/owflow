@@ -303,7 +303,7 @@ warnings: ["any non-critical observations"]
 
 ## Integration
 
-**Invoked by**: development orchestrator (Phase 5), migration orchestrator (Phase 2)
+**Invoked by**: development orchestrator (Phase 5), migration-spec
 
 **Prerequisites**:
 

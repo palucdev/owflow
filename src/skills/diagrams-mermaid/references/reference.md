@@ -141,7 +141,7 @@ Integrated into:
 - `src/skills/development/SKILL.md` - Phase 5 (spec refinement), Phase 7 (plan refinement)
 - `src/skills/research/SKILL.md` - Phase 5 (high-level design refinement)
 - `src/skills/performance/SKILL.md` - Phase 3 (spec refinement), Phase 5 (plan refinement)
-- `src/skills/migration/SKILL.md` - Phase 3 (spec refinement), Phase 4 (plan refinement)
+- `src/skills/migration-spec/SKILL.md` - spec refinement; `src/skills/migration-plan/SKILL.md` - plan refinement
 
 Reference files:
 - `src/skills/flow-init/references/architecture-template.md`
