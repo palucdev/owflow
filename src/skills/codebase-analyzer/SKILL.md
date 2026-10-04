@@ -155,8 +155,8 @@ risk_level: low|low-medium|medium|medium-high|high
 
 ## Integration
 
-| Orchestrator | Phase | artifact_name |
+| Orchestrator | Step (slug) | artifact_name |
 |-------------|-------|---------------|
-| development orchestrator | Phase 1 | `codebase-analysis.md` (default) |
-| migration-analyze | state-analysed | `current-state-analysis.md` |
-| performance orchestrator | Phase 1 | `codebase-analysis.md` (default) |
+| development orchestrator | `codebase-analysed` | `codebase-analysis.md` (default) |
+| migration-analyze | `state-analysed` | `current-state-analysis.md` |
+| performance orchestrator | `phase-1` | `codebase-analysis.md` (default) |

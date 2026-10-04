@@ -43,7 +43,7 @@ Resolve the `task-path-or-identifier` argument BEFORE anything else (see [Gate C
 
 ## Execute
 
-**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) and [Issue Resolution](../orchestrator-framework/references/orchestrator-patterns.md) (Section 6).
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md), the [Fix Loop Contract](../orchestrator-framework/references/fix-loop-contract.md), and [Issue Resolution](../orchestrator-framework/references/orchestrator-patterns.md) (Section 6).
 
 ### Verification Options Prompt (`options-chosen`, inline)
 
@@ -94,14 +94,7 @@ Verification Results:
 
 **Step 3**: Gate on status — `passed` → skip to State Update. `passed_with_issues` or `failed` → fix loop (Step 4).
 
-**Step 4**: User-driven fix loop (max 3 iterations):
-
-1. Present critical + warning issues as a numbered list.
-2. `question` — "Which issues should I fix?" Options: "Fix all fixable issues" / "Let me choose specific issues" / "Skip fixes, proceed as-is".
-3. Fix selected issues; **immediately** log each to `verification_context.fixes_applied` in state (not deferred to the end).
-4. After fixes: set `skip_test_suite: false` (code changed, tests must re-run).
-5. `question` — "Re-run verification to check fixes?" → re-invoke `implementation-verifier` → back to Step 2, or "No, proceed to next phase".
-6. **Immediately** update `verification_context.reverify_count` and `verification_context.last_status` in state after each verifier run.
+**Step 4**: User-driven fix loop (max 3 iterations) — follow the [Fix Loop Contract](../orchestrator-framework/references/fix-loop-contract.md): the three-option question wording, immediate `fixes_applied` writes, `skip_test_suite: false` after fixes, re-invoking `implementation-verifier` on request, and refreshing `reverify_count` / `last_status` / `issues_found` right after each verifier run.
 
 **Exit conditions**: no critical issues remain → proceed; user explicitly chooses to proceed with issues → proceed with issues logged; max 3 iterations → `question` "Proceed with known issues?" / "Stop workflow". **MUST NOT proceed with unresolved critical issues unless the user explicitly approves.**
 
@@ -111,7 +104,7 @@ Apply after EVERY phase/step above:
 
 1. **Write immediately** — update `orchestrator-state.yml` as soon as the step completes, appending ONLY the step slug actually performed plus that step's fields. Never defer writes to the end of the skill.
 2. **Options prompt** — append `options-chosen` to `completed_phases` with the chosen `options.*` and `skip_test_suite` (written right after the options prompt, before verification starts).
-3. **Per verifier run** — update `verification_context.last_status`, `issues_found`, `fixes_applied`, and `reverify_count` immediately after each `implementation-verifier` run and after each fix-loop iteration (per steps 3/6 above), so an interruption loses nothing.
+3. **Per verifier run** — update `verification_context.last_status`, `issues_found`, `fixes_applied`, and `reverify_count` immediately after each `implementation-verifier` run and after each fix-loop iteration (per the [Fix Loop Contract](../orchestrator-framework/references/fix-loop-contract.md)'s immediate-write cadence), so an interruption loses nothing.
 4. **Completion** — append `verification-done` to `completed_phases` only at skill exit: status `passed`, or user-approved proceed with issues logged. Bump `orchestrator.updated` on every write.
 5. **Failures** — if `implementation-verifier` itself fails or the workflow stops with unresolved critical issues, do NOT append `verification-done` to `completed_phases`; append it to `orchestrator.failed_phases` and increment `auto_fix_attempts["verification-done"]`.
 6. **Validate** — after every write, re-read the file to confirm values, then run the `verify_template` tool with `filePath: <task-path>/orchestrator-state.yml`, `templateName: orchestrator-state-development.yml`. Fix any reported issue immediately before proceeding.

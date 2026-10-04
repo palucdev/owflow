@@ -138,10 +138,10 @@ Better:
 
 Integrated into:
 - `src/skills/flow-init/SKILL.md` - Phase 6 (architecture and tech-stack doc refinement)
-- `src/skills/development/SKILL.md` - Phase 5 (spec refinement), Phase 7 (plan refinement)
-- `src/skills/research/SKILL.md` - Phase 5 (high-level design refinement)
-- `src/skills/performance/SKILL.md` - Phase 3 (spec refinement), Phase 5 (plan refinement)
-- `src/skills/migration-spec/SKILL.md` - spec refinement; `src/skills/migration-plan/SKILL.md` - plan refinement
+- `src/skills/dev-spec/SKILL.md` - `spec-written` (spec refinement); `src/skills/dev-plan/SKILL.md` - `plan-created` (plan refinement)
+- `src/skills/research-design/SKILL.md` - `design-generated` (high-level design refinement)
+- `src/skills/performance/SKILL.md` - `phase-3` (spec refinement), `phase-5` (plan refinement)
+- `src/skills/migration-spec/SKILL.md` - `strategy-specified` (spec refinement); `src/skills/migration-plan/SKILL.md` - `plan-created` (plan refinement)
 
 Reference files:
 - `src/skills/flow-init/references/architecture-template.md`

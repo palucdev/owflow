@@ -78,7 +78,7 @@ Not applicable — `migration-target` has no activation condition; it runs whene
 > **ANTI-PATTERN — never author the gap inventory inline. The gap analysis is delegated; the inline content is only type classification, strategy recommendation, and the research record.**
 
 1. **Task tool — `gap-analyzer`** (frozen contract, gap inventory only). Pass: `task_path`, current-state summary, target description (`task.description` + clarifications), and constraints. The agent hard-codes its output as `analysis/gap-analysis.md`.
-2. **Normalize the path (ADR-013)**: after the agent returns, rename/move its output to the declared artifact `analysis/target-state-plan.md`.
+2. **Normalize the path**: after the agent returns, rename/move its output to the declared artifact `analysis/target-state-plan.md`.
 3. **Type classification** (inline): run the keyword/confidence algorithm from `references/migration-types.md` against the migration description. A dispatcher `--type` value is the starting default, never an override. When confidence < 100% (or the default is ambiguous), use `question` with the detected type and evidence to confirm/adjust. Write `migration_context.migration_type`.
 4. **Strategy recommendation** (inline): pick incremental / big-bang / dual-run / phased with the reference decision tree; the rationale belongs in `phase_summaries.target.summary` and the plan artifact — the vestigial `migration_strategy` block stays unwritten.
 5. **External research** (unless `--no-web-research`): WebSearch per the per-type research table. Record `external_research.performed`, `.category`, `.breaking_changes`, `.migration_guide_url` — `migration-target` is the declared single writer of the `external_research.*` block. On a deliberate skip record `performed: false` — never leave the block implying research that did not happen.
@@ -107,7 +107,7 @@ Present results, get user confirmation, then hand off (see [Gate Contract](../or
 **Risk level** — [low / medium / high] ([N] breaking changes; ⚠ high requires rollback + compatibility testing)
 **External research** — [performed: N queries / skipped (`--no-web-research`)]
 
-🔒 **Risk lock** — target system, migration type, strategy, and breaking changes are LOCKED at this gate (ADR-007); changing any of them routes back through `/owflow:migration-target`.
+🔒 **Risk lock** — target system, migration type, strategy, and breaking changes are LOCKED at this gate; changing any of them routes back through `/owflow:migration-target`.
 
 **Artifacts**
 

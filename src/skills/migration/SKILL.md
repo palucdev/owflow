@@ -1,6 +1,6 @@
 ---
 name: owflow:migration
-description: Migration workflow dispatcher. Initializes/resumes migration tasks, derives the next step from state, and hands off to the matching /owflow:migration-* subskill. Handles technology migrations, platform changes, and architecture pattern transitions with adaptive risk assessment, incremental execution, rollback planning, dual-run support, and compatibility verification. Use /owflow:goal-migration to run all steps in one session.
+description: Migration workflow dispatcher. Initializes/resumes migration tasks, derives the next step from state, and hands off to the matching /owflow:migration-* subskill. Handles technology migrations, platform changes, and architecture pattern transitions with adaptive risk assessment, incremental execution, rollback planning, dual-run support, and compatibility verification.
 argument-hint: "[task description | task-path] [--from=<slug>] [--type=TYPE] [--no-web-research]"
 user-invocable: true
 ---
@@ -9,7 +9,7 @@ user-invocable: true
 
 Entry point for migration tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:migration-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
 
-Migration state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `state-analysed`, `target-planned`, `strategy-specified`, `plan-created`, `migration-executed`, `options-chosen`, `verification-done`, `issues-resolved`, `docs-generated`, `task-completed`. The routing table below maps slugs to subskills.
+Migration state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts`: `state-analysed`, `target-planned`, `strategy-specified`, `plan-created`, `migration-executed`, `options-chosen`, `verification-done`, `issues-resolved`, `docs-generated`, `task-completed`. The routing table below maps slugs to subskills.
 
 For the all-in-one loop with in-session `question` gates, use `/owflow:goal-migration`.
 

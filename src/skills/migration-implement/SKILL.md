@@ -1,13 +1,13 @@
 ---
 name: owflow:migration-implement
-description: Migration — executes the approved implementation plan via the reused implementation-plan-executor (normal lane only), producing the work log and the migration-executed slug.
+description: Migration — executes the approved implementation plan via isolated per-group delegation (normal lane only), producing the work log and the migration-executed slug.
 argument-hint: "[task-path-or-identifier]"
 user-invocable: true
 ---
 
 # Migration Implement — Plan Execution & Work Log (migration-executed)
 
-Work phase of the migration workflow. Executes `implementation/implementation-plan.md` task group by task group through the reused `implementation-plan-executor` engine — **normal lane only, no quick lane** — and records the execution in state. The engine owns checkboxes, the work log, incremental tests, standards discovery, and its own user-confirmed failure handling; this shell owns the state write.
+Work phase of the migration workflow. Executes `implementation/implementation-plan.md` task group by task group through isolated per-group delegation — **normal lane only, no quick lane** — and records the execution in state. The delegation owns checkboxes, the work log, incremental tests, standards discovery, and its own user-confirmed failure handling; this shell owns the state write.
 
 ## Entry Gate
 
@@ -52,7 +52,7 @@ When the only unmet prerequisite is the state file, use `question` — "No task 
 - `implementation/work-log.md` exists but `migration-executed` is missing ⇒ **adopt**: append `migration-executed`, backfill `phase_summaries.implement.summary` and `migration_outputs.work_log` where still null.
 - `migration-executed` is present but `implementation/work-log.md` is missing ⇒ **drop** `migration-executed` from `completed_phases` and re-run.
 - Both artifact and slug exist ⇒ report the existing execution summary and route to the Exit Gate.
-- A partially executed plan (unchecked groups remain) is NOT complete: resume with `/owflow:migration-implement <task-path>` so the executor picks up the uncompleted groups.
+- A partially executed plan (unchecked groups remain) is NOT complete: resume with `/owflow:migration-implement <task-path>` so the per-group execution picks up the uncompleted groups.
 
 ### 6. Conditional activation
 
@@ -66,21 +66,21 @@ Not applicable — `migration-implement` has no activation condition; it runs wh
 
 ## Execute
 
-**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md). The executor engine applies its own test-driven per-group order and continuous standards discovery.
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md). The per-group execution applies its own test-driven order and continuous standards discovery.
 
 | Direction | Artifact                            | Producer                                                             |
 | --------- | ----------------------------------- | -------------------------------------------------------------------- |
 | Consumed  | `implementation/implementation-plan.md` | `migration-plan` (approved plan with per-group rollback steps)   |
 | Consumed  | `implementation/spec.md`            | `migration-spec` (approved specification)                            |
-| Produced  | `implementation/work-log.md`        | `implementation-plan-executor` (**Skill**, reused 1:1 — normal lane only) |
+| Produced  | `implementation/work-log.md`        | per-group delegation to `task-group-implementer` (**Task tool**, normal lane only) |
 
 ### Plan Execution (`migration-executed`)
 
 > **ANTI-PATTERN — never execute the plan's task groups inline. "The groups are straightforward" is NOT a reason to skip delegation.**
 
-1. **Skill tool — `implementation-plan-executor`** (element-for-element 1:1 reuse; never the quick lane — migration has no quick lane). Pass: `task_path`, `task_description`, the `implementation/spec.md` + `implementation/implementation-plan.md` paths, `migration_context.*` (type, strategy, risk level, breaking changes), and accumulated `phase_summaries` (analyze → plan). The engine manages its own `task-group-implementer` subagents, lazy standards loading, checkbox marking, incremental tests, the full-suite final run, and `implementation/work-log.md`.
-2. **No post-continuation glue block** — the engine's return is not a handoff to be glued: do NOT "re-read state to confirm you are the orchestrator", do NOT add a numbered phase marker, do NOT auto-proceed to verification. The monolith's post-continuation block existed only because the monolith owned the state writes; here the per-step write below is the only continuation.
-3. **State write**: append `migration-executed` to `completed_phases`; set `phase_summaries.implement.summary`, `migration_outputs.work_log: "implementation/work-log.md"`; bump `orchestrator.updated`. On failure (executor reports failure after its budgets, user stops): do NOT append; append `migration-executed` to `failed_phases` and increment `auto_fix_attempts["migration-executed"]`; partial progress stays in `implementation/work-log.md`. Then re-read state + run `verify_template`.
+1. **Execute the plan — per-group delegation** (normal lane only; migration has no quick lane). For each task group in order: prepare context (task path, task description, the `implementation/spec.md` + `implementation/implementation-plan.md` paths, `migration_context.*` — type, strategy, risk level, breaking changes — and accumulated `phase_summaries` from analyze → plan), delegate the group via the **Task tool** to `task-group-implementer`, then process its report: mark the group's checkboxes in `implementation/implementation-plan.md`, append the work-log entry to `implementation/work-log.md`, and run the group's incremental tests before moving on. Apply lazy standards loading per group; after the last group, run the full test suite once.
+2. **No post-continuation glue block** — the per-group execution's return is not a handoff to be glued: do NOT "re-read state to confirm you are the orchestrator", do NOT add a numbered phase marker, do NOT auto-proceed to verification. The monolith's post-continuation block existed only because the monolith owned the state writes; here the per-step write below is the only continuation.
+3. **State write**: append `migration-executed` to `completed_phases`; set `phase_summaries.implement.summary`, `migration_outputs.work_log: "implementation/work-log.md"`; bump `orchestrator.updated`. On failure (per-group execution fails after its retries, user stops): do NOT append; append `migration-executed` to `failed_phases` and increment `auto_fix_attempts["migration-executed"]`; partial progress stays in `implementation/work-log.md`. Then re-read state + run `verify_template`.
 
 ## State Update Convention (per step)
 

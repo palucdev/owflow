@@ -103,7 +103,7 @@ sequenceDiagram
   Host->>Skill: Invoke dispatcher or wrapper skill
   Skill->>State: Read or bootstrap from template
   State-->>Skill: Step state (completed_phases)
-  Note over Skill: Dispatcher hands off one subskill; wrapper invokes each subskill back-to-back
+  Note over Skill: Dispatcher hands off one subskill while the wrapper invokes each subskill back-to-back
   loop Each incomplete step
     Skill->>Host: Execute step (contextual / interactive work)
     Host->>Sub: Delegate isolated work (Task tool)

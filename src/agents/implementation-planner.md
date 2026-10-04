@@ -281,7 +281,7 @@ groups:
 
 ## Integration
 
-**Invoked by**: development orchestrator (Phase 7), migration-plan
+**Invoked by**: dev-plan, migration-plan
 
 **Prerequisites**:
 

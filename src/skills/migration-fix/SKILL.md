@@ -7,7 +7,7 @@ user-invocable: true
 
 # Migration Fix — Conditional Issue Resolution (issues-resolved)
 
-Conditional work phase of the migration workflow. Activates only when the verification state fact says fixable issues remain. Runs a direct fix loop contract-identical to `dev-verify` Step 4 — three option wordings, max 3 iterations, re-invoke `implementation-verifier`, `fixes_applied` written immediately per iteration. **Data-integrity problems are NEVER auto-fixed.**
+Conditional work phase of the migration workflow. Activates only when the verification state fact says fixable issues remain. Runs the shared [Fix Loop Contract](../orchestrator-framework/references/fix-loop-contract.md) — max 3 iterations, re-invoke `implementation-verifier`, `fixes_applied` written immediately per iteration — with the migration deltas (compatibility verdict invalidation, data-integrity HALT). **Data-integrity problems are NEVER auto-fixed.**
 
 ## Entry Gate
 
@@ -73,7 +73,7 @@ and route to `/owflow:migration-finalize <task-path>` (required next: operator g
 
 ## Execute
 
-**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) and [Issue Resolution](../orchestrator-framework/references/orchestrator-patterns.md) (Section 6).
+**Read first**: the [Delegation Rules](../orchestrator-framework/references/delegation-rules.md), the [Fix Loop Contract](../orchestrator-framework/references/fix-loop-contract.md), and [Issue Resolution](../orchestrator-framework/references/orchestrator-patterns.md) (Section 6).
 
 | Direction | Artifact                                        | Producer                                                              |
 | --------- | ----------------------------------------------- | --------------------------------------------------------------------- |
@@ -86,7 +86,7 @@ and route to `/owflow:migration-finalize <task-path>` (required next: operator g
 
 1. **Display the detailed issue breakdown** grouped by category and severity (location, description, fixability).
 2. **Present critical + warning issues as a numbered list.**
-3. `question` — "Which issues should I fix?" with exactly three options: **"Fix all fixable issues"** / **"Let me choose specific issues"** / **"Skip fixes, proceed as-is"**.
+3. `question` per the [Fix Loop Contract](../orchestrator-framework/references/fix-loop-contract.md) — "Which issues should I fix?" with exactly three options: **"Fix all fixable issues"** / **"Let me choose specific issues"** / **"Skip fixes, proceed as-is"**.
 4. **Fix the selected issues directly** (the migrated code is this skill's artifact). **Immediately** after each fix, append it to `verification_context.fixes_applied` in state — never deferred to the end; bump `orchestrator.updated`; re-read + `verify_template`. After fixes set `options.skip_test_suite: false` (code changed — the suite must re-run on re-verification) **and invalidate the stale compatibility verdict: `verification_context.compatibility_status: null`** (field-level fail-closed exception — the 4 checks ran against pre-fix code; only `migration-verify` may set a new verdict).
 5. `question` — "Re-run verification to check fixes?" → **"Yes, re-run verification"** / **"No, proceed to next phase"**. On yes: Skill tool — `implementation-verifier`; then **immediately** update `verification_context.reverify_count` **and refresh `verification_context.last_status` + `issues_found` from the verifier's structured return** (field-level re-verify exception — the fix loop replaces the verification result), then return to step 1 (max 3 iterations). `compatibility_status` stays `null` (invalidated by the fixes) or `failed` and remains owned by `migration-verify`: when it is not `passed`, the loop's required next step is `/owflow:migration-verify <task-path>` (its re-verification re-runs the compatibility checks and settles the verdict) — never route a non-passed compatibility status to finalize. On "No", exit the loop to the Exit Gate, where the same required-next rule applies. Single-writer split: `migration-verify` owns `last_status`/`issues_found`/`compatibility_status`; this skill owns `fixes_applied`, `reverify_count`, `decisions_made`, plus the re-verify refresh of `last_status`/`issues_found` and the fail-closed invalidation of `compatibility_status`.
 6. **Record each user decision** (specific selection, proceed-with-warnings, deliberate skip) in `verification_context.decisions_made`.
