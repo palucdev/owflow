@@ -8,7 +8,7 @@ owflow is an OpenCode plugin that registers an agentic SDLC system at runtime: i
 
 The plugin entry point (`src/index.ts`, default-exported `OwflowPlugin`) never runs workflows itself. It performs three registration duties — config mutation (skills path, command palette, subagent definitions), lifecycle hooks (compaction reminder, destructive-command guard, session attribution), and custom tools (`verify_template`, `fork_task`). Workflow logic lives entirely in `src/skills/**` markdown, interpreted by the host agent at invocation time, with `.owflow/tasks/**/orchestrator-state.yml` as the durable state.
 
-Two modes share one state file per split workflow: an assisted dispatcher (`/owflow:development`, `/owflow:research`, `/owflow:migration`) hands off one subskill per invocation, and an autonomous wrapper (`/owflow:goal-development`, `/owflow:goal-research`, `/owflow:goal-migration`) runs every step in one session; either can be mixed on the same task. Performance remains a single orchestrator on the classic phase-slug pipeline.
+Two modes share one state file per split workflow: an assisted dispatcher (`/owflow:development`, `/owflow:research`, `/owflow:performance`, `/owflow:migration`) hands off one subskill per invocation, and an autonomous wrapper (`/owflow:goal-development`, `/owflow:goal-research`, `/owflow:goal-performance`, `/owflow:goal-migration`) runs every step in one session; either can be mixed on the same task.
 
 ## System Structure
 
@@ -20,12 +20,12 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 ### Configuration Layer
 - **Location**: `src/configuration/`
 - **Purpose**: Register agents, commands, and skills into the host config; synthesize command wrappers from skill frontmatter
-- **Key Files**: `agents-config.ts` (23 subagents, model aliasing), `commands-config.ts` (6 maintained + 39 synthesized, fail-fast frontmatter contract), `skills-config.ts` (adds plugin skills path)
+- **Key Files**: `agents-config.ts` (23 subagents, model aliasing), `commands-config.ts` (6 maintained + 46 synthesized, fail-fast frontmatter contract), `skills-config.ts` (adds plugin skills path)
 
 ### Workflow Engine (Skills)
-- **Location**: `src/skills/` (44 skills: 39 user-invocable, 5 internal)
+- **Location**: `src/skills/` (51 skills: 46 user-invocable, 5 internal)
 - **Purpose**: Markdown-defined dispatchers, standalone subskills, and wrappers implementing the four workflows; shared contracts in `orchestrator-framework/references/` (gate contract, delegation rules, dispatcher handoff, state schema)
-- **Key Files**: `development/SKILL.md`, `research/SKILL.md`, `migration/SKILL.md`, `performance/SKILL.md`, `goal-*/SKILL.md`, `dev-*/SKILL.md`, `research-*/SKILL.md`, `migration-*/SKILL.md`
+- **Key Files**: `development/SKILL.md`, `research/SKILL.md`, `migration/SKILL.md`, `performance/SKILL.md`, `goal-*/SKILL.md`, `dev-*/SKILL.md`, `research-*/SKILL.md`, `migration-*/SKILL.md`, `performance-*/SKILL.md`
 
 ### Subagents
 - **Location**: `src/agents/` (23 definitions, all `mode: subagent`, `hidden: true`)
@@ -33,8 +33,8 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 - **Key Files**: one markdown file per agent with frontmatter `name`, `description`, `model`, `mode`
 
 ### Commands
-- **Location**: `src/commands/` (6 maintained), generated at runtime (39 wrappers)
-- **Purpose**: Slash-command surface; the 39 wrappers are synthesized from `SKILL.md` frontmatter via `renderCommandTemplate`, removing duplication
+- **Location**: `src/commands/` (6 maintained), generated at runtime (46 wrappers)
+- **Purpose**: Slash-command surface; the 46 wrappers are synthesized from `SKILL.md` frontmatter via `renderCommandTemplate`, removing duplication
 - **Key Files**: `src/commands/*.md` (`work`, `reviews-*`), `src/configuration/commands-config.ts`
 
 ### Tools

@@ -130,12 +130,13 @@ You can always be explicit when you prefer - arguments and flags simply override
 
 ## Supported Workflows
 
-| Command                | Use When                                    |
-| ---------------------- | ------------------------------------------- |
-| `/owflow:development`  | Features, bug fixes, enhancements           |
-| `/owflow:research`     | Research with synthesis and solution design |
-| `/owflow:performance`  | Optimizing speed or resource usage          |
-| `/owflow:migration`    | Changing technologies or patterns           |
+| Command                    | Use When                                       |
+| -------------------------- | ---------------------------------------------- |
+| `/owflow:development`      | Features, bug fixes, enhancements              |
+| `/owflow:research`         | Research with synthesis and solution design    |
+| `/owflow:performance`      | Optimizing speed or resource usage             |
+| `/owflow:goal-performance` | Optimizing speed or resource usage, end to end |
+| `/owflow:migration`        | Changing technologies or patterns              |
 
 Use `/owflow:work` as a single entry point — it classifies the task with the `task-classifier` subagent and routes to the right workflow.
 
@@ -194,6 +195,17 @@ The full `/owflow:development` workflow consists of standalone subskills — `/o
 ```
 
 If a subskill is invoked too early in the workflow (prerequisite phases not yet complete), it stops and tells you exactly which steps to run first, in order. If the workflow state doesn't exist yet, use `/owflow:development <description>` to start from scratch.
+
+### Fine-Grained Control: Performance Subskills
+
+The full `/owflow:performance` workflow consists of standalone subskills — `/owflow:performance-analyze`, `/owflow:performance-spec`, `/owflow:performance-plan`, `/owflow:performance-implement`, `/owflow:performance-verify`, `/owflow:performance-finalize` — which you can also invoke individually. Each accepts a task path, or just a task-directory identifier:
+
+```bash
+/owflow:performance-analyze 2026-01-12-dashboard-queries
+/owflow:performance-verify .owflow/tasks/performance/2026-01-12-dashboard-queries
+```
+
+If a subskill is invoked too early in the workflow (prerequisite steps not yet complete), it stops and tells you exactly which steps to run first, in order. If the workflow state doesn't exist yet, use `/owflow:performance <description>` to start from scratch.
 
 ## Standards-Aware Development
 

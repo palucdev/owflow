@@ -11,7 +11,7 @@ This document describes the technology choices and rationale for owflow, an Open
 - **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
 
 ### Markdown + YAML frontmatter
-- **Usage**: The majority of the product surface — 44 skills (`SKILL.md`), 23 agent definitions, 6 maintained commands, templates
+- **Usage**: The majority of the product surface — 51 skills (`SKILL.md`), 23 agent definitions, 6 maintained commands, templates
 - **Rationale**: Skills/agents/commands are declarative content consumed by OpenCode; frontmatter is the single source of truth from which commands are synthesized at runtime
 
 ## Frameworks

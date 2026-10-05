@@ -1,12 +1,11 @@
 # Performance Optimization Guide
 
-Reference covering performance metrics knowledge, optimization patterns, and static analysis detection strategies.
+Reference covering performance metrics knowledge and optimization patterns.
 
 ## Table of Contents
 
 1. [Performance Metrics](#performance-metrics)
 2. [Optimization Patterns](#optimization-patterns)
-3. [Static Analysis Detection Patterns](#static-analysis-detection-patterns)
 
 ---
 
@@ -270,96 +269,3 @@ for (let i = 0; i < 1000000; i++) {
 
 ---
 
-# Static Analysis Detection Patterns
-
-Strategies for detecting performance bottlenecks by reading code rather than running profiling tools.
-
-## Database Pattern Detection
-
-### N+1 Query Detection by Framework
-
-**Generic ORM-in-loop patterns** (Grep heuristics):
-- Query call inside `for`/`forEach`/`map`/`while` body
-- `await` + model method inside iteration callback
-- Lazy-loaded relationship access inside loop
-
-**Framework-specific indicators**:
-
-| Framework | N+1 Pattern | Fix Pattern |
-|-----------|-------------|-------------|
-| Sequelize | `.findByPk()`/`.findOne()` in loop | `include: [{ model: X }]` |
-| Prisma | `prisma.x.findUnique()` in loop | `include: { x: true }` |
-| TypeORM | `repository.findOne()` in loop | `relations: ['x']` or QueryBuilder `.leftJoinAndSelect()` |
-| Django | Attribute access in template `{% for %}` | `.select_related()`/`.prefetch_related()` |
-| Rails | Association call without `.includes()` | `.includes(:association)` |
-| SQLAlchemy | Relationship access in loop | `joinedload()`/`subqueryload()` |
-| Hibernate | `@ManyToOne` lazy access in loop | `@Fetch(FetchMode.JOIN)` or JPQL `JOIN FETCH` |
-
-### Missing Index Detection
-
-**Cross-reference strategy**:
-1. Find all index definitions in schema/migration files
-2. Find all query patterns (WHERE, ORDER BY, JOIN columns)
-3. Flag columns queried but not indexed
-
-**Where to find indexes by framework**:
-- **Rails**: `add_index` in `db/migrate/` files
-- **Django**: `db_index=True` in model fields, `indexes` in Meta
-- **Sequelize**: `indexes` array in model definition
-- **Prisma**: `@@index` and `@@unique` in schema.prisma
-- **TypeORM**: `@Index()` decorator
-- **SQL migrations**: `CREATE INDEX` statements
-
-### Slow Query Pattern Indicators
-
-Patterns detectable from code without running queries:
-- `SELECT *` on tables with many columns
-- Missing `LIMIT`/`TOP` on queries against known-large tables
-- `LIKE '%...'` (leading wildcard prevents index use)
-- `OR` conditions on different columns (prevents single index use)
-- Subqueries in WHERE that could be JOINs
-- `DISTINCT` masking a JOIN issue
-
-## Algorithm Pattern Detection
-
-### Nested Loop / O(n^2) Heuristics
-
-**Search patterns**:
-- Nested `for`/`forEach`/`while` loops over same or related collections
-- `.find()`/`.filter()`/`.some()`/`.includes()` inside `.map()`/`.forEach()`/`for`
-- `.indexOf()` inside loop (linear search repeated)
-- `.sort()` inside loop (O(n log n) per iteration)
-
-**Fix indicators**: Can be resolved by pre-building a Map/Set/index before the loop
-
-### Blocking I/O Patterns
-
-**Node.js sync operations**:
-- `readFileSync`, `writeFileSync`, `readdirSync`, `statSync`, `existsSync`
-- `execSync`, `spawnSync`
-- `crypto.pbkdf2Sync`, `crypto.randomBytesSync`
-
-**Sequential awaits** (should be `Promise.all`):
-- Multiple `await` statements on independent operations in same function
-- Sequential HTTP/fetch calls to different endpoints
-- Sequential database queries with no data dependency between them
-
-## Memory Pattern Detection
-
-**Unbounded growth indicators**:
-- `Map`/`Set`/`Object`/`Array` in module or class scope with `.set()`/`push()` but no `.delete()`/eviction
-- No size limit check before adding to collection
-- No TTL or expiration mechanism
-
-**Leak-prone patterns**:
-- `addEventListener`/`.on()` without paired `removeEventListener`/`.off()`
-- `setInterval` without `clearInterval` in cleanup/destroy/unmount
-- Closures in long-lived callbacks capturing large objects
-
-## Caching Opportunity Detection
-
-**Indicators**:
-- Same query/function called multiple times with same parameters in a request lifecycle
-- Database query in a loop that could be batched and cached
-- External API call returning reference/config data (infrequent changes)
-- Expensive computation (sort, aggregate, transform) on data that doesn't change per-request

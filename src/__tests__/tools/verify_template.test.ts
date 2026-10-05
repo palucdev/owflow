@@ -210,6 +210,16 @@ describe("verify_template tool", () => {
       expect((result as any).output).toContain("YAML Structure Validation Failed");
       expect((result as any).output).toContain("- Missing key: performance_context.bottleneck_priorities");
     });
+
+    test("binding proof: re-keyed performance state instance with completed_phases [codebase-analysed] validates against co-landed template", async () => {
+      const result = await verify_template.execute(
+        { filePath: "performance-binding-proof.yml", templateName },
+        { directory: fixturesDir } as any,
+      );
+      expect((result as any).output).toBe(
+        "File exists and follows the correct YAML structure.",
+      );
+    });
   });
 
   describe("template: orchestrator-state-research.yml", () => {

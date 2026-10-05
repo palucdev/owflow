@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import matter from "gray-matter";
+import yaml from "yaml";
 import fs from "node:fs";
 import path from "node:path";
 import { PLUGIN_ROOT } from "../../utils/plugin-info.js";
@@ -274,14 +275,14 @@ describe("skill command registration", () => {
     const config = {} as OpenCodeConfig;
     configureCommands(config);
 
-    expect(Object.keys(config.command)).toHaveLength(45);
+    expect(Object.keys(config.command)).toHaveLength(52);
 
     // Both totals fall out of disk state: one wrapper per invocable skill on
     // top of the maintained command files.
     const invocableSkills = commandsConfig
       .readSkillFrontmatter()
       .filter((entry) => entry.data["user-invocable"] === true);
-    expect(invocableSkills).toHaveLength(39);
+    expect(invocableSkills).toHaveLength(46);
   });
 
   test("should let a maintained command win over a synthesized one with the same name", () => {
@@ -552,6 +553,140 @@ describe("synthesized command contract", () => {
       );
     } finally {
       readerSpy.mockRestore();
+    }
+  });
+});
+
+describe("performance vocabulary & binding guard", () => {
+  const FROZEN_SLUGS = [
+    "codebase-analysed",
+    "bottlenecks-identified",
+    "spec-written",
+    "spec-audited",
+    "plan-created",
+    "implementation-done",
+    "options-chosen",
+    "verification-done",
+    "task-completed",
+  ];
+
+  const PERFORMANCE_SKILL_DIRS = [
+    "performance-analyze",
+    "performance-spec",
+    "performance-plan",
+    "performance-implement",
+    "performance-verify",
+    "performance-finalize",
+    "goal-performance",
+  ];
+
+  test("should bind every performance state slug and handoff to the frozen vocabulary", () => {
+    const skillsDir = path.join(PLUGIN_ROOT, "skills");
+    const readSkill = (dir: string): string =>
+      fs.readFileSync(path.join(skillsDir, dir, "SKILL.md"), "utf8");
+
+    // (a) The co-landed template keys every retry counter to the frozen slugs.
+    const template = yaml.parse(
+      fs.readFileSync(
+        path.join(
+          PLUGIN_ROOT,
+          "templates",
+          "orchestrator-state-performance.yml",
+        ),
+        "utf8",
+      ),
+    );
+    expect(Object.keys(template.orchestrator.auto_fix_attempts)).toEqual(
+      FROZEN_SLUGS,
+    );
+
+    // (b) Every slug-shaped token in a state-write or handoff context is frozen.
+    // Scoped extraction only: list items written ahead of a completed_phases /
+    // failed_phases key, auto_fix_attempts["..."] keys, --from arguments, and
+    // routing handoffs. No whole-file prose scan (engines, skill names, and the
+    // [task-path-or-identifier] literal all live outside these contexts).
+    const knownNames = new Set(
+      fs
+        .readdirSync(skillsDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name),
+    );
+    const isSlugCandidate = (token: string): boolean =>
+      /^[a-z][a-z0-9-]*$/.test(token) &&
+      !token.includes("<") &&
+      !knownNames.has(token);
+    const dispatcherRaw = readSkill("performance");
+    const routingSection = dispatcherRaw.slice(
+      dispatcherRaw.indexOf("## Routing Table"),
+      dispatcherRaw.indexOf("### Resume Validation"),
+    );
+    const captured = new Set<string>();
+    for (const dir of ["performance", ...PERFORMANCE_SKILL_DIRS]) {
+      const raw = readSkill(dir);
+      for (const line of raw.split(/\r?\n/)) {
+        const keyAt = line.search(
+          /`(?:orchestrator\.)?(?:completed_phases|failed_phases)`/,
+        );
+        if (keyAt === -1) continue;
+        // Only tokens ahead of the key are its list items; status literals
+        // trailing it (e.g. "status `passed`") are not state slugs.
+        for (const match of line
+          .slice(0, keyAt)
+          .matchAll(/`([a-z][a-z0-9-]*)`/g)) {
+          if (isSlugCandidate(match[1]!)) captured.add(match[1]!);
+        }
+      }
+      for (const match of raw.matchAll(/auto_fix_attempts\["([^"]+)"\]/g)) {
+        if (isSlugCandidate(match[1]!)) captured.add(match[1]!);
+      }
+      for (const match of raw.matchAll(/--from=([^\s`\]]+)/g)) {
+        if (isSlugCandidate(match[1]!)) captured.add(match[1]!);
+      }
+    }
+    // A handoff target that is not a shipped skill name is a typo: it survives
+    // the filter and is asserted against the frozen slugs below.
+    for (const match of routingSection.matchAll(/\/owflow:([a-z][a-z0-9-]*)/g)) {
+      if (isSlugCandidate(match[1]!)) captured.add(match[1]!);
+    }
+    expect(
+      [...captured].filter((token) => !FROZEN_SLUGS.includes(token)),
+    ).toEqual([]);
+    // Extraction coverage: a passing no-op scan must not satisfy the guard.
+    expect(FROZEN_SLUGS.every((slug) => captured.has(slug))).toBe(true);
+
+    // (c) Each new directory declares the exact prefixed-name frontmatter contract.
+    const argumentHints: Record<string, string> = {
+      "performance-analyze": "[task-path-or-identifier]",
+      "performance-spec": "[task-path-or-identifier]",
+      "performance-plan": "[task-path-or-identifier]",
+      "performance-implement": "[task-path-or-identifier]",
+      "performance-verify": "[task-path-or-identifier]",
+      "performance-finalize": "[task-path-or-identifier]",
+      "goal-performance": "[task description | task-path] [--from=<step-slug>]",
+    };
+    for (const dir of PERFORMANCE_SKILL_DIRS) {
+      const data = matter(readSkill(dir)).data;
+      expect(data.name).toBe(`owflow:${dir}`);
+      expect(Object.keys(data)).toHaveLength(4);
+      expect(data["argument-hint"]).toBe(argumentHints[dir]);
+      expect(data["user-invocable"]).toBe(true);
+    }
+
+    // (d) Every routing-table handoff resolves to a registered command name.
+    const config = {} as OpenCodeConfig;
+    configureCommands(config);
+    const handoffs = [
+      ...routingSection.matchAll(/\/owflow:([a-z][a-z0-9-]*)/g),
+    ].map((match) => `owflow:${match[1]}`);
+    expect(handoffs.length).toBeGreaterThan(0);
+    for (const name of handoffs) {
+      expect(config.command[name]).toBeDefined();
+    }
+
+    // (e) No command reference may use the slash form `/owflow/<name>` instead
+    // of `/owflow:<name>` — the palette-visible typo class that shipped once.
+    for (const dir of ["performance", ...PERFORMANCE_SKILL_DIRS]) {
+      expect(readSkill(dir)).not.toMatch(/\/owflow\//);
     }
   });
 });

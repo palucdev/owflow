@@ -1,10 +1,10 @@
 orchestrator:
   started_phase: null
-  entry_point: null
-  completed_phases: []
+  entry_point: "performance"
+  completed_phases: [codebase-analysed]
   failed_phases: []
   auto_fix_attempts:
-    codebase-analysed: 0
+    codebase-analysed: 1
     bottlenecks-identified: 0
     spec-written: 0
     spec-audited: 0
@@ -20,16 +20,16 @@ orchestrator:
     pragmatic_review_enabled: true
     reality_check_enabled: true
     production_check_enabled: null
-  created: "YYYY-MM-DDTHH:MM:SSZ"
-  updated: "YYYY-MM-DDTHH:MM:SSZ"
-  task_path: null
+  created: "2026-10-01T00:00:00Z"
+  updated: "2026-10-01T00:00:00Z"
+  task_path: ".owflow/tasks/performance/2026-10-01-binding-proof"
   task_ids: {}
 
 task:
-  title: null
+  title: "Binding proof instance"
   description: null
-  status: pending
-  tags: []
+  status: in_progress
+  tags: ["performance"]
   priority: null
 
 performance_context:
@@ -48,7 +48,7 @@ performance_context:
     involves_data_operations: false
     ui_heavy: false
   phase_summaries:
-    codebase_analysis: { key_files: [], summary: null }
+    codebase_analysis: { key_files: [], summary: "Codebase analysis complete." }
     bottleneck_analysis:
       { bottlenecks: [], summary: null, user_data_incorporated: false }
     specification: { summary: null }

@@ -146,7 +146,7 @@ Use Skill tool:
 Examples:
 
 - Resume development: `skill: "owflow:development"` with `args: "--resume .owflow/tasks/development/2025-10-23-fix"`
-- Restart from step: `skill: "owflow:development"` with `args: "--resume .owflow/tasks/development/2025-10-26-auth --from=verification-done"` (development, research, and migration tasks use descriptive step slugs in `completed_phases`; performance is the remaining `phase-N` holdout)
+- Restart from step: `skill: "owflow:development"` with `args: "--resume .owflow/tasks/development/2025-10-26-auth --from=verification-done"` (development, research, performance, and migration tasks use descriptive step slugs in `completed_phases`)
 - Fresh attempts: `skill: "owflow:development"` with `args: "--resume .owflow/tasks/development/2025-10-23-fix --reset-attempts"`
 
 ### Step 3: Classify & Route New Task
@@ -236,7 +236,7 @@ Display:
 | Workflow Type | Skill         | Args                                                |
 | ------------- | ------------- | --------------------------------------------------- |
 | development   | `development` | `--resume [path] [--from=<slug>] [--reset-attempts]` |
-| performance   | `performance` | `--resume [path] [--from=PHASE]`                    |
+| performance   | `performance` | `--resume [path] [--from=<slug>]`                   |
 | migration     | `migration`   | `--resume [path] [--from=<slug>]`                   |
 | research      | `research`    | `--resume [path] [--from=<slug>]`                   |
 
