@@ -174,6 +174,19 @@ The performance **dispatcher**: initializes or resumes a performance task, deriv
 
 Static-analysis-first optimization: reads the code to find bottlenecks — N+1 queries, missing indexes, O(n²) algorithms, blocking I/O, memory leaks — then runs the standard specification, planning, implementation, and verification steps. Given nothing, it asks what is slow and what profiling data you have; the workflow provides a directory for flame graphs and APM screenshots. Resume with `--from=<slug>`. The `performance-verify` subskill asks which additional checks to run and records the answer in state.
 
+#### The `/owflow:performance-*` subskills
+
+Each is standalone, resolves its task from a full path or the directory name under `.owflow/tasks/performance/`, and stops with the ordered prerequisite steps when something is missing.
+
+| Command | Arguments | What it does |
+| --- | --- | --- |
+| `/owflow:performance-analyze` | `[task-path-or-identifier]` | Codebase analysis with clarifications, then static bottleneck identification delegated to the `bottleneck-analyzer` agent |
+| `/owflow:performance-spec` | `[task-path-or-identifier]` | Requirements, specification, diagram refinement, and the conditional specification audit |
+| `/owflow:performance-plan` | `[task-path-or-identifier]` | Grouped, dependency-ordered optimization plan plus an execution-flow diagram |
+| `/owflow:performance-implement` | `[task-path-or-identifier]` | Plan execution and the work log |
+| `/owflow:performance-verify` | `[task-path-or-identifier]` | Verification options, comprehensive verification, and the user-driven fix loop |
+| `/owflow:performance-finalize` | `[task-path-or-identifier]` | Optimization-results inventory, final results confirmation, completion, and commit guidance |
+
 ---
 
 ## Migration

@@ -17,7 +17,7 @@
 - [ ] **Fix type declarations** — `package.json` declares `types: dist/index.d.ts`, but tsconfig never emits declarations and `dist/index.d.ts` is confirmed missing; enable `declaration` or remove the field
 - [ ] **CONTRIBUTING guide** — the CHANGELOG now exists (Keep a Changelog format, 0.1.0 → 0.6.0); what remains is a guide for adding skills/agents/commands and documenting Bun as the canonical contributor toolchain
 - [ ] **Document plugin internals** — architecture doc for the registration flow and workflow state machine is available in `.owflow/docs/project/architecture.md`; link it from README
-- [ ] **Sync `docs/commands.md`** — the user-facing command reference omits the six `/owflow:performance-*` subcommands; add them for parity with the documented migration subcommands
+- [x] **Sync `docs/commands.md`** — resolved: the six `/owflow:performance-*` subcommands are now documented for parity with the migration subcommands (2026-10-05)
 
 ### Technical Debt
 - [ ] **`.gitattributes` + formatter** — committed blobs are LF while the working tree is CRLF with no normalization (`commands-config.ts` compensates by emitting CRLF); add `* text=auto eol=lf` and consider Prettier/ESLint
