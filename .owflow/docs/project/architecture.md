@@ -1,7 +1,7 @@
 # System Architecture
 
 ## Overview
-owflow is an OpenCode plugin that registers an agentic SDLC system at runtime: it contributes skills, commands, and subagents to the host, plus hooks and tools that enforce workflow safety and state consistency. The "product" is a markdown-defined workflow engine — dispatcher skills route to standalone subskills that drive step-by-step task execution, delegate heavy work to isolated subagents, and persist progress in per-task YAML state files.
+owflow is an OpenCode plugin that registers an agentic SDLC system at runtime: it contributes skills, commands, and subagents to the host, plus hooks and tools that enforce workflow safety and state consistency. The "product" is a markdown-defined workflow engine — dispatcher skills route to standalone subskills that drive step-by-step task execution, delegate heavy work to isolated subagents, and persist progress in per-task YAML state files. As of 0.6.0, all four workflows (development, research, performance, migration) follow this decomposed shape.
 
 ## Architecture Pattern
 **Pattern**: OpenCode plugin with runtime registration + markdown-defined workflow engine (state-machine orchestration).
@@ -44,7 +44,7 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 
 ### State & Templates
 - **Location**: `src/templates/` (5 YAML templates: base + 4 workflows), `.owflow/tasks/` (runtime)
-- **Purpose**: Versioned task-state shape; descriptive step slugs (`codebase-analysed`, `spec-written`, `implementation-done`, …) tracked in `orchestrator.completed_phases` with resume semantics
+- **Purpose**: Versioned task-state shape; descriptive step slugs tracked in `orchestrator.completed_phases` with resume semantics — development 13 slugs (`codebase-analysed`, `tdd-red-proven`, `spec-written`, `implementation-done`, `e2e-run`, `task-completed`, …), migration 10, performance 9 (`codebase-analysed`, `bottlenecks-identified`, `options-chosen`, `verification-done`, …), research 8 (`brief-written`, …)
 - **Key Files**: `src/templates/orchestrator-state-*.yml`
 
 ### Build & Distribution
@@ -135,4 +135,4 @@ Not applicable. Structured persistence is YAML state files validated structurall
 No containers or cloud infrastructure. Deployment is `npm publish` guarded by `prepack` → `bun run build` (rm dist → type-check → tests → copy markdowns). Local development installs via `bun run local-install` (`opencode plugin "$(pwd)" --global --force`).
 
 ---
-*Based on codebase analysis performed 2026-10-01*
+*Based on codebase analysis performed 2026-10-05*
