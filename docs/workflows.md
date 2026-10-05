@@ -172,29 +172,26 @@ Static code analysis to detect bottlenecks, followed by standard spec/plan/imple
 /owflow:performance "Optimize dashboard loading time"
 ```
 
-### Phases
+### Pipeline Steps
 
-| #   | Phase                                                                                                     |
-| --- | --------------------------------------------------------------------------------------------------------- |
-| 1   | Codebase analysis + clarifications                                                                        |
-| 2   | Static performance analysis (N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, memory leaks) |
-| 3   | Requirements + specification                                                                              |
-| 4   | Specification audit (conditional)                                                                         |
-| 5   | Implementation planning                                                                                   |
-| 6   | Implementation execution                                                                                  |
-| 7   | Verification options                                                                                      |
-| 8   | Verification + issue resolution                                                                           |
-| 9   | Finalization                                                                                              |
+| Step slug(s)                                  | Description                                                         | Subskill                        | Produces                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `codebase-analysed`, `bottlenecks-identified` | Codebase analysis + clarifications, then static bottleneck analysis | `/owflow:performance-analyze`   | `analysis/codebase-analysis.md`, `analysis/clarifications.md`, `analysis/performance-analysis.md` |
+| `spec-written`, `spec-audited` (conditional)  | Requirements + specification + audit                                | `/owflow:performance-spec`      | `analysis/requirements.md`, `implementation/spec.md`, `verification/spec-audit.md` (conditional)  |
+| `plan-created`                                | Implementation planning                                             | `/owflow:performance-plan`      | `implementation/implementation-plan.md`                                                           |
+| `implementation-done`                         | Implementation execution                                            | `/owflow:performance-implement` | implemented optimizations, `implementation/work-log.md`                                           |
+| `options-chosen`, `verification-done`         | Verification options, verification, issue resolution                | `/owflow:performance-verify`    | `verification/implementation-verification.md`                                                     |
+| `task-completed`                              | Finalization                                                        | `/owflow:performance-finalize`  | completed task                                                                                    |
 
 **Optional profiling data**: You can provide runtime profiling data, flame graphs, or APM screenshots. The workflow creates `analysis/user-profiling-data/` for these files.
 
 ### Resume
 
 ```
-/owflow:performance [task-path] [--from=PHASE]
+/owflow:performance [task-path] [--from=<slug>]
 ```
 
-Resume phases are the `phase-N` slugs recorded in the task's `orchestrator-state.yml` (`completed_phases`).
+Resume uses the step slugs recorded in the task's `orchestrator-state.yml` (`completed_phases`).
 
 ---
 

@@ -1,17 +1,18 @@
 orchestrator:
   started_phase: null
+  entry_point: null
   completed_phases: []
   failed_phases: []
   auto_fix_attempts:
-    phase-1: 0
-    phase-2: 0
-    phase-3: 0
-    phase-4: 0
-    phase-5: 0
-    phase-6: 0
-    phase-7: 0
-    phase-8: 0
-    phase-9: 0
+    codebase-analysed: 0
+    bottlenecks-identified: 0
+    spec-written: 0
+    spec-audited: 0
+    plan-created: 0
+    implementation-done: 0
+    options-chosen: 0
+    verification-done: 0
+    task-completed: 0
   options:
     spec_audit_enabled: null
     skip_test_suite: true
@@ -39,11 +40,21 @@ performance_context:
     p1: 0
     p2: 0
     p3: 0
+  project_doc_paths: []
+  task_characteristics:
+    has_reproducible_defect: false
+    modifies_existing_code: false
+    creates_new_entities: false
+    involves_data_operations: false
+    ui_heavy: false
   phase_summaries:
     codebase_analysis: { key_files: [], summary: null }
     bottleneck_analysis:
       { bottlenecks: [], summary: null, user_data_incorporated: false }
     specification: { summary: null }
+    clarifications: { summary: null }
+    planning: { summary: null }
+    implementation: { summary: null }
 
 verification_context:
   last_status: null

@@ -55,6 +55,11 @@ When a subskill is invoked with a task path/identifier whose `orchestrator-state
 - Task directory under `.owflow/tasks/migrations/`; template `orchestrator-state-migration.yml`; fresh-start hint: `Run /owflow:migration <description> to start a migration task from scratch.`
 - Skill starting points (used for the bootstrap question and `started_phase`): migration-analyze → `state-analysed`; migration-target → `target-planned`; migration-spec → `strategy-specified`; migration-plan → `plan-created`; migration-implement → `migration-executed`; migration-verify → `options-chosen`; migration-fix → `issues-resolved`; migration-finalize → `task-completed`.
 
+#### performance-* bootstrap
+
+- Task directory under `.owflow/tasks/performance/`; template `orchestrator-state-performance.yml`; fresh-start hint: `Run /owflow:performance <description> to start a task from scratch.`
+- Skill starting points (used for the bootstrap question and `started_phase`): performance-analyze → `codebase-analysed`; performance-spec → `spec-written`; performance-plan → `plan-created`; performance-implement → `implementation-done`; performance-verify → `options-chosen`; performance-finalize → `task-completed`.
+
 ### Deterministic entry checks (future)
 
 Entry-gate checks above are currently executed by the agent reading state. For more deterministic routing, future work considers (a) a small script that checks whether `orchestrator-state.yml` exists, parses it, and answers slug/next-step queries, and (b) an OpenCode lifecycle hook that automates these entry-gate checks for dev-* skills before they run. Until then, follow the rules above exactly as written.
@@ -112,6 +117,6 @@ The Exit Gate runs after all phase work and state updates are final. It presents
 
 ## Exceptions
 
-- **Dispatchers** (`development`, `research`, `migration`): the Exit Gate's acceptance question is adapted — the results box is the handoff block, and the question asks how to proceed (hand off to the suggested subskill / switch to autonomous mode / adjust / stop).
+- **Dispatchers** (`development`, `research`, `performance`, `migration`): the Exit Gate's acceptance question is adapted — the results box is the handoff block, and the question asks how to proceed (hand off to the suggested subskill / switch to autonomous mode / adjust / stop).
 - **Utility skills with explicit no-follow-up contracts** (`agents-md-generator`, `rule-reviewer`): the acceptance question is confirm-or-revise only; follow-up suggestions stay prohibited unless the user asks. See [confirm-or-revise exception](confirm-or-revise-exception.md).
-- **Orchestrated mode** (`goal-development`, `goal-research`, `goal-migration`): the subskill's own Exit Gate acceptance question IS the loop gate — Accept means "continue to the next subskill". The wrapper MUST NOT add a second consecutive `question`.
+- **Orchestrated mode** (`goal-development`, `goal-research`, `goal-performance`, `goal-migration`): the subskill's own Exit Gate acceptance question IS the loop gate — Accept means "continue to the next subskill". The wrapper MUST NOT add a second consecutive `question`.

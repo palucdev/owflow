@@ -1,54 +1,62 @@
 ---
 name: owflow:performance
-description: Orchestrates performance optimization workflows using static code analysis to identify bottlenecks (N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, memory leaks). Accepts optional user-provided profiling data. Reuses standard specification, planning, implementation, and verification phases.
-argument-hint: "[task description]"
+description: Performance workflow dispatcher. Initializes/resumes performance tasks, derives the next step from state, and hands off to the matching /owflow:performance-* subskill. Static-analysis-first bottleneck identification (N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, memory leaks) with optional user-provided profiling data.
+argument-hint: "[task description | task-path] [--from=<step-slug>]"
 user-invocable: true
 ---
 
-# Performance Orchestrator
+# Performance Dispatcher
 
-Static-analysis-first performance optimization workflow. Identifies bottlenecks by reading code, then uses the standard specification/planning/implementation/verification pipeline to fix them.
+Entry point for performance tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:performance-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate. The dispatcher owns only initialization (task directory, state, six task items) and the drop-only resume trim; every task artifact is produced by the subskills (see [Task Structure](#task-structure)).
 
-Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
+Performance state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts`: `codebase-analysed`, `bottlenecks-identified`, `spec-written`, `spec-audited` (conditional), `plan-created`, `implementation-done`, `options-chosen`, `verification-done`, `task-completed`. The routing table below maps slugs to subskills.
+
+For the all-in-one loop with in-session `question` gates, use `/owflow:goal-performance`.
+
+Gates follow the shared contract in the [Gate Contract](../orchestrator-framework/references/gate-contract.md), with the [dispatcher exception](../orchestrator-framework/references/gate-contract.md#exceptions).
 
 ## Entry Gate
 
-**BEFORE executing any phase, you MUST complete these steps:**
+**BEFORE deriving the handoff, complete these steps:**
 
-### Argument resolution
+### Step 1: Load Framework Patterns
 
-- **Performance issue description provided** → use it as the task description.
-- **Task path / identifier** (directory under `.owflow/tasks/performance/`) → resume mode: read `orchestrator-state.yml`, find the first incomplete phase (`--from=PHASE` overrides), validate existing artifacts, then continue from there.
-- **Nothing provided** → ask via `question`: "What is slow or performance-constrained? Describe the symptom (endpoint, page, job), expected vs actual behavior, and any profiling data you have." — collect the description, plus optional profiling data paths, before proceeding.
+**Read the framework reference files NOW using the Read tool:**
 
-### Prerequisites
+1. The [Dispatcher & Handoff Pattern](../orchestrator-framework/references/dispatcher-handoff.md) governs this skill.
+2. The [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) bound what subskills delegate.
+3. The [Orchestrator Patterns](../orchestrator-framework/references/orchestrator-patterns.md) define state schema, initialization, and context passing.
 
-| Required for this skill | Where verified                                        | Produced by                  |
-| ----------------------- | ----------------------------------------------------- | ---------------------------- |
-| State file exists       | `<task-path>/orchestrator-state.yml` (resume mode)    | prior `/owflow:performance` run |
+### Step 2: Resolve the Argument
 
-On resume, if the state file is missing → print: `No performance task found at <path>. Run /owflow:performance <description> to start from scratch.` and STOP. Validate expected artifacts for completed phases (remove entries with missing artifacts).
+**If the argument is a task path or identifier** (a directory, or a directory name under `.owflow/tasks/performance/`) → **resume mode**:
 
-### Execution steps
+1. Read `orchestrator-state.yml`.
+2. **Resume validation (drop-only)** — before `completed_phases` is trusted, validate every entry against the two-kind resume table below; an entry whose marker is missing is DROPPED. The path never repairs or re-keys state.
+3. Derive the next handoff with the Routing Table below.
+4. `--from=<step-slug>` overrides the derived step — validate the target's upstream conditions exist (per the routing table and the target subskill's Entry Gate), else use `question` to confirm or cancel. An unknown slug → print the 9 accepted slugs and STOP.
+5. Missing state file → print: `No performance task found at <path>. Run /owflow:performance <description> to start a task from scratch.` and STOP.
 
-1. **Load framework patterns** — Read `../orchestrator-framework/references/orchestrator-patterns.md` NOW: delegation rules, interactive mode, state schema, initialization, context passing, issue resolution.
-2. **Initialize workflow:**
-   1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
-   2. **Create Task Directory**: `.owflow/tasks/performance/YYYY-MM-DD-task-name/`
-   3. **Create Subdirectories**: `analysis/`, `analysis/user-profiling-data/`, `implementation/`, `verification/`
-   4. **Initialize State**: Create `orchestrator-state.yml` with performance context
-      - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-performance.yml`.
-   5. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
+**If the argument is a performance issue description** (any other free text) → new task.
+
+**If nothing is provided** → ask via `question`: "What is slow or performance-constrained? Describe the symptom (endpoint, page, job), expected vs actual behavior, and any profiling data you have." — collect the description, plus optional profiling data paths, then WAIT. Never guess or auto-pick a task.
+
+### Step 3: Initialize (new task)
+
+1. **Create Task Directory**: `.owflow/tasks/performance/YYYY-MM-DD-task-name/` (3-5 kebab-case words from the description)
+2. **Create Subdirectories**: `analysis/`, `analysis/user-profiling-data/`, `implementation/`, `verification/`
+3. **Initialize State**: create `orchestrator-state.yml` from the performance template — `task.title` / `task.description` from the description, `task.status: in_progress`, `orchestrator.task_path`, `orchestrator.entry_point: "performance"` (template/bootstrap mechanic). Discover project documentation: read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section, and store them as `performance_context.project_doc_paths` in state.
+   - **CRITICAL**: use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-performance.yml`.
+4. **Create Task Items**: use `TaskCreate` for the six subskill handoffs (one item each, per the Task Configuration table), then set the execution order with `TaskUpdate addBlockedBy` (analyze → spec → plan → implement → verify → finalize). Record every created item's id in `orchestrator.task_ids` — the `goal-performance` wrapper updates these same ids at each hop instead of creating its own. On resume, refresh the already-evidenced items instead of re-creating them.
 
 **Output**:
 
 ```
-Performance Orchestrator Started
+🚀 Performance Dispatcher
 
 Task: [performance issue description]
 Directory: [task-path]
-
-Starting Phase 1: Codebase Analysis...
+Next step: [step name]
 ```
 
 ---
@@ -72,358 +80,178 @@ Use for:
 
 1. **Static Analysis First**: Read code to detect patterns. Don't try to run profiling tools.
 2. **User Data Welcome**: Incorporate user-provided profiling data when available
-3. **Reuse Standard Phases**: Use proven specification/planning/implementation/verification pipeline
+3. **Subskill Pipeline**: The optimization pipeline is the six `/owflow:performance-*` subskills — analyze → spec → plan → implement → verify → finalize — not inline phases; this dispatcher only routes.
 4. **Conservative Estimates**: Provide improvement ranges, not false precision
 5. **Practical Optimizations**: Focus on patterns the agent CAN detect and fix
 
 ---
 
-## Phase Configuration
+## Task Configuration
 
-| Phase | content                                      | activeForm                                        | Agent/Skill                  |
-| ----- | -------------------------------------------- | ------------------------------------------------- | ---------------------------- |
-| 1     | "Analyze codebase"                           | "Analyzing codebase"                              | codebase-analyzer            |
-| 2     | "Analyze performance bottlenecks"            | "Analyzing performance bottlenecks"               | bottleneck-analyzer          |
-| 3     | "Gather requirements & create specification" | "Gathering requirements & creating specification" | specification-creator        |
-| 4     | "Audit specification"                        | "Auditing specification"                          | spec-auditor (conditional)   |
-| 5     | "Plan implementation"                        | "Planning implementation"                         | implementation-planner       |
-| 6     | "Execute implementation"                     | "Executing implementation"                        | implementation-plan-executor |
-| 7     | "Prompt verification options"                | "Prompting verification options"                  | Direct                       |
-| 8     | "Verify implementation & resolve issues"     | "Verifying implementation"                        | implementation-verifier      |
-| 9     | "Finalize workflow"                          | "Finalizing workflow"                             | Direct                       |
+One task item per subskill handoff (`TaskCreate` at init; ordered with `addBlockedBy`):
 
----
-
-## Workflow Phases
-
-### Phase 1: Codebase Analysis & Clarifications
-
-**Purpose**: Comprehensive codebase exploration for performance context, followed by scope/requirements clarification
-**Execute**:
-
-1. Skill tool - `codebase-analyzer`
-2. Update state with analysis results
-3. Direct - use question for max 5 critical clarifying questions about performance concerns, hotspots, and optimization goals
-4. Save clarifications to `analysis/clarifications.md`
-   **Output**: `analysis/codebase-analysis.md`, `analysis/clarifications.md`
-   **State**: Update `performance_context.phase_summaries.codebase_analysis`, `task_context.clarifications_resolved`
-
-Pass `task_type="enhancement"` and the performance-focused description. The codebase-analyzer adaptively selects parallel Explore agents based on task complexity. For performance tasks, the description should guide agents toward: database query patterns, hot code paths, I/O operations, caching layers, connection management, schema/migration files.
-
-→ **AUTO-CONTINUE** — Do NOT end turn, do NOT prompt user. Proceed immediately to Phase 2.
+| Subskill | Slugs owned (frozen) | Task item content | Engine(s) |
+| --- | --- | --- | --- |
+| `performance-analyze` | `codebase-analysed`, `bottlenecks-identified` | "Analyze codebase & bottlenecks" | Skill `codebase-analyzer`; Task `bottleneck-analyzer` |
+| `performance-spec` | `spec-written`, `spec-audited` (conditional) | "Gather requirements & create specification" | Task `specification-creator`; Task `spec-auditor`; Skill `diagrams-mermaid` |
+| `performance-plan` | `plan-created` | "Plan implementation" | Task `implementation-planner`; Skill `diagrams-mermaid` |
+| `performance-implement` | `implementation-done` | "Execute implementation" | Skill `implementation-plan-executor` |
+| `performance-verify` | `options-chosen`, `verification-done` | "Verify implementation & resolve issues" | Skill `implementation-verifier` |
+| `performance-finalize` | `task-completed` | "Finalize workflow" | Direct (inline-legal) |
 
 ---
 
-### Phase 2: Static Performance Analysis
+## Routing Table (completed_phases → next subskill)
 
-**Purpose**: Identify bottlenecks through static code analysis + optional user profiling data
-**Execute**: Task tool - `bottleneck-analyzer` subagent
-**Output**: `analysis/performance-analysis.md`
-**State**: Update `performance_context.bottlenecks_identified`, `performance_context.user_data_available`, `performance_context.bottleneck_priorities`
+Every row is evaluated in order; the first matching row wins. **Every condition includes the absence of its own slug(s)** (the absence clause), the evaluation order is **total** (a fallback row closes it), and **the first-missing-slug heuristic is retired** for this table — see the routing rules below.
 
-**Process**:
+| # | Subskill (slugs owned) | Routes here when | Handoff command |
+| --- | --- | --- | --- |
+| 1 | `performance-analyze` (`codebase-analysed`, `bottlenecks-identified`) | new task, OR `codebase-analysed` absent, OR (`codebase-analysed` present AND `bottlenecks-identified` absent) | `/owflow:performance-analyze <task-path>` |
+| 2 | `performance-spec` (`spec-written`, `spec-audited`) | `bottlenecks-identified` complete AND [ (`spec-written` absent) OR (`spec-audited` absent AND (`options.spec_audit_enabled` is **null OR `true`**)) ] | `/owflow:performance-spec <task-path>` |
+| 3 | **`performance-plan`** (`plan-created`) | **`spec-written` complete AND `options.spec_audit_enabled` is non-null — the audit decision is settled — AND `plan-created` absent.** Never `spec-audited`. | `/owflow:performance-plan <task-path>` |
+| 4 | `performance-implement` (`implementation-done`) | `plan-created` complete AND `implementation-done` absent | `/owflow:performance-implement <task-path>` |
+| 5 | `performance-verify` (`options-chosen`, `verification-done`) | `implementation-done` complete AND [ `options-chosen` absent OR `verification-done` absent ] | `/owflow:performance-verify <task-path>` |
+| 6 | `performance-finalize` (`task-completed`) | `verification-done` complete AND `task-completed` absent | `/owflow:performance-finalize <task-path>` |
+| T | terminal | `task-completed` complete (validated by `task.status: completed`) → **no handoff**; report the task as done | — |
+| F | **fallback** | **no row above matched** (anomalous state — e.g. `SW ∧ SA ∧ spec_audit_enabled: null`, or slugs present out of order after a hand-edited state). Report the state that failed to route, then route to `/owflow:performance-analyze <task-path>` | `/owflow:performance-analyze <task-path>` |
 
-1. Check if `analysis/user-profiling-data/` contains any files
-2. If empty, use question:
-   - Question: "Do you have profiling data to provide (flame graphs, APM screenshots, slow query logs)?"
-   - Options: "Yes, let me add files to analysis/user-profiling-data/" | "No, proceed with static analysis only"
-3. If user chooses to add files, wait for them, then proceed
+**Routing rules, normative.** These four sentences ship verbatim in the dispatcher; they are the guard's defense against its own simplification:
 
-**ANTI-PATTERN — DO NOT DO THIS:**
+1. **Absence clause** — each row that *advances* the pipeline requires its own slugs to be absent from `completed_phases` (rows 1, 2, 3, 4, 6; row 5 is a re-entry row and requires only the sub-step it owns to be outstanding). No row ever fires on the strength of its own slug already being present.
+2. **Row 2 re-enters `performance-spec` while the audit decision is undecided** (`spec_audit_enabled` null) *and* when it is decided-yes with no `spec-audited` slug; `performance-spec`'s own skip/resume rule settles it — re-ask only while the decision is `null`, never once it is non-null.
+3. **Row 3 requires a settled decision** (`spec_audit_enabled` non-null), never the `spec-audited` slug. Audit-skipped therefore falls through to row 3 instead of looping.
+4. **The first-missing-slug heuristic used by both shipped dispatchers is retired for this table** (`development/SKILL.md:87`, `research/SKILL.md:100`) and must not be reintroduced — the conditional audit makes row 2 a three-way disjunction. Any edit that collapses rows 2–3 back to a single "first missing slug" rule reintroduces the audit-skip resume loop.
 
-- ❌ "Let me analyze the bottlenecks myself..." — STOP. Delegate to bottleneck-analyzer.
-- ❌ "I'll grep for N+1 patterns..." — STOP. Delegate to bottleneck-analyzer.
+**Why the fallback exists, stated honestly.** Its purpose is **totality**: a total routing function never leaves the user without a command. Its destination is row 1's destination, and that destination is **not** guaranteed to block — row 1 can only fail when `codebase-analysed` ∧ `bottlenecks-identified` are both recorded, which means both analyze marker artifacts exist, so `performance-analyze`'s Entry Gate would *pass*. F therefore guarantees a defined, reported destination; it does not itself guarantee that a prerequisite check will stop the flow. The states F actually catches are the unreachable-by-design ones (`spec-written` ∧ `spec-audited` with the decision `null`) and hand-edited states — in both cases re-running analyze is the safe, reversible move.
 
-**INVOKE NOW** — Task tool call:
+Every reachable state routes to exactly one handoff:
 
-4. Task tool - `bottleneck-analyzer` subagent
+| Reachable state | Matching row | Handoff |
+| --- | --- | --- |
+| new task, or analyze step 1 done (`codebase-analysed` absent) | 1 | `performance-analyze` |
+| analyze done, `bottlenecks-identified` absent | 1 | `performance-analyze` |
+| **spec step 1 done, audit decision still `null`** | **2** | **`performance-spec` (asks the audit decision)** |
+| audit decided `true`, `spec-audited` absent | 2 | `performance-spec` (audit sub-step) |
+| audit ran (`spec-audited` present, decision `true`) | 3 | `performance-plan` |
+| audit skipped (decision `false`, no `spec-audited`) | 3 | `performance-plan` |
+| `plan-created` present, `implementation-done` absent | 4 | `performance-implement` |
+| `implementation-done` present, `options-chosen` absent | 5 | `performance-verify` (asks options) |
+| `options-chosen` present, `verification-done` absent | 5 | `performance-verify` (idempotence rule) |
+| `verification-done` present, `task-completed` absent | 6 | `performance-finalize` |
+| all 9 slugs, `task.status: completed` | T | none — done |
+| anomalous (unreachable-by-design, e.g. `SW ∧ SA` with decision `null`; or slugs out of order) | F | `performance-analyze`, with the failing state reported |
 
-**Context to pass**: task_path, description, codebase analysis summary from Phase 1, user data paths (if any)
+Row 2's two-part condition is what makes the audit a first-class routable outcome in **all three** directions: `null` → stays in `performance-spec` to settle the decision; `true` + `spec-audited` missing → routes into the audit sub-step; `false`, or `true` + `spec-audited` present → falls through to row 3.
 
-**SELF-CHECK**: Did you just invoke the Task tool with `bottleneck-analyzer`? Or did you start analyzing code yourself? If the latter, STOP and invoke the Task tool.
+### Resume Validation — the two-kind table
 
-→ Pause
+Applied on every resume, before `completed_phases` is trusted (`gate-contract.md:28`). An entry whose marker is missing is dropped; artifacts beat state.
 
-question - "Performance analysis complete. [N] bottlenecks identified ([P0 count] P0, [P1 count] P1). Continue to specification?"
+| Slug | Validated against | Kind |
+| --- | --- | --- |
+| `codebase-analysed` | `analysis/codebase-analysis.md` | file |
+| `bottlenecks-identified` | `analysis/performance-analysis.md` | file |
+| `spec-written` | `implementation/spec.md` | file |
+| `spec-audited` | `verification/spec-audit.md` | file (conditional) |
+| `plan-created` | `implementation/implementation-plan.md` | file |
+| `implementation-done` | `implementation/work-log.md` | file |
+| `options-chosen` | at least one non-null `orchestrator.options.*` review flag | **state predicate — vacuous, see note** |
+| `verification-done` | `verification/implementation-verification.md` | file |
+| `task-completed` | `task.status: completed` | **state predicate** |
 
----
-
-### Phase 3: Requirements & Specification
-
-> **Phase gate**: Requires `question` confirmation from Phase 2 before executing.
-
-**Purpose**: Gather optimization requirements and create specification
-**Output**: `analysis/requirements.md`, `implementation/spec.md`
-**State**: Update `performance_context.phase_summaries.specification`
-
-**Part A — Requirements Gathering (inline)**:
-
-1. Present bottleneck summary from Phase 2 to user
-2. Use question for optimization priorities:
-   - Which bottleneck priorities to address? (All P0+P1, P0 only, specific ones)
-   - Any constraints? (backward compatibility, memory limits, no new dependencies)
-   - Performance targets? (specific response time goals, if known)
-3. Save gathered requirements to `analysis/requirements.md` with: performance issue description, bottleneck analysis summary, optimization priorities, constraints, targets
-
-**Part B — Specification Creation (subagent)**:
-
-📋 **Standards Discovery**: Read `.owflow/docs/INDEX.md` before creating spec.
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "Let me create the specification..." — STOP. Delegate to specification-creator.
-- ❌ "I'll write the spec based on the analysis..." — STOP. Delegate to specification-creator.
-
-**INVOKE NOW** — Task tool call:
-
-4. Task tool - `specification-creator` subagent
-
-**Context to pass**: task_path, task_type="performance", task_description, requirements_path (analysis/requirements.md), project_context_paths (INDEX.md + project_doc_paths from state — all discovered project docs), phase_summaries (codebase_analysis, bottleneck_analysis)
-
-**SELF-CHECK**: Did you just invoke the Task tool with `specification-creator`? Or did you start writing spec.md yourself? If the latter, STOP and invoke the Task tool.
-
-**Part C — Diagram Refinement (Skill, content-preserving)**:
-
-5. Invoke Skill tool: `diagrams-mermaid` to refine `implementation/spec.md`
-6. Add diagrams that clarify bottleneck flows and optimization boundaries without replacing specification text.
-7. If context for a diagram is missing, document gaps and avoid speculative dependencies.
-
-→ Pause
-
-question - Display executive summary before asking. Read `implementation/spec.md` and extract: optimization targets, approach chosen, number of changes planned, expected impact. Format as brief overview then "Continue to specification audit?"
+**The `options-chosen` predicate is vacuous against this template — recorded, not fixed (Known Limitation #11).** The template ships `code_review_enabled: true`, `pragmatic_review_enabled: true` and `reality_check_enabled: true`, so "at least one non-null `options.*` review flag" is true on a **brand-new** state, before the user has chosen anything. The predicate therefore never drops a stale `options-chosen` entry, and the safeguard is delivered by other means: `performance-verify` owns the slug, its Entry Gate routes on the slug itself, and its idempotence rule governs the re-entry. Narrowing the predicate to a value the template cannot pre-satisfy would require a dedicated marker artifact — new scope, and D1 is settled, so it is **recorded as Known Limitation #11** instead. `task-completed`'s predicate (`task.status: completed` against a `pending` default) *does* discriminate and is sound.
 
 ---
 
-### Phase 4: Specification Audit (Conditional)
+## Checklist Waivers (routing-only dispatcher)
 
-> **Phase gate**: Requires `question` confirmation from Phase 3 before executing.
+This dispatcher records explicit, named waivers against [Orchestrator Creation Checklist](../orchestrator-framework/references/orchestrator-creation-checklist.md) items written for a monolith-shaped orchestrator with inline phases; a routing-only dispatcher cannot satisfy them because it executes no phase bodies and delegates nothing:
 
-**Purpose**: Independent review of optimization specification
-**Execute**: Task tool - `spec-auditor` subagent
-**Output**: `verification/spec-audit.md`
-**State**: Update `options.spec_audit_enabled`
-
-**Run if**: >5 optimizations planned, spec >50 lines, or user requests
-**Skip if**: Simple optimization (1-3 changes)
-
-question to decide - "Run specification audit?"
-
-→ Pause
-
-question - Display executive summary before asking. Read `verification/spec-audit.md` and extract: overall verdict, issue counts by severity, top findings. Format as brief overview then "Continue to implementation planning?"
+| Checklist item | Disposition | Why |
+| --- | --- | --- |
+| `:16` Phase structure (Purpose / Execute / Output / State / Transition per phase) | Waived | No phase bodies here — the 6 subskills own Execute/Output/State, and Entry/Exit Gates own transitions. |
+| `:17` Delegation enforcement (ANTI-PATTERN / INVOKE NOW / SELF-CHECK per delegated phase) | Waived | The dispatcher spawns no subagents; delegation blocks live in the subskills that delegate. |
+| `:18` POST-CONTINUATION blocks | Waived | No Skill-tool phase runs here; each subskill appends its own slugs. |
+| `:19` Context passing (accumulated context in subagent prompts) | Waived by the same clause as `:17` | Unsatisfiable for the same reason: no subagents are spawned here. |
+| `:20` Context extraction (per-phase `phase_summaries`) | Waived | Extraction happens per step inside the subskills. |
+| `:21` Decision gates (`decisions_needed` presented via `question`) | Waived | The dispatcher receives none; the subskills own their decision questions. |
+| `:22` `question` at every `→ Pause` | Waived | No `→ Pause` transitions exist — routing prints one command and STOPS; the explicit invocation is the gate. |
+| `:25` Auto-recovery table | Waived | Retries are owned per subskill (each `performance-*` SKILL.md carries its own `## Recovery` table). |
+| `:24` TaskCreate initialization | **Satisfied, not waived** | The dispatcher creates the six task items with `addBlockedBy` at init and records their ids in `orchestrator.task_ids`; the wrapper only updates those ids. |
 
 ---
 
-### Phase 5: Implementation Planning
+## Exit Gate (adapted for dispatch mode)
 
-> **Phase gate**: Requires `question` confirmation from Phase 4 before executing.
+After deriving the handoff, present the results box, ask how to proceed, then hand off accordingly (see the [dispatcher exception](../orchestrator-framework/references/gate-contract.md)). The results box IS the handoff block. Never auto-invoke the subskill.
 
-**Purpose**: Break optimization specification into implementation steps
-
-📋 **Standards Discovery**: Read `.owflow/docs/INDEX.md` before planning.
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "Let me create the implementation plan..." — STOP. Delegate to implementation-planner.
-- ❌ "I'll break this into optimization steps..." — STOP. Delegate to implementation-planner.
-
-**INVOKE NOW** — Task tool call:
-
-**Execute**: Task tool - `implementation-planner` subagent
-**Output**: `implementation/implementation-plan.md`
-**State**: Update task groups and dependencies
-
-**Context to pass**: task_path, task_type="performance", task_description, phase_summaries (specification, bottleneck_analysis, codebase_analysis)
-
-**SELF-CHECK**: Did you just invoke the Task tool with `implementation-planner`? Or did you start writing the plan yourself? If the latter, STOP and invoke the Task tool.
-
-**Post-plan diagram refinement (Skill, content-preserving)**:
-
-- Invoke Skill tool: `diagrams-mermaid` for `implementation/implementation-plan.md`
-- Add one compact optimization execution flow (task-group dependency or state flow).
-- Keep plan steps authoritative; diagrams are explanatory additions only.
-
-→ Pause
-
-question - Display executive summary before asking. Read `implementation/implementation-plan.md` and extract: number of task groups, total steps, key dependencies, optimization sequence. Format as brief overview then "Continue to implementation?"
-
----
-
-### Phase 6: Implementation
-
-> **Phase gate**: Requires `question` confirmation from Phase 5 before executing.
-
-**Purpose**: Execute the optimization plan
-
-📋 **Standards Discovery**: Implementation reads `.owflow/docs/INDEX.md` continuously.
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "Let me implement this directly..." — STOP. Delegate to implementation-plan-executor.
-- ❌ "This is simple enough to code inline..." — STOP. Simplicity is NOT a reason to skip delegation.
-
-**INVOKE NOW** — Skill tool call:
-
-**Execute**: Skill tool - `implementation-plan-executor`
-**Output**: Implemented optimizations, `implementation/work-log.md`
-**State**: Update implementation progress, extract phase_summaries.implementation
-
-**SELF-CHECK**: Did you just invoke the Skill tool with `implementation-plan-executor`? Or did you start writing code yourself? If the latter, STOP immediately and invoke the Skill tool instead.
-
-**⚠️ POST-IMPLEMENTATION CONTINUATION** — After the skill completes and returns control:
-
-1. Read `orchestrator-state.yml` to confirm you are the orchestrator
-2. Update state: add Phase 6 to `completed_phases`
-3. Proceed to Phase 7
-
-→ Pause
-
-question - Display executive summary before asking. Extract from `phase_summaries.implementation` and `implementation/work-log.md`: optimizations applied, files changed, test results, any known issues. Format as brief overview then "Continue to verification?"
-
----
-
-### Phase 7: Verification Options
-
-> **Phase gate**: Requires `question` confirmation from Phase 6 before executing.
-
-**Purpose**: Determine which verification checks to run
-**Execute**: Direct - use question for options
-**Output**: Updated state with verification options
-**State**: Set `options.code_review_enabled`, `options.pragmatic_review_enabled`, `options.production_check_enabled`, `options.reality_check_enabled`
-
-**Always enabled**: Reality check, pragmatic review
-**Auto-set**: `skip_test_suite: true` (full test suite already passed during implementation phase; cleared before re-verification if fixes are applied)
-
-question with multiselect - "Which additional verification checks?"
-
-- "Code review" (recommended)
-- "Production readiness check"
-
-→ Pause
-
-question - "Options selected. Continue to Phase 8?"
-
----
-
-### Phase 8: Verification & Issue Resolution
-
-> **Phase gate**: Requires `question` confirmation from Phase 7 before executing.
-
-**Purpose**: Comprehensive implementation verification with user-driven fix cycles
-**Output**: `verification/implementation-verification.md`, optional review reports
-**State**: Update `verification_context`
-
-**Execute**:
-
-**Step 1**: Invoke Skill tool - `implementation-verifier`
-
-**Step 2**: Display detailed issue breakdown grouped by category and severity (critical/warning/info), listing location, description, and fixability for each.
-
-**Step 3**: Gate on verification status:
-
-- `status: passed` → skip to Pause
-- `status: passed_with_issues` or `failed` → enter user-driven fix loop (Step 4)
-
-**Step 4**: User-driven fix loop (max 3 iterations):
-
-1. Present all critical + warning issues as a numbered list
-2. question — "Which issues should I fix?" with options: "Fix all fixable issues" / "Let me choose specific issues" / "Skip fixes, proceed as-is"
-3. Fix selected issues
-4. After fixes: set `skip_test_suite: false` (code changed, tests must re-run)
-5. question — "Re-run verification to check fixes?" with options: "Yes, re-run verification" / "No, proceed to next phase"
-6. If re-run → re-invoke `implementation-verifier` → return to Step 2
-
-→ Pause
-
-question - Display executive summary: total issues found, issues fixed, issues remaining by severity. Then "Continue to finalization?"
-
----
-
-### Phase 9: Finalization → Exit Gate
-
-> **Phase gate**: Requires `question` confirmation from Phase 8 before executing.
-
-**Purpose**: Present optimization results, confirm correctness with the user, and close the workflow (Exit Gate contract, [Gate Contract](../orchestrator-framework/references/gate-contract.md))
-**Execute**: Direct - create summary, update state, guide commit
-**Output**: Workflow summary
-**State**: Set `task.status: completed`
-
-**Process**:
-
-1. Create workflow summary (bottlenecks found, optimizations implemented, verification result)
-2. Update task status to "completed"
-3. **Results box**:
+### Results box
 
 ```markdown
-## ✅ PERFORMANCE WORKFLOW COMPLETE — <task name>
+## ✅ PERFORMANCE TASK READY — <task name>
 
-**Bottlenecks found** — [count by severity]
-**Optimizations applied** — [count + key ones]
-**Verification** — [final verdict]
-**Estimated improvement** — [range from analysis]
+**Task** — [performance issue description]
+**Directory** — `<task-path>`
+**Next step** — [subskill + slug(s)]
+[Resume note: completed steps / fresh task]
 
-**Artifacts**
-- `analysis/performance-analysis.md`
-- `implementation/work-log.md`
-- `verification/implementation-verification.md`
+**Next ▸** `/owflow:performance-<subskill> <task-path>`
 ```
 
-4. **Results-acceptance question** — use `question` — "Are these results correct?" with options:
-   - **Accept** — workflow is complete; print next steps below.
-   - **Adjust** — re-run the affected phase (additional optimizations, re-verification) with the user's corrections, then re-present the results box.
-   - **Discuss** — walk through bottleneck findings, optimization rationale, and measurement caveats in more depth; then re-ask.
-   - **Stop here** — print the resume command (`/owflow:performance <task-path>`) and end.
+### Acceptance question
 
-5. **Next steps (after Accept)** — performance-specific guidance:
-   - Run the application and verify improvements manually
-   - Consider profiling with runtime tools to measure actual impact
-   - Monitor production metrics after deployment
-   - Address remaining P2/P3 bottlenecks if needed
-   - `/owflow:standards-update "<lesson learned>"` — capture optimization patterns as standards
+Use `question` — "Task ready. How would you like to proceed?" with options:
 
-→ End of workflow
+- **Hand off to /owflow:performance-<subskill>** — the user invokes the suggested command (the dispatcher copies it to chat for convenience). Execution starts in a fresh context.
+- **Switch to autonomous mode** — run the remaining steps in one session: `/owflow:goal-performance <task-path>`.
+- **Adjust** — task set-up or derivation is wrong (wrong description, wrong task, wrong `--from`); re-run the affected step, re-present the results box.
+- **Stop here** — print the resume command (`/owflow:performance <task-path>`) and end.
 
----
+### Handoff message
 
-## Domain Context (State Extensions)
+On Accept (hand off choice), print, then STOP:
 
-Performance-specific fields in `orchestrator-state.yml`:
+```
+✓ Performance task ready at <task-path>
 
-Refer to the template [src/templates/orchestrator-state-performance.yml](../../templates/orchestrator-state-performance.yml).
+Next step:
+  → /owflow:performance-<subskill> <task-path>
+
+Other options:
+  /owflow:goal-performance <task-path>   — run remaining steps in one loop
+  /owflow:performance --from=<step-slug> <task-path>   — jump to a specific step
+```
 
 ---
 
 ## Task Structure
 
+The dispatcher creates the directory skeleton at init; every artifact below is produced by the subskill named in the comments:
+
 ```
 .owflow/tasks/performance/YYYY-MM-DD-task-name/
-├── orchestrator-state.yml
+├── orchestrator-state.yml                # dispatcher (init) + every subskill (per-step writes)
 ├── analysis/
-│   ├── codebase-analysis.md           # Phase 1
-│   ├── performance-analysis.md        # Phase 2
-│   ├── user-profiling-data/           # Optional user-provided data
-│   └── requirements.md                # Phase 3
+│   ├── codebase-analysis.md              # performance-analyze (codebase-analysed)
+│   ├── clarifications.md                 # performance-analyze
+│   ├── performance-analysis.md           # performance-analyze (bottlenecks-identified)
+│   ├── requirements.md                   # performance-spec
+│   └── user-profiling-data/              # optional user-provided data
 ├── implementation/
-│   ├── spec.md                        # Phase 3
-│   ├── implementation-plan.md         # Phase 5
-│   └── work-log.md                    # Phase 6
+│   ├── spec.md                           # performance-spec (spec-written)
+│   ├── implementation-plan.md            # performance-plan (plan-created)
+│   └── work-log.md                       # performance-implement (implementation-done)
 └── verification/
-    ├── spec-audit.md                  # Phase 4 (conditional)
-    └── implementation-verification.md # Phase 8
+    ├── spec-audit.md                     # performance-spec (spec-audited, conditional)
+    └── implementation-verification.md    # performance-verify (verification-done)
 ```
 
 ---
 
 ## Auto-Recovery
 
-| Phase | Max Attempts | Strategy                                   |
-| ----- | ------------ | ------------------------------------------ |
-| 1     | 2            | Expand search scope, prompt user for hints |
-| 2     | 2            | Re-analyze with broader patterns, ask user |
-| 3     | 2            | Regenerate spec with adjusted requirements |
-| 5     | 2            | Regenerate plan                            |
-| 6     | 5            | Fix syntax, imports, tests                 |
-| 8     | 3            | Fix-then-reverify cycles                   |
+Retries are owned by each subskill (each `/owflow:performance-*` SKILL.md carries its own `## Recovery` table).
 
 ---
 
@@ -432,6 +260,8 @@ Refer to the template [src/templates/orchestrator-state-performance.yml](../../t
 Invoked via:
 
 - `/owflow:performance [description]` (new)
-- `/owflow:performance [task-path] [--from=PHASE]` (resume)
+- `/owflow:performance [task-path] [--from=<step-slug>]` (resume)
+
+Alternative: `/owflow:goal-performance <task-path>` — same task lifecycle, all subskills invoked in one session with `question` gates.
 
 Task directory: `.owflow/tasks/performance/YYYY-MM-DD-task-name/`

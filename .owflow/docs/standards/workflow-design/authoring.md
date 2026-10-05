@@ -9,6 +9,9 @@ Every agent declares `name`, `description`, `mode: subagent`, and `hidden: true`
 ### Thin Command Wrappers over Skills
 Slash commands are thin wrappers: user-facing guidance lives in commands, orchestration logic lives in SKILL.md. Synthesized wrappers hold no workflow logic; maintained commands (`work`, `reviews-*`) own only routing/argument logic. Edit the source file — never duplicate content.
 
+### Command Synthesis at Plugin Load
+User-invocable skills become slash commands at plugin load: the config hook renders the command template from skill frontmatter, requiring a non-empty `name` and `description` and skipping `user-invocable: false` skills. Maintained `src/commands/*.md` files load first, and a user-configured command always wins over synthesis. `argument-hint` is documentation-only — it is not part of the registered command object — so flags that change behavior must be restated in the skill body.
+
 ### Anti-Duplication and Single Source of Truth
 If technical details exist in a SKILL.md, reference them instead of restating them in AGENTS.md or commands. Orchestration logic lives in SKILL.md. Never restate skill purposes in AGENTS.md, never restate agent purposes (agents/*.md is the source of truth), and keep commands free of "About this workflow" sections.
 

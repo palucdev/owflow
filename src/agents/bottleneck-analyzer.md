@@ -74,9 +74,11 @@ Detect ORM calls inside iteration constructs:
   - **Django**: Attribute access on queryset (lazy loading) inside template/view loops
   - **Rails**: Association method calls without `.includes()` or `.preload()`
   - **SQLAlchemy**: Relationship access without `joinedload()` or `subqueryload()`
+  - **Hibernate**: `@ManyToOne` lazy access in loop → `@Fetch(FetchMode.JOIN)` or JPQL `JOIN FETCH`
 
 **Missing Index Detection** (read schema/migrations, don't run EXPLAIN):
 - Read migration files and schema definitions to catalog existing indexes
+- Per-framework index locations: Rails `add_index`, Django `db_index` / Meta `indexes`, Sequelize `indexes`, Prisma `@@index`/`@@unique`, TypeORM `@Index`, SQL migrations `CREATE INDEX`
 - Grep for query patterns (WHERE, ORDER BY, JOIN columns)
 - Cross-reference: columns filtered/sorted on without corresponding indexes
 - Flag composite conditions without composite indexes
@@ -85,7 +87,9 @@ Detect ORM calls inside iteration constructs:
 - `SELECT *` when only a few columns are needed
 - Missing `LIMIT` on queries against large tables
 - String operations in WHERE clauses (`LIKE '%...'`)
+- `OR` conditions on different columns (prevents single index use)
 - Subqueries that could be JOINs
+- `DISTINCT` masking a JOIN issue
 - Unbounded queries without pagination
 
 **Output**: List of database bottlenecks with file:line references and fix approach

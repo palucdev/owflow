@@ -130,14 +130,25 @@ You can always be explicit when you prefer - arguments and flags simply override
 
 ## Supported Workflows
 
-| Command                | Use When                                    |
-| ---------------------- | ------------------------------------------- |
-| `/owflow:development`  | Features, bug fixes, enhancements           |
-| `/owflow:research`     | Research with synthesis and solution design |
-| `/owflow:performance`  | Optimizing speed or resource usage          |
-| `/owflow:migration`    | Changing technologies or patterns           |
+| Command                    | Use When                                       |
+| -------------------------- | ---------------------------------------------- |
+| `/owflow:development`      | Features, bug fixes, enhancements              |
+| `/owflow:research`         | Research with synthesis and solution design    |
+| `/owflow:performance`      | Optimizing speed or resource usage             |
+| `/owflow:migration`        | Changing technologies or patterns              |
 
 Use `/owflow:work` as a single entry point — it classifies the task with the `task-classifier` subagent and routes to the right workflow.
+
+### Autonomous Workflows
+
+Each workflow has a `/owflow:goal-*` equivalent that runs the same pipeline back-to-back in one session, pausing at decision gates between steps. Both modes share one task state, so you can mix them freely on a single task.
+
+| Command                    | Runs                          |
+| -------------------------- | ----------------------------- |
+| `/owflow:goal-development` | The full development pipeline |
+| `/owflow:goal-research`    | The full research pipeline    |
+| `/owflow:goal-performance` | The full performance pipeline |
+| `/owflow:goal-migration`   | The full migration pipeline   |
 
 ### Research Utility
 
@@ -194,6 +205,17 @@ The full `/owflow:development` workflow consists of standalone subskills — `/o
 ```
 
 If a subskill is invoked too early in the workflow (prerequisite phases not yet complete), it stops and tells you exactly which steps to run first, in order. If the workflow state doesn't exist yet, use `/owflow:development <description>` to start from scratch.
+
+### Fine-Grained Control: Performance Subskills
+
+The full `/owflow:performance` workflow consists of standalone subskills — `/owflow:performance-analyze`, `/owflow:performance-spec`, `/owflow:performance-plan`, `/owflow:performance-implement`, `/owflow:performance-verify`, `/owflow:performance-finalize` — which you can also invoke individually. Each accepts a task path, or just a task-directory identifier:
+
+```bash
+/owflow:performance-analyze 2026-01-12-dashboard-queries
+/owflow:performance-verify .owflow/tasks/performance/2026-01-12-dashboard-queries
+```
+
+If a subskill is invoked too early in the workflow (prerequisite steps not yet complete), it stops and tells you exactly which steps to run first, in order. If the workflow state doesn't exist yet, use `/owflow:performance <description>` to start from scratch.
 
 ## Standards-Aware Development
 

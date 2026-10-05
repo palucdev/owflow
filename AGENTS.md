@@ -236,7 +236,8 @@ Commands by workflow (outer) and its steps (inner):
   - Steps: `/owflow:research-plan`, `/owflow:research-gather`, `/owflow:research-synthesize`, `/owflow:research-finalize`.
   - Optional steps: `/owflow:research-brainstorm`, `/owflow:research-converge`, `/owflow:research-design`.
   - Quick lane `/owflow:research-quick`; fork utility `/owflow:research-fork`.
-- **Performance** — `/owflow:performance`.
+- **Performance** — `/owflow:goal-performance` runs every step in one session; `/owflow:performance` is the dispatcher.
+  - Steps: `/owflow:performance-analyze`, `/owflow:performance-spec`, `/owflow:performance-plan`, `/owflow:performance-implement`, `/owflow:performance-verify`, `/owflow:performance-finalize`.
 - **Migration** — `/owflow:goal-migration` runs every step in one session; `/owflow:migration` is the dispatcher.
   - Steps: `/owflow:migration-analyze`, `/owflow:migration-target`, `/owflow:migration-spec`, `/owflow:migration-plan`, `/owflow:migration-implement`, `/owflow:migration-verify`, `/owflow:migration-fix`, `/owflow:migration-finalize`.
 - **Setup & standards** — `/owflow:flow-init`, `/owflow:standards-update`, `/owflow:standards-discover`.
@@ -246,7 +247,7 @@ Commands by workflow (outer) and its steps (inner):
 
 Key usage rules:
 
-- All orchestrators support `--from=` (resume point — development, research, and migration use descriptive step slugs; performance keeps phase slugs); pass a task description to start new or a task path/identifier (directory name under `.owflow/tasks/<type>/`) to resume.
+- All orchestrators support `--from=` (resume point — development, research, performance, and migration use descriptive step slugs); pass a task description to start new or a task path/identifier (directory name under `.owflow/tasks/<type>/`) to resume.
 - `/owflow:development "desc" --research=<research-task-path>` (or just the research task path, auto-detected) starts development informed by completed research; research context flows through ALL phases without skipping any, artifacts copied to `analysis/research-context/`.
 - Development has two modes sharing one state file: `/owflow:goal-development` runs all dev-* subskills in one session with `question` gates; `/owflow:development` hands off one subskill per invocation. Mix both modes on a single task freely.
 - Every dev-* subskill is standalone and can be invoked at any time. Each resolves its task from a full path or an identifier (directory name under `.owflow/tasks/development/`), never auto-picking a task. If the prerequisite phases are not complete (or no argument resolves to a task), it STOPs and prints the ordered prerequisite steps with the exact commands to run each, plus a hint to start fresh via `/owflow:development <description>`.
@@ -254,6 +255,9 @@ Key usage rules:
 - Research is split the same way: `/owflow:research` is the dispatcher (assisted mode) and `/owflow:goal-research` the autonomous wrapper — two modes sharing one state file.
 - Every research-* subskill is standalone and resolves its task from a full path or an identifier (directory name under `.owflow/tasks/research/`), never auto-picking a task. Missing prerequisites block with the ordered prerequisite steps; the fresh-start hint is `/owflow:research <question>`.
 - Every research-* subskill ends with the same **Exit Gate** contract (results box + results-acceptance question, never auto-chain). Quick lane: `/owflow:research-quick "description"` bootstraps a standard research task and fuses brief, plan, gather, and synthesis into one pass.
+- Performance is split the same way: `/owflow:performance` is the dispatcher (assisted mode) and `/owflow:goal-performance` the autonomous wrapper — two modes sharing one state file.
+- Every performance-* subskill is standalone and resolves its task from a full path or an identifier (directory name under `.owflow/tasks/performance/`), never auto-picking a task. Missing prerequisites block with the ordered prerequisite steps; the fresh-start hint is `/owflow:performance <description>`.
+- Every performance-* subskill ends with the same **Exit Gate** contract (results box + results-acceptance question, never auto-chain). Flags: `--from=<slug>`.
 - Migration is split the same way: `/owflow:migration` is the dispatcher (assisted mode) and `/owflow:goal-migration` the autonomous wrapper — two modes sharing one state file.
 - Every migration-* subskill is standalone and resolves its task from a full path or an identifier (directory name under `.owflow/tasks/migrations/`), never auto-picking a task. Missing prerequisites block with the ordered prerequisite steps; the fresh-start hint is `/owflow:migration <description>`.
 - Every migration-* subskill ends with the same **Exit Gate** contract (results box + results-acceptance question, never auto-chain). Flags: `--from=<slug>`, `--type=code|data|architecture|general`, and `--no-web-research` (forwarded to `migration-target`).

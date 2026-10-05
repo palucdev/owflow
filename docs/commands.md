@@ -13,7 +13,7 @@ Commands come in **two kinds**, and the kind tells you where the text you see wh
 | **Maintained content command** | A markdown file in `src/commands/`, one file per command. The whole body is authored there: which subagent or skill to invoke, how to read the user's arguments, and worked examples. | `src/commands/<name>.md` |
 | **Synthesized wrapper** | Generated at config time from a `SKILL.md` frontmatter block — one wrapper per skill marked `user-invocable: true`. The body holds no workflow logic; it is an instruction to invoke the skill. | that skill's `SKILL.md` frontmatter |
 
-The plugin registers **6 maintained** commands and **39 synthesized** wrappers. Both numbers follow from the rules above rather than being independent facts: one file per maintained command, one wrapper per invocable skill. What registers is read from disk at config time, and `bun test src` asserts only the resulting totals — 45 commands, of which 39 are synthesized. The suite does not pin the exact name set, so renaming a skill's `name` frontmatter renames its command without failing a test.
+The plugin registers **6 maintained** commands and **46 synthesized** wrappers. Both numbers follow from the rules above rather than being independent facts: one file per maintained command, one wrapper per invocable skill. What registers is read from disk at config time, and `bun test src` asserts only the resulting totals — 52 commands, of which 46 are synthesized. The suite does not pin the exact name set, so renaming a skill's `name` frontmatter renames its command without failing a test.
 
 ### The maintained content commands
 
@@ -86,7 +86,7 @@ Pass a description to start a task, or a task path to resume one. `/owflow:goal-
 | `--user-docs` / `--no-user-docs` | Force/skip user documentation |
 | `--reset-attempts` | Reset failed attempt counters (resume) |
 
-The phase flags are written into the task's state as options and the subskills read them from there; `--research=PATH` instead records the linked research task in state. `--reset-attempts` is a development-dispatch flag — `/owflow:performance` resumes on `--from=PHASE` and `/owflow:migration` on `--from=<slug>`, and neither reads it.
+The phase flags are written into the task's state as options and the subskills read them from there; `--research=PATH` instead records the linked research task in state. `--reset-attempts` is a development-dispatch flag — `/owflow:performance` and `/owflow:migration` resume on `--from=<slug>`, and neither reads it.
 
 Starting from a completed research task is either naming the research folder as the sole argument or passing `--research=PATH` alongside a description. Either way the research context informs every subskill; it never skips one.
 
@@ -126,7 +126,7 @@ The quick lanes skip delegation and audit, not discipline. A bug-shaped descript
 
 ### Code review inside the development workflow
 
-Whether the code-review subagent runs is a **state option, not a command flag**. `code_review_enabled` lives in the task's `orchestrator-state.yml` and ships as `true` in the development state template; the verification step reads it and delegates to the `code-reviewer` subagent when it is set, writing `verification/code-review-report.md`. `/owflow:performance` carries the same option and asks which additional checks to run at its verification-options phase. To run that review on its own at any time, use `/owflow:reviews-code` on any path.
+Whether the code-review subagent runs is a **state option, not a command flag**. `code_review_enabled` lives in the task's `orchestrator-state.yml` and ships as `true` in the development state template; the verification step reads it and delegates to the `code-reviewer` subagent when it is set, writing `verification/code-review-report.md`. `/owflow:performance` carries the same option; its `performance-verify` subskill asks which additional checks to run. To run that review on its own at any time, use `/owflow:reviews-code` on any path.
 
 ---
 
@@ -166,11 +166,30 @@ Copies a research task directory wholesale into a new task, then trims the copy'
 
 ---
 
-## Performance and Migration
+## Performance
 
 ### `/owflow:performance [task description | task-path]`
 
-Static-analysis-first optimization: reads the code to find bottlenecks — N+1 queries, missing indexes, O(n²) algorithms, blocking I/O, memory leaks — then runs the standard specification, planning, implementation, and verification phases. Given nothing, it asks what is slow and what profiling data you have; the workflow provides a directory for flame graphs and APM screenshots. Resume with `--from=PHASE`. At its verification-options phase it asks which additional checks to run and records the answer in state.
+The performance **dispatcher**: initializes or resumes a performance task, derives the next step from state, and hands off to the matching `performance-*` subskill. `/owflow:goal-performance` runs the same lifecycle with every subskill invoked for you, in one session.
+
+Static-analysis-first optimization: reads the code to find bottlenecks — N+1 queries, missing indexes, O(n²) algorithms, blocking I/O, memory leaks — then runs the standard specification, planning, implementation, and verification steps. Given nothing, it asks what is slow and what profiling data you have; the workflow provides a directory for flame graphs and APM screenshots. Resume with `--from=<slug>`. The `performance-verify` subskill asks which additional checks to run and records the answer in state.
+
+#### The `/owflow:performance-*` subskills
+
+Each is standalone, resolves its task from a full path or the directory name under `.owflow/tasks/performance/`, and stops with the ordered prerequisite steps when something is missing.
+
+| Command | Arguments | What it does |
+| --- | --- | --- |
+| `/owflow:performance-analyze` | `[task-path-or-identifier]` | Codebase analysis with clarifications, then static bottleneck identification delegated to the `bottleneck-analyzer` agent |
+| `/owflow:performance-spec` | `[task-path-or-identifier]` | Requirements, specification, diagram refinement, and the conditional specification audit |
+| `/owflow:performance-plan` | `[task-path-or-identifier]` | Grouped, dependency-ordered optimization plan plus an execution-flow diagram |
+| `/owflow:performance-implement` | `[task-path-or-identifier]` | Plan execution and the work log |
+| `/owflow:performance-verify` | `[task-path-or-identifier]` | Verification options, comprehensive verification, and the user-driven fix loop |
+| `/owflow:performance-finalize` | `[task-path-or-identifier]` | Optimization-results inventory, final results confirmation, completion, and commit guidance |
+
+---
+
+## Migration
 
 ### `/owflow:migration [task description | task-path]`
 
@@ -237,7 +256,7 @@ Discovers coding standards from project configuration files, code patterns, docu
 
 ### `/owflow:standards-update [description of standard/convention] [--from=PATH]`
 
-Creates or updates a standard from conversation context or an explicit description; with no arguments it scans the current conversation for convention statements and proposes them as new standards. `--from=PATH` switches to sync mode — analyzing what differs between this project's standards and another project's, and letting you select which to import. Note that `--from` means a **step slug** on the development, research, and migration commands, a **phase** on performance, and a **project path** here.
+Creates or updates a standard from conversation context or an explicit description; with no arguments it scans the current conversation for convention statements and proposes them as new standards. `--from=PATH` switches to sync mode — analyzing what differs between this project's standards and another project's, and letting you select which to import. Note that `--from` means a **step slug** on the development, research, performance, and migration commands, and a **project path** here.
 
 ---
 

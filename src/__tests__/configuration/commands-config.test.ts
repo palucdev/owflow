@@ -274,14 +274,14 @@ describe("skill command registration", () => {
     const config = {} as OpenCodeConfig;
     configureCommands(config);
 
-    expect(Object.keys(config.command)).toHaveLength(45);
+    expect(Object.keys(config.command)).toHaveLength(52);
 
     // Both totals fall out of disk state: one wrapper per invocable skill on
     // top of the maintained command files.
     const invocableSkills = commandsConfig
       .readSkillFrontmatter()
       .filter((entry) => entry.data["user-invocable"] === true);
-    expect(invocableSkills).toHaveLength(39);
+    expect(invocableSkills).toHaveLength(46);
   });
 
   test("should let a maintained command win over a synthesized one with the same name", () => {

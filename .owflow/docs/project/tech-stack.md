@@ -6,12 +6,12 @@ This document describes the technology choices and rationale for owflow, an Open
 ## Languages
 
 ### TypeScript 5 (peer `^5`)
-- **Usage**: ~100% of source code (`src/`, 13 modules, ~679 lines of TS plus tests)
+- **Usage**: ~100% of source code (`src/`, 13 modules, ~679 lines of TS plus ~2,158 lines of tests)
 - **Rationale**: The OpenCode plugin API is typed; strict typing protects a logic-heavy registration and state-machine layer; declarations are the intended public interface
 - **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
 
 ### Markdown + YAML frontmatter
-- **Usage**: The majority of the product surface — 44 skills (`SKILL.md`), 23 agent definitions, 6 maintained commands, templates
+- **Usage**: The majority of the product surface — 51 skills (`SKILL.md`, ~13.3K lines), 23 agent definitions, 6 maintained commands, 5 templates
 - **Rationale**: Skills/agents/commands are declarative content consumed by OpenCode; frontmatter is the single source of truth from which commands are synthesized at runtime
 
 ## Frameworks
@@ -25,8 +25,8 @@ None. No server framework, HTTP API, or long-running service. The only runtime f
 - **`@opencode-ai/plugin` `^1.18.4`** — plugin entry contract (`Plugin` type), custom tool factory (`tool()`), config mutation and lifecycle hook types
 
 ### Testing
-- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 151 tests across 10 suites with YAML fixtures
-- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored)
+- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 158 tests across 10 suites with 19 YAML fixtures
+- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored); currently ~98% line / 100% function coverage
 
 ## Database
 None. Persistence is file-based: orchestrator state lives in `orchestrator-state.yml` files under `.owflow/tasks/`, parsed/stringified with the `yaml` package. Task artifacts are markdown. OpenCode configuration is mutated in-memory through the plugin API.
@@ -34,8 +34,8 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
 ## Build Tools & Package Management
 - **Bun** (`bunfig.toml`, `bun.lock`) — dev, build, and test runtime
 - **`bun tsc`** — type-check and emit ESM JavaScript to `dist/`
-- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS — 141 files total in the payload)
-- **npm** — publish path only (`package-lock.json` also committed; `prepack` runs the build as a publish guard)
+- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS and html-renderer assets — 149 files total in the payload)
+- **npm** — publish path only (`prepack` runs the full build as a publish guard); `package-lock.json` has been removed, leaving `bun.lock` as the single lockfile
 - **Node ^25** — host engine requirement (`engines` field)
 
 ## Build & Runtime Flow
@@ -59,7 +59,7 @@ flowchart TD
 None detected.
 
 ### CI/CD
-None. Build/test gates run only via local `prepack` or the `local-install` script (`bun run build && opencode plugin "$(pwd)" --global --force`). Adding CI is a roadmap technical-debt item.
+None. Build/test gates run only via local `prepack` or the `local-install` script (`bun run build && opencode plugin "$(pwd)" --global --force`). Adding CI is a roadmap item.
 
 ### Hosting
 npm registry (distribution). No hosted service, database, or cloud infrastructure.
@@ -83,11 +83,11 @@ None enforced (no ESLint/Prettier/EditorConfig). Style is manual and consistent:
 Minimal dependency surface is a deliberate design principle — 3 runtime dependencies.
 
 ## Version Management
-Semver in `package.json` (currently `0.4.3`, pre-1.0). No CHANGELOG; no git tags observed. Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
+Semver in `package.json` (currently `0.6.0`, pre-1.0). `CHANGELOG.md` follows Keep a Changelog and records releases from 0.1.0 (2026-05-10) through 0.6.0 (2026-10-05); no git tags observed. Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
 
 ## Migration Path (for legacy projects)
-Not applicable — modern stack throughout (Bun, TypeScript 5, Node ^25). Known gap: `types: dist/index.d.ts` is declared but declarations are never emitted (no `declaration: true` in tsconfig); fix or remove is a roadmap item.
+Not applicable — modern stack throughout (Bun, TypeScript 5, Node ^25). Known gap: `types: dist/index.d.ts` is declared but declarations are never emitted (no `declaration: true` in tsconfig) and the file is absent from `dist/`; fix or remove is a roadmap item.
 
 ---
-*Last Updated*: 2026-10-01
+*Last Updated*: 2026-10-05
 *Auto-detected*: languages, versions, dependencies, build/test tooling, absence of CI/linting/containers, distribution model — all from repository inspection

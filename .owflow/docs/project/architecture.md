@@ -1,14 +1,14 @@
 # System Architecture
 
 ## Overview
-owflow is an OpenCode plugin that registers an agentic SDLC system at runtime: it contributes skills, commands, and subagents to the host, plus hooks and tools that enforce workflow safety and state consistency. The "product" is a markdown-defined workflow engine — dispatcher skills route to standalone subskills that drive step-by-step task execution, delegate heavy work to isolated subagents, and persist progress in per-task YAML state files.
+owflow is an OpenCode plugin that registers an agentic SDLC system at runtime: it contributes skills, commands, and subagents to the host, plus hooks and tools that enforce workflow safety and state consistency. The "product" is a markdown-defined workflow engine — dispatcher skills route to standalone subskills that drive step-by-step task execution, delegate heavy work to isolated subagents, and persist progress in per-task YAML state files. As of 0.6.0, all four workflows (development, research, performance, migration) follow this decomposed shape.
 
 ## Architecture Pattern
 **Pattern**: OpenCode plugin with runtime registration + markdown-defined workflow engine (state-machine orchestration).
 
 The plugin entry point (`src/index.ts`, default-exported `OwflowPlugin`) never runs workflows itself. It performs three registration duties — config mutation (skills path, command palette, subagent definitions), lifecycle hooks (compaction reminder, destructive-command guard, session attribution), and custom tools (`verify_template`, `fork_task`). Workflow logic lives entirely in `src/skills/**` markdown, interpreted by the host agent at invocation time, with `.owflow/tasks/**/orchestrator-state.yml` as the durable state.
 
-Two modes share one state file per split workflow: an assisted dispatcher (`/owflow:development`, `/owflow:research`, `/owflow:migration`) hands off one subskill per invocation, and an autonomous wrapper (`/owflow:goal-development`, `/owflow:goal-research`, `/owflow:goal-migration`) runs every step in one session; either can be mixed on the same task. Performance remains a single orchestrator on the classic phase-slug pipeline.
+Two modes share one state file per split workflow: an assisted dispatcher (`/owflow:development`, `/owflow:research`, `/owflow:performance`, `/owflow:migration`) hands off one subskill per invocation, and an autonomous wrapper (`/owflow:goal-development`, `/owflow:goal-research`, `/owflow:goal-performance`, `/owflow:goal-migration`) runs every step in one session; either can be mixed on the same task.
 
 ## System Structure
 
@@ -20,12 +20,12 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 ### Configuration Layer
 - **Location**: `src/configuration/`
 - **Purpose**: Register agents, commands, and skills into the host config; synthesize command wrappers from skill frontmatter
-- **Key Files**: `agents-config.ts` (23 subagents, model aliasing), `commands-config.ts` (6 maintained + 39 synthesized, fail-fast frontmatter contract), `skills-config.ts` (adds plugin skills path)
+- **Key Files**: `agents-config.ts` (23 subagents, model aliasing), `commands-config.ts` (6 maintained + 46 synthesized, fail-fast frontmatter contract), `skills-config.ts` (adds plugin skills path)
 
 ### Workflow Engine (Skills)
-- **Location**: `src/skills/` (44 skills: 39 user-invocable, 5 internal)
+- **Location**: `src/skills/` (51 skills: 46 user-invocable, 5 internal)
 - **Purpose**: Markdown-defined dispatchers, standalone subskills, and wrappers implementing the four workflows; shared contracts in `orchestrator-framework/references/` (gate contract, delegation rules, dispatcher handoff, state schema)
-- **Key Files**: `development/SKILL.md`, `research/SKILL.md`, `migration/SKILL.md`, `performance/SKILL.md`, `goal-*/SKILL.md`, `dev-*/SKILL.md`, `research-*/SKILL.md`, `migration-*/SKILL.md`
+- **Key Files**: `development/SKILL.md`, `research/SKILL.md`, `migration/SKILL.md`, `performance/SKILL.md`, `goal-*/SKILL.md`, `dev-*/SKILL.md`, `research-*/SKILL.md`, `migration-*/SKILL.md`, `performance-*/SKILL.md`
 
 ### Subagents
 - **Location**: `src/agents/` (23 definitions, all `mode: subagent`, `hidden: true`)
@@ -33,8 +33,8 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 - **Key Files**: one markdown file per agent with frontmatter `name`, `description`, `model`, `mode`
 
 ### Commands
-- **Location**: `src/commands/` (6 maintained), generated at runtime (39 wrappers)
-- **Purpose**: Slash-command surface; the 39 wrappers are synthesized from `SKILL.md` frontmatter via `renderCommandTemplate`, removing duplication
+- **Location**: `src/commands/` (6 maintained), generated at runtime (46 wrappers)
+- **Purpose**: Slash-command surface; the 46 wrappers are synthesized from `SKILL.md` frontmatter via `renderCommandTemplate`, removing duplication
 - **Key Files**: `src/commands/*.md` (`work`, `reviews-*`), `src/configuration/commands-config.ts`
 
 ### Tools
@@ -44,7 +44,7 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 
 ### State & Templates
 - **Location**: `src/templates/` (5 YAML templates: base + 4 workflows), `.owflow/tasks/` (runtime)
-- **Purpose**: Versioned task-state shape; descriptive step slugs (`codebase-analysed`, `spec-written`, `implementation-done`, …) tracked in `orchestrator.completed_phases` with resume semantics
+- **Purpose**: Versioned task-state shape; descriptive step slugs tracked in `orchestrator.completed_phases` with resume semantics — development 13 slugs (`codebase-analysed`, `tdd-red-proven`, `spec-written`, `implementation-done`, `e2e-run`, `task-completed`, …), migration 10, performance 9 (`codebase-analysed`, `bottlenecks-identified`, `options-chosen`, `verification-done`, …), research 8 (`brief-written`, …)
 - **Key Files**: `src/templates/orchestrator-state-*.yml`
 
 ### Build & Distribution
@@ -135,4 +135,4 @@ Not applicable. Structured persistence is YAML state files validated structurall
 No containers or cloud infrastructure. Deployment is `npm publish` guarded by `prepack` → `bun run build` (rm dist → type-check → tests → copy markdowns). Local development installs via `bun run local-install` (`opencode plugin "$(pwd)" --global --force`).
 
 ---
-*Based on codebase analysis performed 2026-10-01*
+*Based on codebase analysis performed 2026-10-05*
