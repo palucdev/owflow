@@ -16,12 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `owflow:performance` rewritten as a routing-only dispatcher (437 → 267 lines) that hands off to the subskills one step per invocation.
-- Commands/config test surface extended with a performance vocabulary & binding guard and a `performance-binding-proof` fixture.
 - Documentation surface (AGENTS.md, docs/, README, work command) synced to the split.
 
 ### Notes
 
-- Pre-split performance tasks carrying `phase-N` state are not resumable; restart them via `/owflow:performance <description>`. See the upgrade note in `docs/workflows.md` (Performance → Resume).
+- Pre-split performance tasks carrying `phase-N` state are not resumable; restart them via `/owflow:performance <description>`.
 
 ## [0.5.0] - 2026-10-05
 

@@ -193,8 +193,6 @@ Static code analysis to detect bottlenecks, followed by standard spec/plan/imple
 
 Resume uses the step slugs recorded in the task's `orchestrator-state.yml` (`completed_phases`).
 
-> **Upgrade note**: this pipeline replaced the pre-split `phase-N` state vocabulary. A performance task created with an older plugin version is not resumable — its `orchestrator-state.yml` uses retired slugs and fails template validation. Start a fresh task with `/owflow:performance <description>`; existing `analysis/` and `implementation/` artifacts can be copied into the new task directory.
-
 ---
 
 ## Migration

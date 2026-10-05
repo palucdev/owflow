@@ -135,10 +135,20 @@ You can always be explicit when you prefer - arguments and flags simply override
 | `/owflow:development`      | Features, bug fixes, enhancements              |
 | `/owflow:research`         | Research with synthesis and solution design    |
 | `/owflow:performance`      | Optimizing speed or resource usage             |
-| `/owflow:goal-performance` | Optimizing speed or resource usage, end to end |
 | `/owflow:migration`        | Changing technologies or patterns              |
 
 Use `/owflow:work` as a single entry point — it classifies the task with the `task-classifier` subagent and routes to the right workflow.
+
+### Autonomous Workflows
+
+Each workflow has a `/owflow:goal-*` equivalent that runs the same pipeline back-to-back in one session, pausing at decision gates between steps. Both modes share one task state, so you can mix them freely on a single task.
+
+| Command                    | Runs                          |
+| -------------------------- | ----------------------------- |
+| `/owflow:goal-development` | The full development pipeline |
+| `/owflow:goal-research`    | The full research pipeline    |
+| `/owflow:goal-performance` | The full performance pipeline |
+| `/owflow:goal-migration`   | The full migration pipeline   |
 
 ### Research Utility
 

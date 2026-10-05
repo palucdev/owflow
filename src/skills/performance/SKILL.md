@@ -1,6 +1,6 @@
 ---
 name: owflow:performance
-description: Performance workflow dispatcher. Initializes/resumes performance tasks, derives the next step from state, and hands off to the matching /owflow:performance-* subskill. Static-analysis-first bottleneck identification (N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, memory leaks) with optional user-provided profiling data. Use /owflow:goal-performance to run all steps in one session.
+description: Performance workflow dispatcher. Initializes/resumes performance tasks, derives the next step from state, and hands off to the matching /owflow:performance-* subskill. Static-analysis-first bottleneck identification (N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, memory leaks) with optional user-provided profiling data.
 argument-hint: "[task description | task-path] [--from=<step-slug>]"
 user-invocable: true
 ---
@@ -9,7 +9,7 @@ user-invocable: true
 
 Entry point for performance tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:performance-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate. The dispatcher owns only initialization (task directory, state, six task items) and the drop-only resume trim; every task artifact is produced by the subskills (see [Task Structure](#task-structure)).
 
-Performance state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts` (NOT phase numbers): `codebase-analysed`, `bottlenecks-identified`, `spec-written`, `spec-audited` (conditional), `plan-created`, `implementation-done`, `options-chosen`, `verification-done`, `task-completed`. The routing table below maps slugs to subskills.
+Performance state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts`: `codebase-analysed`, `bottlenecks-identified`, `spec-written`, `spec-audited` (conditional), `plan-created`, `implementation-done`, `options-chosen`, `verification-done`, `task-completed`. The routing table below maps slugs to subskills.
 
 For the all-in-one loop with in-session `question` gates, use `/owflow:goal-performance`.
 

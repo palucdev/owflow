@@ -27,14 +27,6 @@ Before considering an orchestrator complete, verify ALL items:
 
 ---
 
-## Routing-Only Dispatcher Waivers
-
-A routing-only dispatcher (e.g., `/owflow:performance`) executes no phase bodies and delegates nothing, so the monolith-shaped required elements above are explicitly waived, per item, in the dispatcher body itself: `:16` Phase structure, `:17` Delegation enforcement, `:18` POST-CONTINUATION blocks, `:19` Context passing (waived by the same clause as `:17`), `:20` Context extraction, `:21` Decision gates, `:22` `question` at every `→ Pause`, `:25` Auto-recovery table. Item `:24` TaskCreate initialization is **satisfied, not waived** — the dispatcher creates the workflow's task items with `addBlockedBy` at init and records their ids in `orchestrator.task_ids`.
-
-Evidence: `src/skills/performance/SKILL.md` "Checklist Waivers (routing-only dispatcher)".
-
----
-
 ## Anti-Patterns
 
 | Anti-Pattern                            | Why It's Wrong                                      |

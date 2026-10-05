@@ -1,7 +1,7 @@
 # Development Roadmap
 
 ## Current State
-- **Version**: 0.4.3 (pre-1.0)
+- **Version**: 0.6.0 (pre-1.0)
 - **Key Features**: 4 workflow types (development, research, performance, migration); 51 skills (46 user-invocable); 23 subagents; 52 commands (6 maintained, 46 synthesized from skill frontmatter); 2 custom tools (`verify_template`, `fork_task`); destructive-command guard; task state machine with resume semantics; `.owflow/docs/` standards management
 - **Recent Updates**: split the research, migration, and performance orchestrators into standalone subskills; dynamic command wrappers from skill frontmatter; entry-gate hooks for dev skills (git history, Sep 2026)
 
