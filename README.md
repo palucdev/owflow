@@ -135,7 +135,7 @@ You can always be explicit when you prefer - arguments and flags simply override
 | `/owflow:development`  | Features, bug fixes, enhancements           |
 | `/owflow:research`     | Research with synthesis and solution design |
 | `/owflow:performance`  | Optimizing speed or resource usage          |
-| `/owflow:migration`    | Changing technologies or patterns (`/owflow:goal-migration` = all steps in one session) |
+| `/owflow:migration`    | Changing technologies or patterns           |
 
 Use `/owflow:work` as a single entry point — it classifies the task with the `task-classifier` subagent and routes to the right workflow.
 
