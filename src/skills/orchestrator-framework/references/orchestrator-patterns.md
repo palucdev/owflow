@@ -135,8 +135,6 @@ Orchestrators add domain-specific fields using `[domain]_context`:
 
 See each orchestrator's SKILL.md "Domain Context" section for full schema.
 
-**Note**: migration step progress lives in `orchestrator.completed_phases` (descriptive step slugs); `migration_context.steps_completed` no longer exists — it was documented here but never declared in the migration template.
-
 ### Shared: research_reference
 
 When development starts from completed research (`--research` flag):
