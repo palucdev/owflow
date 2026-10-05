@@ -270,18 +270,18 @@ describe("skill command registration", () => {
     }
   });
 
-  test("should register one command per invocable skill alongside the six content commands", () => {
+  test("should register one command per invocable skill alongside the six maintained commands", () => {
     const config = {} as OpenCodeConfig;
     configureCommands(config);
 
-    expect(Object.keys(config.command)).toHaveLength(36);
+    expect(Object.keys(config.command)).toHaveLength(45);
 
     // Both totals fall out of disk state: one wrapper per invocable skill on
     // top of the maintained command files.
     const invocableSkills = commandsConfig
       .readSkillFrontmatter()
       .filter((entry) => entry.data["user-invocable"] === true);
-    expect(invocableSkills).toHaveLength(30);
+    expect(invocableSkills).toHaveLength(39);
   });
 
   test("should let a maintained command win over a synthesized one with the same name", () => {

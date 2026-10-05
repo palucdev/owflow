@@ -11,7 +11,7 @@ This document describes the technology choices and rationale for owflow, an Open
 - **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
 
 ### Markdown + YAML frontmatter
-- **Usage**: The majority of the product surface — 35 skills (`SKILL.md`), 23 agent definitions, 6 maintained commands, templates
+- **Usage**: The majority of the product surface — 44 skills (`SKILL.md`), 23 agent definitions, 6 maintained commands, templates
 - **Rationale**: Skills/agents/commands are declarative content consumed by OpenCode; frontmatter is the single source of truth from which commands are synthesized at runtime
 
 ## Frameworks
@@ -25,7 +25,7 @@ None. No server framework, HTTP API, or long-running service. The only runtime f
 - **`@opencode-ai/plugin` `^1.18.4`** — plugin entry contract (`Plugin` type), custom tool factory (`tool()`), config mutation and lifecycle hook types
 
 ### Testing
-- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 141 tests across 10 suites with YAML fixtures
+- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 151 tests across 10 suites with YAML fixtures
 - **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored)
 
 ## Database
@@ -34,7 +34,7 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
 ## Build Tools & Package Management
 - **Bun** (`bunfig.toml`, `bun.lock`) — dev, build, and test runtime
 - **`bun tsc`** — type-check and emit ESM JavaScript to `dist/`
-- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (132 files in the published payload)
+- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS — 141 files total in the payload)
 - **npm** — publish path only (`package-lock.json` also committed; `prepack` runs the build as a publish guard)
 - **Node ^25** — host engine requirement (`engines` field)
 

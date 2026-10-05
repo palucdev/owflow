@@ -4,7 +4,7 @@
 
 **Purpose:** Pattern guide for migration execution strategies (incremental, rollback, dual-run)
 
-This reference provides decision criteria and implementation patterns for the three core migration strategies supported by the migration orchestrator.
+This reference provides decision criteria and implementation patterns for the three core migration strategies supported by the migration workflow.
 
 ---
 
@@ -21,7 +21,7 @@ This reference provides decision criteria and implementation patterns for the th
 
 ## Overview
 
-Migration strategies define **how** to execute the transition from current to target state. The migration orchestrator supports three core strategies, which can be combined:
+Migration strategies define **how** to execute the transition from current to target state. The migration workflow supports three core strategies, which can be combined:
 
 | Strategy        | Purpose                                 | Risk Level  | Use When                                     |
 | --------------- | --------------------------------------- | ----------- | -------------------------------------------- |
@@ -155,7 +155,7 @@ If success: Continue to Phase 2
 
 ### Implementation Pattern
 
-**Rollback Plan Structure** (`planning/rollback-plan.md`):
+**Rollback Plan Structure** (`analysis/rollback-plan.md`):
 
 ```markdown
 # Rollback Plan: [Migration Name]
@@ -273,7 +273,7 @@ Old System (100% traffic) → Dual-Run (Old + New in parallel) → New System (1
 - Keep old system running for 7-30 days (rollback safety net)
 - After validation period, decommission old system
 
-**Dual-Run Plan Structure** (`planning/dual-run-plan.md`):
+**Dual-Run Plan Structure** (`analysis/dual-run-plan.md`):
 
 ```markdown
 # Dual-Run Plan: [Migration Name]
@@ -422,9 +422,9 @@ Phase 5: Decommission MySQL
 4. **Combine strategies** based on risk, scope, and requirements
 5. **Document procedures** before executing migration
 
-**References in SKILL.md**:
+**Read by**:
 
-- Phase 2 (Specification): Select migration strategy
-- Phase 3 (Planning): Structure implementation plan by strategy
-- Phase 4 (Execution): Execute according to selected strategy
-- Phase 5 (Verification): Test rollback procedures (non-destructive)
+- `migration-spec`: select the migration strategy and produce the rollback/dual-run plans
+- `migration-plan`: structure the implementation plan by strategy (per-task-group rollback steps)
+- `migration-implement`: execute according to the selected strategy
+- `migration-verify`: test rollback procedures non-destructively and run the compatibility checks

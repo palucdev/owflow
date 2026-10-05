@@ -1,60 +1,98 @@
 ---
 name: owflow:migration
-description: Orchestrates the complete migration workflow from current state analysis through implementation to compatibility verification. Handles technology migrations, platform changes, and architecture pattern transitions with adaptive risk assessment, incremental execution, and rollback planning. Use when migrating technologies, platforms, or architecture patterns.
-argument-hint: "[task description]"
+description: Migration workflow dispatcher. Initializes/resumes migration tasks, derives the next step from state, and hands off to the matching /owflow:migration-* subskill. Handles technology migrations, platform changes, and architecture pattern transitions with adaptive risk assessment, incremental execution, rollback planning, dual-run support, and compatibility verification.
+argument-hint: "[task description | task-path] [--from=<slug>] [--type=TYPE] [--no-web-research]"
 user-invocable: true
 ---
 
-# Migration Orchestrator
+# Migration Dispatcher
 
-Systematic migration workflow from current state analysis to verified migration with rollback capabilities.
+Entry point for migration tasks in **assisted mode**: initialize (or resume) the task, derive the next pending step from `orchestrator-state.yml`, print the matching subskill command, and STOP. Each `/owflow:migration-*` subskill runs its steps with fresh context — the explicit invocation IS the step gate.
 
-Gates follow the shared contract in [Gate Contract](../orchestrator-framework/references/gate-contract.md).
+Migration state uses descriptive step slugs in `completed_phases` / `failed_phases` / `auto_fix_attempts`: `state-analysed`, `target-planned`, `strategy-specified`, `plan-created`, `migration-executed`, `options-chosen`, `verification-done`, `issues-resolved`, `docs-generated`, `task-completed`. The routing table below maps slugs to subskills.
+
+For the all-in-one loop with in-session `question` gates, use `/owflow:goal-migration`.
+
+Gates follow the shared contract in the [Gate Contract](../orchestrator-framework/references/gate-contract.md), with the [dispatcher exception](../orchestrator-framework/references/gate-contract.md).
+
+## Input / Output Artifacts
+
+| Artifact                              | Behavior                                                                                  |
+| ------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Argument (description / task path)     | migration description (new task) or task path/identifier (resume); nothing provided → ask |
+| `orchestrator-state.yml`               | read on resume — artifact-validated against the marker table below                        |
+| Task directory + state initialization  | written once (Step 3, new task) — `entry_point: "migration"`, flags recorded              |
+| Slugs, artifacts, and step bodies      | none — every task artifact is produced by the subskills (see [Task Structure](#task-structure)) |
+
+The dispatcher writes nothing else — it owns 0 slugs and contains no step bodies.
 
 ## Entry Gate
 
-**BEFORE executing any phase, you MUST complete these steps:**
+**BEFORE deriving the handoff, complete these steps:**
 
-### Argument resolution
+### Step 1: Load Framework Patterns
 
-- **Migration description provided** → use it as the task description.
-- **Task path / identifier** (directory under `.owflow/tasks/migrations/`) → resume mode: read `orchestrator-state.yml`, find the first incomplete phase (`--from=PHASE` overrides), validate existing artifacts, then continue from there.
-- **Nothing provided** → ask via `question`: "What technology, platform, or architecture should be migrated, and to what?" — capture source and target state before proceeding.
+**Read the framework reference files NOW using the Read tool:**
 
-### Prerequisites
+1. The [Dispatcher & Handoff Pattern](../orchestrator-framework/references/dispatcher-handoff.md) governs this skill.
+2. The [Delegation Rules](../orchestrator-framework/references/delegation-rules.md) bound what subskills delegate.
+3. The [Orchestrator Patterns](../orchestrator-framework/references/orchestrator-patterns.md) define state schema, initialization, and context passing.
 
-| Required for this skill | Where verified                                        | Produced by                |
-| ----------------------- | ----------------------------------------------------- | -------------------------- |
-| State file exists       | `<task-path>/orchestrator-state.yml` (resume mode)    | prior `/owflow:migration` run |
+### Step 2: Resolve the Argument
 
-On resume, if the state file is missing → print: `No migration task found at <path>. Run /owflow:migration <description> to start from scratch.` and STOP. Validate expected artifacts for completed phases (remove entries with missing artifacts).
+**If the argument is a task path or identifier** (a directory, or a directory name under `.owflow/tasks/migrations/`) → **resume mode**:
 
-### Execution steps
+1. Read `orchestrator-state.yml`; artifact-validate `completed_phases` against the marker table below — **drop** any slug whose marker is missing, **adopt** any marker whose slug is missing (append the slug, backfill still-null fields it proves were produced).
+2. Find the resume point: the FIRST step slug not in `completed_phases` whose routing-table condition holds. **Compatibility re-verification fallback**: if **no routing-table step applies** and `verification-done` is complete and `verification_context.compatibility_status != passed` (failed or null/invalidated), the resume point is `/owflow:migration-verify <task-path>` (re-verification — the 4 checks re-run and the verdict is settled), overriding slug completeness; a recorded data-integrity HALT keeps the user-confirmed rollback path dominant. `--from=<slug>` overrides, but only after validating that slug's prerequisites (the upstream slug **and** marker artifacts) exist **and** its row's state facts hold (e.g. no Finalize jump while `compatibility_status != passed`) — otherwise use `question`, never a silent jump.
+3. Missing state file → print: `No migration task found at <path>. Run /owflow:migration <description> to start a migration task from scratch.` and STOP.
 
-1. **Load framework patterns** — Read `../orchestrator-framework/references/orchestrator-patterns.md` NOW: delegation rules, interactive mode, state schema, initialization, context passing, issue resolution.
-2. **Initialize workflow:**
-   1. **Create Task Items**: Use `TaskCreate` for all phases (see Phase Configuration), then set dependencies with `TaskUpdate addBlockedBy`
-   2. **Create Task Directory**: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`
-   3. **Initialize State**: Create `orchestrator-state.yml` with migration context
-      - **CRITICAL**: Use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-migration.yml`.
-   4. **Discover project documentation**: Read `.owflow/docs/INDEX.md` (if exists), extract ALL file paths from the "Project Documentation" section — includes predefined docs AND any user-added project docs. Store as `project_context.project_doc_paths` in state.
+**If the argument is a migration description** (any other free text) → new task.
+
+**If nothing is provided** → ask via `question`: "What technology, platform, or architecture should be migrated, and to what?" — capture source and target state, then WAIT. Never guess or auto-pick a task.
+
+#### Marker table (artifact-validated resume)
+
+| Slug                 | Marker artifact / state fact                                 |
+| -------------------- | ------------------------------------------------------------ |
+| `state-analysed`     | `analysis/current-state-analysis.md` **and** `analysis/clarifications.md` |
+| `target-planned`     | `analysis/target-state-plan.md`                              |
+| `strategy-specified` | `implementation/spec.md`                                     |
+| `plan-created`       | `implementation/implementation-plan.md`                      |
+| `migration-executed` | `implementation/work-log.md`                                 |
+| `options-chosen`     | settled `options.*` values (state-resident — no artifact)     |
+| `verification-done`  | `verification/implementation-verification.md` + `verification/compatibility-test-results.md` **and** non-null `verification_context.compatibility_status` |
+| `issues-resolved`    | non-empty `verification_context.fixes_applied` **or** a recorded approval in `verification_context.decisions_made` (state-resident — no artifact) |
+| `docs-generated`     | `documentation/migration-guide.md`                           |
+| `task-completed`     | `task.status: completed` (state-resident — no artifact)      |
+
+A settled options value, a completed fix phase (non-empty `fixes_applied` or a recorded approval/deliberate skip), or a `--from` decision is not re-asked on resume: report the existing decision and route from it.
+
+### Step 3: Initialize (new task)
+
+1. **Create Task Directory**: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/` (3–5 kebab-case words from the description)
+2. **Initialize State**: create `orchestrator-state.yml` from the migration template.
+   - `task.title` / `task.description` from the description; `task.status: in_progress`; `task.tags: []`; `task.priority: null` (template defaults)
+   - `orchestrator.started_phase: state-analysed`; `orchestrator.entry_point: "migration"`; `orchestrator.task_path`; `orchestrator.created` / `orchestrator.updated`
+   - Flags: `--type=code|data|architecture|general` → `migration_context.migration_type` (a **default, not an override** — `migration-target` still confirms on low confidence); `--no-web-research` is a per-subskill flag forwarded to `migration-target` (skips external research; `migration-target` records `external_research.performed: false`) — nothing is persisted for it at init
+   - **CRITICAL**: use the `verify_template` tool immediately after creation to check YAML validity against `orchestrator-state-migration.yml`.
+3. **Create Task Items**: use `TaskCreate` for the migration steps (one item per subskill handoff: analyze → target → spec → plan → implement → verify → fix → finalize), then set the execution order with `TaskUpdate addBlockedBy`. Record the ids in `orchestrator.task_ids`. On resume, refresh the already-evidenced items instead of re-creating them.
+4. No project-documentation discovery at this layer — `migration-spec` reads `.owflow/docs/INDEX.md` when it gathers requirements (nothing is persisted to a `project_context` key).
 
 **Output**:
 
 ```
-🚀 Migration Orchestrator Started
+🚀 Migration Dispatcher
 
 Task: [migration description]
 Directory: [task-path]
-
-Starting Phase 1: Analyze current state...
+Next step: [step name]
 ```
 
 ---
 
 ## When to Use
 
-Use for:
+Use when:
 
 - Migrating from one framework/library to another (e.g., Vue 2 → Vue 3, Express → Fastify)
 - Changing database platforms (e.g., MySQL → PostgreSQL, MongoDB → DynamoDB)
@@ -83,279 +121,78 @@ Use for:
 | **Data**         | database, schema, data migration     | Dual-run (zero downtime) | Data integrity, checksums         |
 | **Architecture** | REST→GraphQL, monolith→microservices | Dual-run or phased       | Compatibility, rollback           |
 
----
-
-## Phase Configuration
-
-| Phase | content                                           | activeForm                                             | Agent/Skill                               |
-| ----- | ------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
-| 1     | "Analyze current state"                           | "Analyzing current state"                              | codebase-analyzer                         |
-| 2     | "Plan target state and gaps"                      | "Planning target state and gaps"                       | gap-analyzer                              |
-| 3     | "Gather requirements & create migration strategy" | "Gathering requirements & creating migration strategy" | Direct + specification-creator (subagent) |
-| 4     | "Plan implementation"                             | "Planning implementation"                              | implementation-planner (subagent)         |
-| 5     | "Execute migration"                               | "Executing migration"                                  | implementation-plan-executor              |
-| 6     | "Verify and test compatibility"                   | "Verifying and testing compatibility"                  | implementation-verifier                   |
-| 7     | "Resolve verification issues"                     | "Resolving verification issues"                        | Direct (conditional)                      |
-| 8     | "Generate documentation"                          | "Generating documentation"                             | user-docs-generator (optional)            |
+The type-detection algorithm (with confidence scoring), per-type adaptations, and the external-research requirement table live in `migration-target/references/migration-types.md` — read there, not here.
 
 ---
 
-## Workflow Phases
+## Routing Table (completed_phases → next subskill)
 
-### Phase 1: Current State Analysis & Clarifications
+Derive the FIRST step slug not in `completed_phases` whose condition holds, then print the matching command:
 
-**Purpose**: Comprehensive analysis of current system before migration, followed by scope/requirements clarification
-**Execute**:
+| Next step (slugs)                                | Condition (from state)                                                                                                         | Handoff command                        | Produces                                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Analyze (`state-analysed`)                       | Always (new task or partial foundation)                                                                                        | `/owflow:migration-analyze <task-path>` | `analysis/current-state-analysis.md`, `analysis/clarifications.md`                                 |
+| Target (`target-planned`)                        | `state-analysed` completed                                                                                                     | `/owflow:migration-target <task-path>`  | `analysis/target-state-plan.md` (type/strategy locked by the risk gate)                            |
+| Spec (`strategy-specified`)                      | `target-planned` completed                                                                                                     | `/owflow:migration-spec <task-path>`    | `analysis/requirements.md`, `implementation/spec.md`, `analysis/rollback-plan.md` (+ `analysis/dual-run-plan.md` when dual-run applies) |
+| Plan (`plan-created`)                            | `strategy-specified` completed                                                                                                 | `/owflow:migration-plan <task-path>`    | `implementation/implementation-plan.md` with per-group rollback/checkpoint steps                   |
+| Implement (`migration-executed`)                 | `plan-created` completed                                                                                                       | `/owflow:migration-implement <task-path>` | implemented migration changes, `implementation/work-log.md`                                       |
+| Verify (`options-chosen`, `verification-done`)   | `migration-executed` completed                                                                                                 | `/owflow:migration-verify <task-path>`  | `verification/implementation-verification.md`, `verification/compatibility-test-results.md`        |
+| Fix (`issues-resolved`)                          | `verification-done` completed **and** (`verification_context.compatibility_status = failed` **or** (`verification_context.last_status != passed` **and** no recorded deliberate skip)) | `/owflow:migration-fix <task-path>`     | fixes + updated `verification/implementation-verification.md`; data-integrity HALT stays with the user |
+| Finalize (`docs-generated`, `task-completed`)    | `verification-done` completed **and** `verification_context.compatibility_status = passed` **and** the fix phase is settled (`issues-resolved` present, or `last_status = passed`, or a recorded deliberate skip) | `/owflow:migration-finalize <task-path>` | `documentation/migration-guide.md` (when `options.docs_enabled` is true), `task.status: completed` |
 
-1. Skill tool - `codebase-analyzer`
-2. Update state with analysis results
-3. Direct - use question for max 5 critical clarifying questions about migration scope, target system, and constraints
-4. Save clarifications to `analysis/clarifications.md`
-   **Output**: `analysis/current-state-analysis.md`, `analysis/clarifications.md`
-   **State**: Update task_context with current system info, `task_context.clarifications_resolved`
+Notes:
 
-→ **AUTO-CONTINUE** — Do NOT end turn, do NOT prompt user. Proceed immediately to Phase 2.
-
----
-
-### Phase 2: Target State Planning & Gap Analysis
-
-**Purpose**: Define target system and identify migration gaps
-**Execute**: Task tool - `gap-analyzer` subagent
-**Output**: `analysis/target-state-plan.md`
-**State**: Update `migration_context.migration_type`, `target_system`, `risk_level`, `breaking_changes`
-
-**Gap Analyzer Tasks**:
-
-1. Define target system from migration description
-2. Identify gaps (features to migrate, APIs to adapt, data to transform)
-3. Classify migration type (code/data/architecture)
-4. Recommend migration strategy (incremental/big-bang/dual-run/phased)
-5. External research via WebSearch for version upgrades
-
-→ Pause
-
-question - Display executive summary before asking. Extract from gap analysis: current system overview, target system, migration type classified, number of gaps identified, recommended strategy, risk level. Format as brief overview then "Continue to migration strategy?"
+- Each row's condition is re-read from state, never inferred: the Fix row activates on a failed compatibility check unconditionally, or on verifier issues without a recorded deliberate skip; the Finalize row requires `compatibility_status = passed` **and** a settled fix phase — a failed compatibility check is never waived by a skip or approval, so `task-completed` cannot be reached over one.
+- **Compatibility re-verification fallback**: when no routing-table row applies **and** `verification-done` ∈ `completed_phases` **and** `compatibility_status != passed`, hand off to `/owflow:migration-verify <task-path>` (the re-verification re-runs the 4 checks and settles the verdict). The Fix row stays primary whenever its condition holds — an ordinary pre-fix failure routes to `/owflow:migration-fix`, never to a redundant check re-run; a recorded data-integrity HALT keeps the user-confirmed rollback path dominant.
+- `task-completed` already in `completed_phases` → the task is TERMINAL: no handoff.
+- Slugs that are already in `completed_phases` but whose marker artifact is missing are dropped during Step 2 — never trust a bare slug.
 
 ---
 
-### Phase 3: Migration Requirements & Strategy Specification
+## Exit Gate (adapted for dispatch mode)
 
-> **Phase gate**: Requires `question` confirmation from Phase 2 before executing.
+After deriving the handoff, present the results box, ask how to proceed, then hand off accordingly (see the [dispatcher exception](../orchestrator-framework/references/gate-contract.md)). Never auto-invoke the subskill.
 
-**Purpose**: Gather migration requirements, then create detailed migration specification with rollback procedures
-**Execute**:
-
-**Part A — Migration Requirements Gathering (inline)**:
-
-1. Direct - use question for migration-specific requirements (3-5 questions):
-   - Migration scope and boundaries (what's in/out of migration)
-   - Rollback expectations and downtime tolerance
-   - Data migration specifics (if data migration type)
-   - Dual-run requirements (if applicable)
-   - Existing code/config to preserve
-   - Frame as confirmable assumptions: "I assume X, is that correct?"
-2. Save gathered requirements to `analysis/requirements.md`
-
-**Part B — Specification Creation (subagent)**: 3. Task tool - `specification-creator` subagent
-
-**Context to pass to subagent**: task_path, task_type (migration), task_description, requirements_path (analysis/requirements.md), project_context_paths (INDEX.md + project_doc_paths from state — all discovered project docs), migration_type, current_system, target_system, risk_level, breaking_changes, phase_summaries (current_state_analysis, gap_analysis)
-
-**Output**: `analysis/requirements.md`, `implementation/spec.md`, `analysis/rollback-plan.md`, optionally `analysis/dual-run-plan.md`
-**State**: Update `rollback_plan_created`, `dual_run_configured`
-
-**Part C — Diagram Refinement (Skill, content-preserving)**:
-
-4. Invoke Skill tool: `diagrams-mermaid` to refine `implementation/spec.md`
-5. Add migration-focused visuals (target architecture and transition/compatibility flow) as supplements, not replacements for strategy prose.
-6. If minimum context is missing, record open gaps instead of inventing systems, protocols, or migration paths.
-
-→ Pause
-
-question - Display executive summary before asking. Read `implementation/spec.md` and extract: migration strategy chosen, scope boundaries, rollback approach, breaking changes identified, key constraints. Format as brief overview then "Continue to implementation planning?"
-
----
-
-### Phase 4: Implementation Planning
-
-> **Phase gate**: Requires `question` confirmation from Phase 3 before executing.
-
-**Purpose**: Break migration into task groups with rollback steps
-**Execute**: Task tool - `implementation-planner` subagent
-**Output**: `implementation/implementation-plan.md` with rollback procedures
-**State**: Update task groups and dependencies
-
-**Context to pass to subagent**: task_path, task_type (migration), migration_type, task_description, phase_summaries (current_state_analysis, gap_analysis, specification)
-
-**Post-plan diagram refinement (Skill, content-preserving)**:
-
-- Invoke Skill tool: `diagrams-mermaid` for `implementation/implementation-plan.md`
-- Add one migration execution/state flow with rollback checkpoints.
-- Preserve written task steps and rollback details as source of truth.
-
-→ Pause
-
-question - Display executive summary before asking. Read `implementation/implementation-plan.md` and extract: number of task groups, total steps, rollback steps included, key dependencies, execution sequence. Format as brief overview then "Continue to execute migration?"
-
----
-
-### Phase 5: Migration Execution
-
-> **Phase gate**: Requires `question` confirmation from Phase 4 before executing.
-
-**Purpose**: Execute migration steps with incremental verification
-
-**ANTI-PATTERN — DO NOT DO THIS:**
-
-- ❌ "Let me implement this directly..." — STOP. Delegate to implementation-plan-executor.
-- ❌ "This migration is simple enough to code inline..." — STOP. Simplicity is NOT a reason to skip delegation.
-
-**INVOKE NOW** — Skill tool call:
-
-**Execute**: Skill tool - `implementation-plan-executor`
-**Output**: Implemented migration changes, `implementation/work-log.md`
-**State**: Update implementation progress, extract phase_summaries.implementation
-
-📋 **Standards Reminder**: Review `.owflow/docs/INDEX.md` before implementing.
-
-**SELF-CHECK**: Did you just invoke the Skill tool with `implementation-plan-executor`? Or did you start writing migration code yourself? If the latter, STOP immediately and invoke the Skill tool instead.
-
-**⚠️ POST-IMPLEMENTATION CONTINUATION** — After the skill completes and returns control:
-
-1. Read `orchestrator-state.yml` to confirm you are the orchestrator
-2. Update state: add Phase 5 to `completed_phases`
-3. Proceed to Phase 6
-
-→ Pause
-
-question - Display executive summary before asking. Extract from `phase_summaries.implementation` and `implementation/work-log.md`: migration steps completed, files changed, test results, rollback readiness status. Format as brief overview then "Continue to verification?"
-
----
-
-### Phase 6: Verification + Compatibility Testing
-
-> **Phase gate**: Requires `question` confirmation from Phase 5 before executing.
-
-**Purpose**: Verify migration success with compatibility and rollback testing
-**Execute**: Skill tool - `implementation-verifier`
-**Output**: `verification/implementation-verification.md`, `verification/compatibility-test-results.md`
-**State**: Update verification results
-
-**Migration-Specific Checks**:
-
-- Verify old system still works (if dual-run)
-- Test rollback procedures (non-destructive)
-- Validate data integrity (for data migrations)
-- Check performance benchmarks (before/after)
-
-**⚠️ POST-VERIFICATION CONTINUATION** — After the skill completes and returns control:
-
-1. Read `orchestrator-state.yml` to confirm you are the orchestrator
-2. Update state: add Phase 6 to `completed_phases`
-3. Evaluate verdict: if PASS → Phase 8, if fixable issues → Phase 7, otherwise stop workflow
-
-→ Pause
-
-question - Display executive summary before asking. Extract from verification results: overall verdict, issue counts by severity, compatibility test results, data integrity status, rollback test results. Format as detailed overview then "Continue to Phase [7 or 8]?"
-
----
-
-### Phase 7: Migration Issue Resolution (Conditional)
-
-> **Phase gate**: Requires `question` confirmation from Phase 6 before executing.
-
-**Purpose**: Fix verification issues through direct editing and re-verification
-**Execute**: Direct - apply fixes, re-verify
-**Output**: Updated code, `verification_context.fixes_applied`
-**State**: Update `reverify_count`, `decisions_made`
-
-**Skip if**: verdict = PASS
-
-**Process**:
-
-1. Display detailed issue breakdown grouped by category and severity, listing location, description, and fixability
-2. Present all critical + warning issues as a numbered list
-3. question — "Which issues should I fix?" with options: "Fix all fixable issues" / "Let me choose specific issues" / "Skip fixes, proceed as-is"
-4. Fix selected issues
-5. question — "Re-run verification to check fixes?" with options: "Yes, re-run verification" / "No, proceed to next phase"
-6. If re-run → re-invoke `implementation-verifier` → return to Step 1
-7. Max 3 iterations
-
-**Data Safety Critical**: HALT on any data integrity issue - never auto-fix data problems. Always present data issues to user with rollback option.
-
-**Exit Conditions**:
-
-- ✅ No critical issues remain → Proceed to Phase 8
-- ⚠️ Max iterations (3) reached → Ask user: proceed with warnings or rollback
-- ❌ Data integrity issues → HALT immediately, recommend rollback
-
-→ Pause
-
-question - Display executive summary: total issues found, issues fixed, issues remaining by severity. Then "Continue to documentation?"
-
----
-
-### Phase 8: Documentation → Exit Gate (Optional)
-
-> **Phase gate**: Requires `question` confirmation from the preceding phase before executing.
-
-**Purpose**: Create migration guide (optional) and run the Exit Gate
-**Execute**: Task tool - `user-docs-generator` subagent (conditional) + Direct (Exit Gate)
-**Output**: `documentation/migration-guide.md` (conditional)
-**State**: Set documentation complete, then `task.status: completed`
-
-**Skip if**: `options.docs_enabled = false`
-
-**Documentation Covers**:
-
-- Migration overview and goals
-- Prerequisites and preparation steps
-- Step-by-step migration procedure
-- Rollback procedures
-- Troubleshooting common issues
-
-**Results box** (present regardless of whether docs ran):
+### Results box
 
 ```markdown
-## ✅ MIGRATION COMPLETE — <task name>
+## ✅ MIGRATION TASK READY — <task name>
 
-**Migration type** — [code / data / architecture]
-**Strategy** — [incremental / big-bang / dual-run / phased]
-**Verification** — [final verdict]
-**Rollback plan** — [path / status]
-**Migration guide** — [path] / not generated
+**Task** — [migration description]
+**Directory** — `<task-path>`
+**Next step** — [step name]
+[Resume note: completed steps / fresh task]
 
-**Artifacts**
-- `analysis/current-state-analysis.md`
-- `analysis/target-state-plan.md`
-- `analysis/rollback-plan.md`
-- `implementation/work-log.md`
-- `verification/implementation-verification.md`
-- `documentation/migration-guide.md` [conditional]
+**Next ▸** `/owflow:migration-<subskill> <task-path>`
 ```
 
-**Results-acceptance question** — use `question` — "Are these results correct?" with options:
+For a terminal task (`task-completed` recorded), the results box reports the workflow as complete and carries no **Next ▸** handoff line.
 
-- **Accept** — migration is complete; print next steps below.
-- **Adjust** — re-run the affected phase (fixes, re-verification, docs) with the user's corrections, then re-present the results box.
-- **Discuss** — walk through specific results (verification verdicts, rollback readiness, guide contents) in more depth; then re-ask.
+### Acceptance question
+
+Use `question` — "Task ready. How would you like to proceed?" with options:
+
+- **Hand off to /owflow:migration-<subskill>** — the user invokes the suggested command (the dispatcher copies it to chat for convenience). Execution starts in a fresh context.
+- **Switch to autonomous mode** — illustrate with `/owflow:goal-migration <task-path>` to run remaining steps in one session with gates.
+- **Adjust** — task set-up is wrong (wrong flags, wrong description, wrong task); re-run the affected initialization step, re-present the results box.
 - **Stop here** — print the resume command (`/owflow:migration <task-path>`) and end.
 
-**Next steps (after Accept)**:
+For a terminal task, omit the first option (there is nothing to hand off) and report the completed workflow.
 
-- `/owflow:reviews-pragmatic <task-path>` — post-migration over-engineering check
-- `/owflow:standards-update "<lesson learned>"` — capture migration learnings as standards
-- Commit the changes and open a PR using the migration guide's procedures
+### Handoff message
 
-→ End of workflow
+On Accept (hand off choice), print, then STOP:
 
----
+```
+✓ Migration task ready at <task-path>
 
-## Domain Context (State Extensions)
+Next step:
+  → /owflow:migration-<subskill> <task-path>
 
-Migration-specific fields in `orchestrator-state.yml`:
-
-Refer to the template [src/templates/orchestrator-state-migration.yml](../../templates/orchestrator-state-migration.yml).
+Other options:
+  /owflow:goal-migration <task-path>   — run remaining steps in one loop
+  /owflow:migration --from=<slug> <task-path>   — jump to a specific step
+```
 
 ---
 
@@ -365,35 +202,57 @@ Refer to the template [src/templates/orchestrator-state-migration.yml](../../tem
 .owflow/tasks/migrations/YYYY-MM-DD-migration-name/
 ├── orchestrator-state.yml
 ├── analysis/
-│   ├── current-state-analysis.md     # Phase 1
-│   ├── target-state-plan.md          # Phase 2
-│   ├── requirements.md               # Phase 3
-│   ├── rollback-plan.md              # Phase 3
-│   └── dual-run-plan.md              # Phase 3 (if dual-run)
+│   ├── current-state-analysis.md     # migration-analyze
+│   ├── clarifications.md             # migration-analyze
+│   ├── target-state-plan.md          # migration-target
+│   ├── requirements.md               # migration-spec
+│   ├── rollback-plan.md              # migration-spec
+│   └── dual-run-plan.md              # migration-spec (if dual-run)
 ├── implementation/
-│   ├── spec.md                       # Phase 3
-│   ├── implementation-plan.md        # Phase 4
-│   └── work-log.md                   # Phase 5
+│   ├── spec.md                       # migration-spec
+│   ├── implementation-plan.md        # migration-plan
+│   └── work-log.md                   # migration-implement
 ├── verification/
-│   ├── implementation-verification.md    # Phase 6
-│   └── compatibility-test-results.md     # Phase 6
+│   ├── implementation-verification.md    # migration-verify
+│   └── compatibility-test-results.md     # migration-verify
 └── documentation/
-    └── migration-guide.md            # Phase 8 (optional)
+    └── migration-guide.md            # migration-finalize (optional)
 ```
+
+---
+
+## Domain Context (State Extensions)
+
+Migration-specific fields in `orchestrator-state.yml`: refer to the template [src/templates/orchestrator-state-migration.yml](../../templates/orchestrator-state-migration.yml).
 
 ---
 
 ## Auto-Recovery
 
-| Phase | Max Attempts | Strategy                                                                          |
-| ----- | ------------ | --------------------------------------------------------------------------------- |
-| 1     | 2            | Expand search patterns, prompt user for file paths                                |
-| 2     | 2            | Re-prompt for target details                                                      |
-| 3     | 2            | Re-gather requirements, re-invoke spec-creator subagent, regenerate rollback plan |
-| 4     | 2            | Regenerate with migration constraints                                             |
-| 5     | 5            | Fix syntax errors, prompt user on repeated failure                                |
-| 6     | 3            | Fix-then-reverify. **HALT on data integrity issues**                              |
-| 8     | 1            | Generate text-only without screenshots                                            |
+Retries are owned by each subskill (max attempts per step):
+
+| Subskill            | Max Attempts | Strategy                                                                          |
+| ------------------- | ------------ | --------------------------------------------------------------------------------- |
+| migration-analyze   | 2            | Expand search patterns, prompt the user for file paths                            |
+| migration-target    | 2            | Re-prompt for target details                                                      |
+| migration-spec      | 2            | Re-gather requirements, re-invoke spec-creator, regenerate rollback plan          |
+| migration-plan      | 2            | Regenerate with migration constraints                                             |
+| migration-implement | 5            | Fix syntax errors, prompt user on repeated failure                                |
+| migration-verify    | 3            | Fix-then-reverify. **HALT on data integrity issues**                              |
+| migration-fix       | 3 iterations | Contract, not a retry counter; data-integrity HALT is never auto-fixed            |
+| migration-finalize  | 1            | Generate the operator guide text-only; state-only completion                      |
+
+---
+
+## Command Flags
+
+Flags are restated here because `argument-hint` is not registered in the command object.
+
+| Flag                              | Effect                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `--from=<slug>`                   | Hand off (resume mode) from a specific step slug; prerequisites are validated, otherwise `question`          |
+| `--type=code\|data\|architecture\|general` | Default classification → `migration_context.migration_type` (not an override — low confidence still confirms) |
+| `--no-web-research`               | Forwarded to `migration-target`: skips external research and records `external_research.performed: false` (no state key is written at init — the flag is per-invocation) |
 
 ---
 
@@ -401,7 +260,9 @@ Refer to the template [src/templates/orchestrator-state-migration.yml](../../tem
 
 Invoked via:
 
-- `/owflow:migration [description] [--type=TYPE]` (new)
-- `/owflow:migration [task-path] [--from=PHASE]` (resume)
+- `/owflow:migration [description] [--type=TYPE] [--no-web-research]` (new)
+- `/owflow:migration [task-path] [--from=<slug>]` (resume)
+
+Alternative: `/owflow:goal-migration` — same task lifecycle, all subskills invoked in one session with `question` gates.
 
 Task directory: `.owflow/tasks/migrations/YYYY-MM-DD-task-name/`

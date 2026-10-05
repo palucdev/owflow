@@ -168,6 +168,16 @@ describe("verify_template tool", () => {
       expect((result as any).output).toContain("YAML Structure Validation Failed");
       expect((result as any).output).toContain("- Missing key: migration_context.target_system");
     });
+
+    test("binding proof: re-keyed migration state instance with completed_phases [state-analysed] validates against co-landed template", async () => {
+      const result = await verify_template.execute(
+        { filePath: "migration-binding-proof.yml", templateName },
+        { directory: fixturesDir } as any,
+      );
+      expect((result as any).output).toBe(
+        "File exists and follows the correct YAML structure.",
+      );
+    });
   });
 
   describe("template: orchestrator-state-performance.yml", () => {

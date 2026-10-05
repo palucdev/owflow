@@ -1,18 +1,27 @@
 orchestrator:
   started_phase: null
+  entry_point: null
   completed_phases: []
   failed_phases: []
   auto_fix_attempts:
-    phase-1: 0
-    phase-2: 0
-    phase-3: 0
-    phase-4: 0
-    phase-5: 0
-    phase-6: 0
-    phase-7: 0
-    phase-8: 0
+    state-analysed: 0
+    target-planned: 0
+    strategy-specified: 0
+    plan-created: 0
+    migration-executed: 0
+    options-chosen: 0
+    verification-done: 0
+    issues-resolved: 0
+    docs-generated: 0
+    task-completed: 0
   options:
-    docs_enabled: false
+    docs_enabled: null
+    skip_test_suite: null
+    code_review_enabled: null
+    code_review_scope: null
+    pragmatic_review_enabled: null
+    production_check_enabled: null
+    reality_check_enabled: null
   created: "YYYY-MM-DDTHH:MM:SSZ"
   updated: "YYYY-MM-DDTHH:MM:SSZ"
   task_path: null
@@ -40,6 +49,22 @@ migration_context:
   breaking_changes: []
   rollback_plan_created: false
   dual_run_configured: false
+  clarifications_resolved: null
+  phase_summaries:
+    analyze:
+      summary: null
+    target:
+      summary: null
+    spec:
+      summary: null
+    plan:
+      summary: null
+    implement:
+      summary: null
+    verify:
+      summary: null
+    fix:
+      summary: null
 
 external_research:
   performed: false
@@ -50,6 +75,21 @@ external_research:
 verification_context:
   last_status: null
   issues_found: null
+  compatibility_status: null
   fixes_applied: []
   decisions_made: []
   reverify_count: 0
+
+migration_outputs:
+  current_state_analysis: null
+  clarifications: null
+  target_state_plan: null
+  requirements: null
+  spec: null
+  rollback_plan: null
+  dual_run_plan: null
+  implementation_plan: null
+  work_log: null
+  implementation_verification: null
+  compatibility_test_results: null
+  migration_guide: null

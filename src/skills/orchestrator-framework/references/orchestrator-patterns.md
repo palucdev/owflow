@@ -8,6 +8,7 @@ Some heavily cross-referenced sections live in their own reference files:
 - [Dispatcher & Handoff Pattern](dispatcher-handoff.md) — subskill loop, mode table, per-step state writes (was Section 7)
 - [Command Namespacing](command-namespacing.md) — `owflow:` prefix rules (was Section 8)
 - [Gate Contract](gate-contract.md) — Entry Gate & Exit Gate skill contract, incl. exceptions (was Section 9)
+- [Fix Loop Contract](fix-loop-contract.md) — user-driven fix-then-reverify contract: option wording, iteration budget, exit conditions, per-iteration state writes
 
 Section numbering below is kept as-is so existing cross-references stay valid.
 
@@ -129,7 +130,7 @@ Orchestrators add domain-specific fields using `[domain]_context`:
 | ----------- | --------------------- | -------------------------------------------------- |
 | Development | `task_context`        | risk_level, ui_heavy, architecture_decision        |
 | Performance | `performance_context` | baseline_p95, target_p95, optimizations_completed  |
-| Migration   | `migration_context`   | migration_type, steps_completed                    |
+| Migration   | `migration_context`   | migration_type, target_system, risk_level          |
 | Research    | `research_context`    | research_type, research_question, confidence_level |
 
 See each orchestrator's SKILL.md "Domain Context" section for full schema.
@@ -204,6 +205,8 @@ If prerequisites missing, use question: "Start from Phase 1", "Specify different
 **Don't just report issues — resolve them.** Use after verification phases that return structured issues.
 
 ### Fix-Then-Reverify Loop
+
+The canonical user-driven contract — option wording, iteration budget, exit conditions, and per-iteration state writes — lives in [Fix Loop Contract](fix-loop-contract.md); skills with a fix phase reference it and document only their deltas. The generic shape:
 
 1. Read verification results (structured issues)
 2. For each issue: trivial/auto-fixable → fix silently, log action; non-trivial → question

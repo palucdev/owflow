@@ -1,14 +1,14 @@
 # System Architecture
 
 ## Overview
-owflow is an OpenCode plugin that registers an agentic SDLC system at runtime: it contributes skills, commands, and subagents to the host, plus hooks and tools that enforce workflow safety and state consistency. The "product" is a markdown-defined workflow engine — orchestrator skills drive phased task execution, delegate heavy work to isolated subagents, and persist progress in per-task YAML state files.
+owflow is an OpenCode plugin that registers an agentic SDLC system at runtime: it contributes skills, commands, and subagents to the host, plus hooks and tools that enforce workflow safety and state consistency. The "product" is a markdown-defined workflow engine — dispatcher skills route to standalone subskills that drive step-by-step task execution, delegate heavy work to isolated subagents, and persist progress in per-task YAML state files.
 
 ## Architecture Pattern
 **Pattern**: OpenCode plugin with runtime registration + markdown-defined workflow engine (state-machine orchestration).
 
 The plugin entry point (`src/index.ts`, default-exported `OwflowPlugin`) never runs workflows itself. It performs three registration duties — config mutation (skills path, command palette, subagent definitions), lifecycle hooks (compaction reminder, destructive-command guard, session attribution), and custom tools (`verify_template`, `fork_task`). Workflow logic lives entirely in `src/skills/**` markdown, interpreted by the host agent at invocation time, with `.owflow/tasks/**/orchestrator-state.yml` as the durable state.
 
-Two modes share one state file per workflow: an assisted dispatcher (`/owflow:development`) hands off one subskill per invocation, and an autonomous wrapper (`/owflow:goal-development`) runs every step in one session; either can be mixed on the same task.
+Two modes share one state file per split workflow: an assisted dispatcher (`/owflow:development`, `/owflow:research`, `/owflow:migration`) hands off one subskill per invocation, and an autonomous wrapper (`/owflow:goal-development`, `/owflow:goal-research`, `/owflow:goal-migration`) runs every step in one session; either can be mixed on the same task. Performance remains a single orchestrator on the classic phase-slug pipeline.
 
 ## System Structure
 
@@ -20,12 +20,12 @@ Two modes share one state file per workflow: an assisted dispatcher (`/owflow:de
 ### Configuration Layer
 - **Location**: `src/configuration/`
 - **Purpose**: Register agents, commands, and skills into the host config; synthesize command wrappers from skill frontmatter
-- **Key Files**: `agents-config.ts` (23 subagents, model aliasing), `commands-config.ts` (6 maintained + 30 synthesized, fail-fast frontmatter contract), `skills-config.ts` (adds plugin skills path)
+- **Key Files**: `agents-config.ts` (23 subagents, model aliasing), `commands-config.ts` (6 maintained + 39 synthesized, fail-fast frontmatter contract), `skills-config.ts` (adds plugin skills path)
 
 ### Workflow Engine (Skills)
-- **Location**: `src/skills/` (35 skills: 30 user-invocable, 5 internal)
-- **Purpose**: Markdown-defined orchestrators and subskills implementing the four workflows; shared contracts in `orchestrator-framework/references/` (gate contract, delegation rules, dispatcher handoff, state schema)
-- **Key Files**: `development/SKILL.md`, `research/SKILL.md`, `migration/SKILL.md`, `performance/SKILL.md`, `goal-*/SKILL.md`, `dev-*/SKILL.md`, `research-*/SKILL.md`
+- **Location**: `src/skills/` (44 skills: 39 user-invocable, 5 internal)
+- **Purpose**: Markdown-defined dispatchers, standalone subskills, and wrappers implementing the four workflows; shared contracts in `orchestrator-framework/references/` (gate contract, delegation rules, dispatcher handoff, state schema)
+- **Key Files**: `development/SKILL.md`, `research/SKILL.md`, `migration/SKILL.md`, `performance/SKILL.md`, `goal-*/SKILL.md`, `dev-*/SKILL.md`, `research-*/SKILL.md`, `migration-*/SKILL.md`
 
 ### Subagents
 - **Location**: `src/agents/` (23 definitions, all `mode: subagent`, `hidden: true`)
@@ -33,8 +33,8 @@ Two modes share one state file per workflow: an assisted dispatcher (`/owflow:de
 - **Key Files**: one markdown file per agent with frontmatter `name`, `description`, `model`, `mode`
 
 ### Commands
-- **Location**: `src/commands/` (6 maintained), generated at runtime (30 wrappers)
-- **Purpose**: Slash-command surface; the 30 wrappers are synthesized from `SKILL.md` frontmatter via `renderCommandTemplate`, removing duplication
+- **Location**: `src/commands/` (6 maintained), generated at runtime (39 wrappers)
+- **Purpose**: Slash-command surface; the 39 wrappers are synthesized from `SKILL.md` frontmatter via `renderCommandTemplate`, removing duplication
 - **Key Files**: `src/commands/*.md` (`work`, `reviews-*`), `src/configuration/commands-config.ts`
 
 ### Tools
@@ -89,25 +89,26 @@ flowchart TB
 8. At session compaction, the hook injects a reminder to re-read state so the workflow resumes correctly.
 
 ## Component Communication Flow
-**Type**: `sequenceDiagram` — time-ordered view of one workflow invocation, showing skill vs. subagent delegation and the phase-gate loop. Complements the narrative "Data Flow" above.
+**Type**: `sequenceDiagram` — time-ordered view of one workflow invocation, showing dispatcher-to-subskill routing, skill vs. subagent delegation, and the step-gate loop. Complements the narrative "Data Flow" above.
 
 ```mermaid
 sequenceDiagram
   actor Dev as Developer
   participant Host as OpenCode Main Agent
-  participant Skill as Orchestrator Skill
+  participant Skill as Dispatcher / Subskill
   participant State as orchestrator-state.yml
   participant Sub as Subagent (Task tool)
 
-  Dev->>Host: /owflow:development "task description"
-  Host->>Skill: Invoke skill (synthesized wrapper instruction)
+  Dev->>Host: /owflow:development or /owflow:goal-development
+  Host->>Skill: Invoke dispatcher or wrapper skill
   Skill->>State: Read or bootstrap from template
-  State-->>Skill: Phase state (completed_phases)
-  loop Each incomplete phase
-    Skill->>Host: Execute phase (contextual / interactive work)
+  State-->>Skill: Step state (completed_phases)
+  Note over Skill: Dispatcher hands off one subskill while the wrapper invokes each subskill back-to-back
+  loop Each incomplete step
+    Skill->>Host: Execute step (contextual / interactive work)
     Host->>Sub: Delegate isolated work (Task tool)
     Sub-->>Host: Structured report or artifacts
-    Host->>State: Record completion slug and artifacts
+    Host->>State: Record step slug and artifacts
     Skill-->>Dev: Results box + results-acceptance question
   end
   Dev-->>Skill: Accept

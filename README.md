@@ -135,7 +135,7 @@ You can always be explicit when you prefer - arguments and flags simply override
 | `/owflow:development`  | Features, bug fixes, enhancements           |
 | `/owflow:research`     | Research with synthesis and solution design |
 | `/owflow:performance`  | Optimizing speed or resource usage          |
-| `/owflow:migration`    | Changing technologies or patterns           |
+| `/owflow:migration`    | Changing technologies or patterns (`/owflow:goal-migration` = all steps in one session) |
 
 Use `/owflow:work` as a single entry point — it classifies the task with the `task-classifier` subagent and routes to the right workflow.
 
@@ -145,6 +145,10 @@ Use `/owflow:work` as a single entry point — it classifies the task with the `
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `/owflow:research-quick "<description>"` | Condensed research: brief → plan → gather → synthesis in one pass     |
 | `/owflow:research-fork <task-path> ["<what this fork should explore>"]` | Branch a research task and re-run from the fork point with different choices |
+
+### Migration Subskills
+
+Migration runs as a pipeline of eight standalone subskills — `/owflow:migration-analyze`, `/owflow:migration-target`, `/owflow:migration-spec`, `/owflow:migration-plan`, `/owflow:migration-implement`, `/owflow:migration-verify`, `/owflow:migration-fix`, `/owflow:migration-finalize` — with `/owflow:migration` as the dispatcher and `/owflow:goal-migration` running the whole pipeline in one session. Flags: `--from=<slug>`, `--type=code|data|architecture|general`, `--no-web-research`.
 
 ### Quick Commands
 
