@@ -267,7 +267,7 @@ Independent of the workflow families; each takes a path or a topic and does one 
 | Command | Arguments | What it does |
 | --- | --- | --- |
 | `/owflow:agents-md-generator` | `[directory or file path]` | Inspects the repository and writes a concise, reference-heavy agent onboarding guide (repo-level or directory-level scope) |
-| `/owflow:diagrams-mermaid` | `[diagram description]` | Mermaid diagrams for planning flows, component communication, and architecture views, with adaptive detail selection including C4 levels |
+| `/owflow:diagrams-mermaid` | `[diagram description] [target file path]` | Mermaid diagrams for planning flows, component communication, and architecture views, written into the target artifact file with context-derived labels and github-dark theming by default (github-light for light surfaces) |
 | `/owflow:html-renderer` | `[path to markdown file]` | Renders a plan, idea, RFC, or design note into a self-contained, share-ready HTML file, written next to the source `.md` |
 | `/owflow:rule-reviewer` | `[path/to/rules.md]` | Scores a rule-for-AI file (`AGENTS.md`, `CLAUDE.md`, or any rules file) on five axes and returns concrete, actionable fixes |
 

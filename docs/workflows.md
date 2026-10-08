@@ -39,32 +39,72 @@ Every entry level below ends in the same pipeline and the same state file — yo
 Auto-detects the task type. The dispatcher initializes the task, then hands off step-by-step.
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#3d444d",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 flowchart TD
-    Start["/owflow:development or /owflow:goal-development"] --> Init["Create task dir + orchestrator-state.yml"]
-    Init --> A["dev-analyze<br/>codebase-analysed, gap-analysed"]
-    A --> Red{"has_reproducible_defect?"}
-    Red -- "yes" --> R["dev-tdd-red<br/>tdd-red-proven"]
-    Red -- "no" --> S
-    R --> S["dev-spec<br/>spec-written, spec-audited"]
-    S --> P["dev-plan<br/>plan-created"]
-    P --> I["dev-implement<br/>implementation-done, tdd-green-proven"]
-    I --> V["dev-verify<br/>options-chosen, verification-done"]
-    V --> F["dev-finalize<br/>e2e-run, docs-generated, task-completed"]
-    F --> Done["Task completed<br/>commit / reviews-*"]
-    Q["Quick dev lane: --quick flag converges analysis + spec + plan into one condensed pass"] -.-> P
-    S -. quick-lane tasks skip straight to dev-implement .-> I
+    entry["/owflow:development or /owflow:goal-development"] --> init["Create task dir + orchestrator-state.yml"]
+    init --> analyze["dev-analyze<br/>codebase-analysed, gap-analysed"]
+    analyze --> defect{"has_reproducible_defect?"}
+    defect -->|"yes"| tddRed["dev-tdd-red<br/>tdd-red-proven"]
+    defect -->|"no"| spec
+    tddRed --> spec["dev-spec<br/>spec-written, spec-audited"]
+    spec --> plan["dev-plan<br/>plan-created"]
+    plan --> implement["dev-implement<br/>implementation-done, tdd-green-proven"]
+    implement --> verify["dev-verify<br/>options-chosen, verification-done"]
+    verify --> finalize["dev-finalize<br/>e2e-run, docs-generated, task-completed"]
+    finalize --> done["Task completed<br/>commit / reviews-*"]
+    quickLane["Quick dev lane: --quick flag converges analysis + spec + plan into one condensed pass"] -.-> plan
+    spec -.->|"quick-lane tasks skip straight to dev-implement"| implement
 ```
 
 #### 2. Assisted vs Autonomous mode
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#3d444d",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 flowchart TD
-    Entry["Same task, same state file"] --> H["Assisted mode<br/>/owflow:development"]
-    Entry --> L["Autonomous mode<br/>/owflow:goal-development"]
-    H --> H1["dev-analyze"] --> H1Q{"Results accepted?"} --> H2["dev-spec"] --> H2Q{"Results accepted?"} --> H3["dev-plan"] --> H3Q{"Results accepted?"} --> H4["dev-implement"] --> H4Q{"Results accepted?"} --> H5["dev-verify"] --> H5Q{"Results accepted?"} --> H6["dev-finalize"]
-    L --> L1["dev-analyze → dev-spec → dev-plan →<br/>dev-implement → dev-verify → dev-finalize<br/>(all in one session)"] --> LQ{"Final results accepted?"}
-    H6 --> Done["Task completed"]
-    LQ --> Done
+    entry["Same task, same state file"] --> assisted["Assisted mode<br/>/owflow:development"]
+    entry --> autonomous["Autonomous mode<br/>/owflow:goal-development"]
+    assisted --> assistedAnalyze["dev-analyze"] --> assistedGate1{"Results accepted?"} --> assistedSpec["dev-spec"] --> assistedGate2{"Results accepted?"} --> assistedPlan["dev-plan"] --> assistedGate3{"Results accepted?"} --> assistedImplement["dev-implement"] --> assistedGate4{"Results accepted?"} --> assistedVerify["dev-verify"] --> assistedGate5{"Results accepted?"} --> assistedFinalize["dev-finalize"]
+    autonomous --> autonomousRun["dev-analyze → dev-spec → dev-plan →<br/>dev-implement → dev-verify → dev-finalize<br/>(all in one session)"] --> autonomousGate{"Final results accepted?"}
+    assistedFinalize --> done["Task completed"]
+    autonomousGate --> done
 ```
 
 #### 3. Quick bug lane (`/owflow:dev-bugfix`)
@@ -72,16 +112,36 @@ flowchart TD
 Lightweight TDD-driven bug fix: condensed analysis → approved fix plan → TDD red → fix → TDD green. Creates a **standard** development task (`entry_point: dev-bugfix`), so it is continuable by any dev-\* subskill afterwards. Also used as a consecutive run to fix a newly emerging problem on an existing task (resets downstream verification slugs).
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#3d444d",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 flowchart TD
-    B["/owflow:dev-bugfix<br/>bug description OR existing-task path"] --> Mode{"What argument was passed?"}
-    Mode -- "bug description" --> Stand["Step 1: create a new standard task<br/>Step 2: condensed bug analysis<br/>Step 3: fix plan approval"]
-    Mode -- "existing-task path" --> Cons["Step 1: reuse the existing task<br/>Step 2: reset downstream verification slugs"]
-    Stand --> Esc{"Complexity escalation check"}
-    Esc -- "simple bug" --> Red
-    Esc -- "complex bug (2+ signals)" --> Escalate["task.status: escalated<br/>continue via /owflow:development <task-path><br/>fill in spec + plan"]
-    Cons --> Red["Step: write a failing test (TDD red)"]
-    Red --> Green["Step: fix + failing test passes (TDD green)"]
-    Green --> Verify["Step: continue with /owflow:dev-verify <task-path>"]
+    entry["/owflow:dev-bugfix<br/>bug description OR existing-task path"] --> mode{"What argument was passed?"}
+    mode -->|"bug description"| newTask["Step 1: create a new standard task<br/>Step 2: condensed bug analysis<br/>Step 3: fix plan approval"]
+    mode -->|"existing-task path"| existingTask["Step 1: reuse the existing task<br/>Step 2: reset downstream verification slugs"]
+    newTask --> escalation{"Complexity escalation check"}
+    escalation -->|"simple bug"| tddRed
+    escalation -->|"complex bug (2+ signals)"| escalated["task.status: escalated<br/>continue via /owflow:development &lt;task-path&gt;<br/>fill in spec + plan"]
+    existingTask --> tddRed["Step: write a failing test (TDD red)"]
+    tddRed --> tddGreen["Step: fix + failing test passes (TDD green)"]
+    tddGreen --> verify["Step: continue with /owflow:dev-verify &lt;task-path&gt;"]
 ```
 
 The dispatcher routes bugfix tasks straight to `/owflow:dev-verify` when `implementation-done` is complete (spec/plan are not required for verification). Escalated tasks route through the full pipeline from the first missing slug.
@@ -91,21 +151,41 @@ The dispatcher routes bugfix tasks straight to `/owflow:dev-verify` when `implem
 Condensed entries that bootstrap a standard task inline, then continue with the lane's condensed work. Three lanes, one per phase cut-off: `/owflow:dev-spec --quick` (spec only), `/owflow:dev-plan --quick` (spec + plan), `/owflow:dev-implement --quick` (spec + plan + implementation). Use when analysis/spec phases can be done in one pass.
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#3d444d",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 flowchart TD
-    QS["/owflow:dev-spec --quick desc"] --> QB0["Step 1: bootstrap task + standards + quick analysis<br/>Step 2: condensed requirements<br/>Step 3: write condensed spec directly (no specification-creator subagent)<br/>spec-written, audit skipped (lane stops)"]
-    QP["/owflow:dev-plan --quick desc"] --> QB1["Step 1: bootstrap task + condensed spec"]
-    QI["/owflow:dev-implement --quick desc"] --> QB2["Step 1: bootstrap task + condensed spec<br/>Step 2: write plan directly (no planner subagent)"]
-    QB0 --> Choice0{"Continue with"}
-    Choice0 -- "/owflow:dev-plan" --> NPlan["Full delegated planning"]
-    Choice0 -- "/owflow:dev-plan --quick" --> Plan
-    QB1 --> Plan["implementation-plan.md saved<br/>plan-created (lane stops)"]
-    QB2 --> Impl["Step 3: implement directly in main agent<br/>with discovered standards<br/>implementation-done"]
-    Plan --> Choice{"Continue with"}
-    Choice -- "/owflow:dev-implement" --> NImpl["Full delegated implementation"]
-    Choice -- "/owflow:dev-implement --quick" --> Impl
-    NPlan --> Choice
-    NImpl --> Next
-    Impl --> Next["Step: continue with /owflow:dev-verify <task-path><br/>or stop — task stays resumable"]
+    specQuick["/owflow:dev-spec --quick desc"] --> specQuickSteps["Step 1: bootstrap task + standards + quick analysis<br/>Step 2: condensed requirements<br/>Step 3: write condensed spec directly (no specification-creator subagent)<br/>spec-written, audit skipped (lane stops)"]
+    planQuick["/owflow:dev-plan --quick desc"] --> planQuickSteps["Step 1: bootstrap task + condensed spec"]
+    implementQuick["/owflow:dev-implement --quick desc"] --> implementQuickSteps["Step 1: bootstrap task + condensed spec<br/>Step 2: write plan directly (no planner subagent)"]
+    specQuickSteps --> afterSpec{"Continue with"}
+    afterSpec -->|"/owflow:dev-plan"| fullPlan["Full delegated planning"]
+    afterSpec -->|"/owflow:dev-plan --quick"| planSaved
+    planQuickSteps --> planSaved["implementation-plan.md saved<br/>plan-created (lane stops)"]
+    implementQuickSteps --> implemented["Step 3: implement directly in main agent<br/>with discovered standards<br/>implementation-done"]
+    planSaved --> afterPlan{"Continue with"}
+    afterPlan -->|"/owflow:dev-implement"| fullImplement["Full delegated implementation"]
+    afterPlan -->|"/owflow:dev-implement --quick"| implemented
+    fullPlan --> afterPlan
+    fullImplement --> next
+    implemented --> next["Step: continue with /owflow:dev-verify &lt;task-path&gt;<br/>or stop — task stays resumable"]
 ```
 
 Quick lanes do not use the pipeline's subagents: `dev-spec --quick` writes the condensed spec directly (no `specification-creator`), `dev-plan --quick` writes the plan directly (no `implementation-planner`), and `dev-implement --quick` implements **directly in the main agent** (no `implementation-plan-executor`), applying the standards read during the condensed prelude (with continuous discovery for newly-surfaced areas). The same applies when `--quick` is passed to those subskills on an existing task (e.g., a quick spec or quick plan). Full-pipeline runs are unaffected: without `--quick`, specification, planning, and implementation always delegate. Anything bug-shaped (a proven reproducible defect) still routes through the TDD red gate — `--quick` never bypasses it; see the bugfix lane above.
@@ -120,15 +200,35 @@ Start interactive development workflow informed by a completed research workflow
 ```
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#3d444d",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 flowchart TD
-    R["Research task<br/>outputs: research-report, solution-exploration,<br/>high-level-design, decision-log"] --> D["/owflow:development <research-path><br/>or --research=PATH"]
-    D --> Copy["Artifacts copied to analysis/research-context/<br/>research_reference set in state"]
-    Copy --> A["dev-analyze — research guides codebase/gap analysis"]
-    A --> S["dev-spec — design + decisions as spec INPUT"]
-    S --> P["dev-plan<br/>plan-created"]
-    P --> I["dev-implement<br/>implementation-done, tdd-green-proven"]
-    I --> V["dev-verify<br/>options-chosen, verification-done"]
-    V --> F["dev-finalize<br/>e2e-run, docs-generated, task-completed"]
+    research["Research task<br/>outputs: research-report, solution-exploration,<br/>high-level-design, decision-log"] --> start["/owflow:development &lt;research-path&gt;<br/>or --research=PATH"]
+    start --> copy["Artifacts copied to analysis/research-context/<br/>research_reference set in state"]
+    copy --> analyze["dev-analyze — research guides codebase/gap analysis"]
+    analyze --> spec["dev-spec — design + decisions as spec INPUT"]
+    spec --> plan["dev-plan<br/>plan-created"]
+    plan --> implement["dev-implement<br/>implementation-done, tdd-green-proven"]
+    implement --> verify["dev-verify<br/>options-chosen, verification-done"]
+    verify --> finalize["dev-finalize<br/>e2e-run, docs-generated, task-completed"]
 ```
 
 #### 6. Standalone subskills

@@ -42,6 +42,26 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
 **Type**: `flowchart` — lightweight view of how sources become the published package and reach the host runtime. All facts are from `package.json` scripts and `tsconfig.json`; no runtime services exist.
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#3d444d",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 flowchart TD
   ts["TypeScript sources<br/>(src/**/*.ts)"] --> tsc["bun tsc<br/>strict type-check + ESM emit"]
   tsc --> dist["dist/<br/>compiled JS"]
@@ -83,11 +103,11 @@ None enforced (no ESLint/Prettier/EditorConfig). Style is manual and consistent:
 Minimal dependency surface is a deliberate design principle — 3 runtime dependencies.
 
 ## Version Management
-Semver in `package.json` (currently `0.6.0`, pre-1.0). `CHANGELOG.md` follows Keep a Changelog and records releases from 0.1.0 (2026-05-10) through 0.6.0 (2026-10-05); no git tags observed. Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
+Semver in `package.json` (currently `0.6.1`, pre-1.0). `CHANGELOG.md` follows Keep a Changelog and records releases from 0.1.0 (2026-05-10) through 0.6.1 (2026-10-08); no git tags observed. Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
 
 ## Migration Path (for legacy projects)
 Not applicable — modern stack throughout (Bun, TypeScript 5, Node ^25). Known gap: `types: dist/index.d.ts` is declared but declarations are never emitted (no `declaration: true` in tsconfig) and the file is absent from `dist/`; fix or remove is a roadmap item.
 
 ---
-*Last Updated*: 2026-10-05
-*Auto-detected*: languages, versions, dependencies, build/test tooling, absence of CI/linting/containers, distribution model — all from repository inspection
+*Last Updated*: 2026-10-08
+*Auto-detected*: languages, versions, dependencies, build/test tooling, infrastructure (GitHub Actions CI added 2026-10-08; no linting/containers), distribution model — all from repository inspection

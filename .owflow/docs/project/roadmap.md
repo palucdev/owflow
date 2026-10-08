@@ -1,9 +1,9 @@
 # Development Roadmap
 
 ## Current State
-- **Version**: 0.6.0 (pre-1.0)
+- **Version**: 0.6.1 (pre-1.0)
 - **Key Features**: 4 workflow types (development, research, performance, migration); 51 skills (46 user-invocable, 5 internal); 23 subagents; 52 commands (6 maintained, 46 synthesized from skill frontmatter); 2 custom tools (`verify_template`, `fork_task`); destructive-command guard; task state machine with resume semantics; `.owflow/docs/` standards management
-- **Recent Updates**: 0.6.0 split the performance orchestrator into 6 `performance-*` subskills (state re-keyed to 9 descriptive slugs, dispatcher trimmed 437 → 267 lines); 0.5.0 split migration into 8 subskills and introduced project docs under `.owflow/docs/`; 0.4.3 replaced 30 static command wrappers with runtime synthesis from skill frontmatter; 0.4.2 split research. All four workflows now share the dispatcher + subskill + `goal-*` architecture.
+- **Recent Updates**: 0.6.1 shipped the diagrams-mermaid file-first contract and github-dark/github-light themes with C4 removal; 0.6.0 split the performance orchestrator into 6 `performance-*` subskills (state re-keyed to 9 descriptive slugs, dispatcher trimmed 437 → 267 lines); 0.5.0 split migration into 8 subskills and introduced project docs under `.owflow/docs/`; 0.4.3 replaced 30 static command wrappers with runtime synthesis from skill frontmatter; 0.4.2 split research. All four workflows now share the dispatcher + subskill + `goal-*` architecture.
 
 ## Planned Enhancements (Next 3-6 Months)
 
@@ -13,14 +13,14 @@
 - [ ] **New workflow capabilities** — continue growing the feature set per project goal: extend quick lanes, deepen subskill composition, and add richer standards automation
 
 ### Medium Priority
-- [ ] **CI pipeline** — run `bun run build` (type-check + tests + coverage) on push/PR for the GitHub/Codeberg remotes
+- [x] **CI pipeline** — resolved for GitHub: `.github/workflows/ci.yml` runs `bun run build` (type-check + tests + coverage) on push/PR (2026-10-08); a Codeberg runner is still open
 - [ ] **Fix type declarations** — `package.json` declares `types: dist/index.d.ts`, but tsconfig never emits declarations and `dist/index.d.ts` is confirmed missing; enable `declaration` or remove the field
-- [ ] **CONTRIBUTING guide** — the CHANGELOG now exists (Keep a Changelog format, 0.1.0 → 0.6.0); what remains is a guide for adding skills/agents/commands and documenting Bun as the canonical contributor toolchain
+- [ ] **CONTRIBUTING guide** — the CHANGELOG now exists (Keep a Changelog format, 0.1.0 → 0.6.1); what remains is a guide for adding skills/agents/commands and documenting Bun as the canonical contributor toolchain
 - [ ] **Document plugin internals** — architecture doc for the registration flow and workflow state machine is available in `.owflow/docs/project/architecture.md`; link it from README
 - [x] **Sync `docs/commands.md`** — resolved: the six `/owflow:performance-*` subcommands are now documented for parity with the migration subcommands (2026-10-05)
 
 ### Technical Debt
-- [ ] **`.gitattributes` + formatter** — committed blobs are LF while the working tree is CRLF with no normalization (`commands-config.ts` compensates by emitting CRLF); add `* text=auto eol=lf` and consider Prettier/ESLint
+- [x] **`.gitattributes`** — resolved: `* text=auto eol=lf` normalizes the working tree to LF (2026-10-08; `commands-config.ts` still emits CRLF for rendered command bodies); a formatter (Prettier/ESLint) remains open
 - [x] **Dual lockfiles** — resolved: only `bun.lock` remains in the tree (`package-lock.json` removed, 2026-10)
 - [ ] **Hook hardening** — log swallowed non-`Blocked:` hook errors behind a debug flag; bound or clean the per-session agent map in `chat.message`
 - [ ] **Agent frontmatter consistency** — `src/agents/project-analyzer.md` lacks the `model: inherit` field present on the other 22 agents

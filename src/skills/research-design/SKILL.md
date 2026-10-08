@@ -83,9 +83,9 @@ Read `outputs/high-level-design.md` and `outputs/decision-log.md`, then present 
 
 ### Part D — Diagram Refinement (Skill, content-preserving)
 
-1. **INVOKE NOW**: Skill tool - `diagrams-mermaid` to refine visual communication in `outputs/high-level-design.md`.
+1. **INVOKE NOW**: Skill tool - `diagrams-mermaid` to refine visual communication in `outputs/high-level-design.md` (the skill writes the diagrams into the file and themes them github-dark by default).
 2. Add diagrams that supplement (NOT replace) existing architecture content:
-   - one architecture view (`C4Container` preferred; `C4Component` only if needed),
+   - one architecture view (`flowchart` with subgraphs; nested subgraphs only if needed),
    - one interaction/state view (`sequenceDiagram` or `flowchart`) for the critical flow.
 3. If minimum context for a diagram is missing, record explicit gaps in the document and avoid speculative components/relationships.
 

@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-10-08
+
+### Added
+
+- `diagrams-mermaid` theming: ready-to-paste `github-dark` (default) and `github-light` Mermaid theme directives with exact palettes, copied and aligned from Pretty-mermaid-skills/beautiful-mermaid.
+
+### Changed
+
+- `diagrams-mermaid` is now file-first: diagrams are written into the target artifact file (chat-only only on explicit opt-in and marked `Not persisted`), all labels must be traceable to context, and Mermaid C4 support was removed in favor of flowchart-plus-subgraph architecture views.
+- Integration sites (`dev-spec`, `research-design`, `flow-init`) pass the target file explicitly and use the flowchart architecture-view guidance.
+- `docs/commands.md`: `/owflow:diagrams-mermaid` description updated to the new skill contract.
+
 ## [0.6.0] - 2026-10-05
 
 ### Added
