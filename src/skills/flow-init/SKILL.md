@@ -155,15 +155,15 @@ Write each file to `.owflow/docs/project/`.
 **Diagram refinement (content-preserving, do NOT replace prose):**
 
 - If Architecture doc is selected and `.owflow/docs/project/architecture.md` exists:
-  1. Invoke Skill tool: `diagrams-mermaid`
+  1. Invoke Skill tool: `diagrams-mermaid` with target file `.owflow/docs/project/architecture.md` (the skill writes the diagrams into the file and themes them github-dark by default)
   2. Pass context from analysis + generated architecture content
   3. Add Mermaid sections that **refine** the document:
-     - `## Visual Architecture Context` (prefer `C4Context` or `C4Container`)
+     - `## Visual Architecture Context` (architecture view: `flowchart` with subgraphs)
      - `## Component Communication Flow` (prefer `sequenceDiagram` or `flowchart`)
   4. Keep existing architecture narrative intact; diagrams must supplement, not replace sections.
 
 - If Tech Stack doc is selected and `.owflow/docs/project/tech-stack.md` exists:
-  1. Invoke Skill tool: `diagrams-mermaid`
+  1. Invoke Skill tool: `diagrams-mermaid` with target file `.owflow/docs/project/tech-stack.md`
   2. Add one lightweight visual section (e.g., runtime/build dependency flow) only if context is sufficient
   3. If context is insufficient, keep text-only output and list missing details (no invented dependencies).
 
