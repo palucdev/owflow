@@ -49,7 +49,7 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
     "background": "#0d1117",
     "primaryColor": "#14181e",
     "primaryTextColor": "#e6edf3",
-    "primaryBorderColor": "#3d444d",
+    "primaryBorderColor": "#383d43",
     "lineColor": "#3d444d",
     "arrowheadColor": "#4493f8",
     "textColor": "#e6edf3",

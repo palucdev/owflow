@@ -11,6 +11,8 @@ Hard rules and behavior are owned by `../SKILL.md` (file-first output, context-d
 
 Default: **github-dark**. Use **github-light** only when the target document/surface is light (print, light docs) or the user asks. Apply exactly one theme per document by copying the directive below as the **first line inside the mermaid fence**, before the diagram type.
 
+Source of truth: the [Pretty-mermaid-skills theme gallery](https://github.com/imxv/Pretty-mermaid-skills/tree/main/assets/theme_gallery) — [`github-dark.svg`](https://github.com/imxv/Pretty-mermaid-skills/blob/main/assets/theme_gallery/github-dark.svg) and [`github-light.svg`](https://github.com/imxv/Pretty-mermaid-skills/blob/main/assets/theme_gallery/github-light.svg). The directives below pin those SVGs' palette variables (`--bg`, `--fg`, `--line`, `--accent`, `--muted`) and their derived CSS mixes: node fill = 3% foreground, node stroke = 20% foreground, group/note tint = 5% foreground.
+
 ### github-dark (default)
 
 ```text
@@ -21,7 +23,7 @@ Default: **github-dark**. Use **github-light** only when the target document/sur
     "background": "#0d1117",
     "primaryColor": "#14181e",
     "primaryTextColor": "#e6edf3",
-    "primaryBorderColor": "#3d444d",
+    "primaryBorderColor": "#383d43",
     "lineColor": "#3d444d",
     "arrowheadColor": "#4493f8",
     "textColor": "#e6edf3",
@@ -46,7 +48,7 @@ Default: **github-dark**. Use **github-light** only when the target document/sur
     "background": "#ffffff",
     "primaryColor": "#f8f8f9",
     "primaryTextColor": "#1f2328",
-    "primaryBorderColor": "#d1d9e0",
+    "primaryBorderColor": "#d2d3d4",
     "lineColor": "#d1d9e0",
     "arrowheadColor": "#0969da",
     "textColor": "#1f2328",
@@ -70,8 +72,9 @@ Default: **github-dark**. Use **github-light** only when the target document/sur
 | edges (line)       | `#3d444d`   | `#d1d9e0`    |
 | arrowheads (accent) | `#4493f8`   | `#0969da`    |
 | muted labels       | `#9198a1`   | `#59636e`    |
-| node fill          | `#14181e`   | `#f8f8f9`    |
-| group/note tint    | `#181c22`   | `#f4f4f4`    |
+| node fill (3% fg)  | `#14181e`   | `#f8f8f9`    |
+| node stroke (20% fg) | `#383d43` | `#d2d3d4`    |
+| group/note tint (5% fg) | `#181c22` | `#f4f4f4` |
 
 `muted` is the source theme's secondary-text accent; no Mermaid `themeVariable` maps to it directly, so it is listed for palette fidelity only — the directives above never emit it.
 
