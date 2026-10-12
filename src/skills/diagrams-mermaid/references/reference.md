@@ -11,7 +11,7 @@ Hard rules and behavior are owned by `../SKILL.md` (file-first output, context-d
 
 Default: **github-dark**. Use **github-light** only when the target document/surface is light (print, light docs) or the user asks. Apply exactly one theme per document by copying the directive below as the **first line inside the mermaid fence**, before the diagram type.
 
-Source of truth: the [Pretty-mermaid-skills theme gallery](https://github.com/imxv/Pretty-mermaid-skills/tree/main/assets/theme_gallery) — [`github-dark.svg`](https://github.com/imxv/Pretty-mermaid-skills/blob/main/assets/theme_gallery/github-dark.svg) and [`github-light.svg`](https://github.com/imxv/Pretty-mermaid-skills/blob/main/assets/theme_gallery/github-light.svg). The directives below pin those SVGs' palette variables (`--bg`, `--fg`, `--line`, `--accent`, `--muted`) and their derived CSS mixes: node fill = 3% foreground, node stroke = 20% foreground, group/note tint = 5% foreground.
+The directives below pin those SVGs' palette variables (`--bg`, `--fg`, `--line`, `--accent`, `--muted`) and their derived CSS mixes: node fill = 3% foreground, node stroke = 20% foreground, group/note tint = 5% foreground.
 
 ### github-dark (default)
 
