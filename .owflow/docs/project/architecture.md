@@ -56,8 +56,28 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 **Type**: `flowchart` — system-level view: who uses owflow, what it registers into, and how it is distributed. Flowchart rather than `C4Context` so each relationship has its own edge and the label stays readable. Component internals stay in "System Structure" above.
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#383d43",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 flowchart TB
-  subgraph dist["Distribution"]
+  subgraph distribution["Distribution"]
     direction TB
     maintainer["Plugin Maintainer"]
     npm["npm Registry"]
@@ -92,6 +112,26 @@ flowchart TB
 **Type**: `sequenceDiagram` — time-ordered view of one workflow invocation, showing dispatcher-to-subskill routing, skill vs. subagent delegation, and the step-gate loop. Complements the narrative "Data Flow" above.
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "darkMode": true,
+    "background": "#0d1117",
+    "primaryColor": "#14181e",
+    "primaryTextColor": "#e6edf3",
+    "primaryBorderColor": "#383d43",
+    "lineColor": "#3d444d",
+    "arrowheadColor": "#4493f8",
+    "textColor": "#e6edf3",
+    "tertiaryColor": "#181c22",
+    "titleColor": "#e6edf3",
+    "edgeLabelBackground": "#0d1117",
+    "stateLabelColor": "#e6edf3",
+    "noteBkgColor": "#181c22",
+    "noteBorderColor": "#3d444d",
+    "noteTextColor": "#e6edf3"
+  }
+}}%%
 sequenceDiagram
   actor Dev as Developer
   participant Host as OpenCode Main Agent
@@ -119,7 +159,7 @@ sequenceDiagram
 ## External Integrations
 - **OpenCode host runtime** — plugin config, hooks, tools, skill/agent/command registration
 - **npm registry** — distribution of the `owflow` package
-- **GitHub / Codeberg remotes** — source hosting (no CI configured)
+- **GitHub / Codeberg remotes** — source hosting (GitHub Actions CI added 2026-10-08; Codeberg runner pending)
 - No databases, third-party APIs, or network services at runtime
 
 ## Database Schema

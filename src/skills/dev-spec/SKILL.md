@@ -116,7 +116,7 @@ Task tool - `specification-creator`. Pass: task_path, task_description, task_cha
 
 ### Diagram Refinement (part of `spec-written`, Skill, content-preserving)
 
-Skill tool - `diagrams-mermaid` on `implementation/spec.md`. Add diagrams that clarify scope and communication without replacing prose: `flowchart` (primary functional path), `sequenceDiagram` (key interaction), optional `C4Component` (if module structure is in scope). Missing context → add an explicit open questions section instead of inventing entities.
+Skill tool - `diagrams-mermaid` on `implementation/spec.md` (the skill writes the diagrams into the file and themes them github-dark by default). Add diagrams that clarify scope and communication without replacing prose: `flowchart` (primary functional path), `sequenceDiagram` (key interaction), optional architecture view (`flowchart` with subgraphs, if module structure is in scope). Missing context → add an explicit open questions section instead of inventing entities.
 
 ### Specification Audit (`spec-audited`, recommended)
 

@@ -20,15 +20,15 @@ Located in `.owflow/docs/project/`
 
 ### Vision (`project/vision.md`)
 
-Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status (v0.6.0, pre-1.0, solo-maintained MIT), package surface (51 skills, 23 subagents, 52 commands), test posture (158 tests across 10 suites, ~98% line / 100% function coverage), 6–12 month goals (grow workflow features, deterministic gates, registration smoke test, CI/type declarations), and evolution to four decomposed workflows (development 0.3.0, research 0.4.2, migration 0.5.0, performance 0.6.0) sharing dispatcher + subskill + `goal-*` architecture.
+Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status (v0.6.1, pre-1.0, solo-maintained MIT), package surface (51 skills, 23 subagents, 52 commands), test posture (158 tests across 10 suites, ~98% line / 100% function coverage), 6–12 month goals (grow workflow features, deterministic gates, registration smoke test, CI/type declarations), and evolution to four decomposed workflows (development 0.3.0, research 0.4.2, migration 0.5.0, performance 0.6.0) sharing dispatcher + subskill + `goal-*` architecture.
 
 ### Roadmap (`project/roadmap.md`)
 
-v0.6.0 feature inventory (4 workflows, 51 skills, 23 subagents, 52 commands, 2 custom tools) with recent-update history; high-priority plans (OpenCode v2 port, deterministic entry-gate checks, new workflow capabilities); medium-priority plans (CI, type declarations, CONTRIBUTING, internals docs, performance-command docs parity); technical debt (`.gitattributes`/formatter, hook hardening, agent frontmatter consistency; dual lockfiles resolved); and future considerations (ADR records, generated docs counts, skill-corpus scaling).
+v0.6.1 feature inventory (4 workflows, 51 skills, 23 subagents, 52 commands, 2 custom tools) with recent-update history; high-priority plans (OpenCode v2 port, deterministic entry-gate checks, new workflow capabilities); medium-priority plans (GitHub Actions CI added 2026-10-08 — Codeberg runner pending, type declarations, CONTRIBUTING, internals docs, performance-command docs parity); technical debt (`.gitattributes`/formatter, hook hardening, agent frontmatter consistency; dual lockfiles resolved); and future considerations (ADR records, generated docs counts, skill-corpus scaling).
 
 ### Tech Stack (`project/tech-stack.md`)
 
-Languages (TypeScript 5 strict ESM; markdown + YAML frontmatter product surface: 51 skills, ~13.3K lines), Bun/Node tooling (single `bun.lock`), three runtime dependencies, build & runtime flow diagram, testing (bun:test, 158 tests across 10 suites, coverage ≥ 0.8), dist payload (149 files), version management, and absent infrastructure (no CI, DB, or containers).
+Languages (TypeScript 5 strict ESM; markdown + YAML frontmatter product surface: 51 skills, ~13.3K lines), Bun/Node tooling (single `bun.lock`), three runtime dependencies, build & runtime flow diagram, testing (bun:test, 158 tests across 10 suites, coverage ≥ 0.8), dist payload (149 files), version management, and infrastructure (GitHub Actions CI added 2026-10-08; no DB, containers, or network services).
 
 ### Architecture (`project/architecture.md`)
 
