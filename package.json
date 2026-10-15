@@ -1,10 +1,16 @@
 {
   "name": "owflow",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
   "main": "dist/index.js",
-  "exports": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./tui": "./dist/tui.js"
+  },
+  "bin": {
+    "owflow-hooks": "dist/cli/show-hooks.js"
+  },
   "types": "dist/index.d.ts",
   "files": [
     "dist",
