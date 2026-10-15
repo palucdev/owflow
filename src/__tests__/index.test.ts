@@ -10,6 +10,9 @@ import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";
 import * as sessionCompaction from "../hooks/session-compaction.js";
 import * as beforeTool from "../hooks/before-tool.js";
+import * as dispatcherModule from "../hooks-wrapper/dispatcher.js";
+import * as digestModule from "../hooks-wrapper/digest.js";
+import type { Dispatcher } from "../hooks-wrapper/dispatcher.js";
 import { verify_template } from "../tools/verify_template.js";
 import { fork_task } from "../tools/fork_task.js";
 
@@ -286,6 +289,358 @@ describe("OwflowPlugin index", () => {
       } finally {
         guardSpy.mockRestore();
       }
+    });
+  });
+
+  describe("hooks wrapper composition", () => {
+    const wrapperHandlerKeys = [
+      "tool.execute.after",
+      "tool.definition",
+      "chat.params",
+      "chat.headers",
+      "command.execute.before",
+      "shell.env",
+      "experimental.chat.messages.transform",
+      "experimental.chat.system.transform",
+      "experimental.compaction.autocontinue",
+      "experimental.text.complete",
+      "event",
+      "dispose",
+    ] as const;
+
+    const builtInKeys = [
+      "tool",
+      "config",
+      "experimental.session.compacting",
+      "chat.message",
+      "tool.execute.before",
+    ] as const;
+
+    type DispatchRecord = {
+      readonly event: string;
+      readonly input: unknown;
+      readonly output: Record<string, unknown> | undefined;
+    };
+
+    const asRecord = (plugin: unknown): Record<string, unknown> =>
+      plugin as Record<string, unknown>;
+
+    const withHooksEnabled = async <T>(run: () => Promise<T>): Promise<T> => {
+      const previous = process.env.OWFLOW_HOOKS_DISABLED;
+      delete process.env.OWFLOW_HOOKS_DISABLED;
+      try {
+        return await run();
+      } finally {
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
+        else process.env.OWFLOW_HOOKS_DISABLED = previous;
+      }
+    };
+
+    const writeHookFile = (fileName: string, contents: string): string => {
+      const hooksDir = path.join(tmpDir, ".owflow", "hooks");
+      fs.mkdirSync(hooksDir, { recursive: true });
+      const filePath = path.join(hooksDir, fileName);
+      fs.writeFileSync(filePath, contents, "utf8");
+      return filePath;
+    };
+
+    const writeHookFixture = (stem: string): void => {
+      writeHookFile(`${stem}.sh`, "#!/bin/bash\n");
+    };
+
+    const stubDispatcher = (
+      behavior?: (record: DispatchRecord) => void,
+    ): Dispatcher => {
+      return async (event, input, output) => {
+        behavior?.({ event, input, output });
+      };
+    };
+
+    test("should expose the 12 wrapper dispatch handlers when hooks are enabled", async () => {
+      writeHookFixture("tool-execute-before");
+
+      await withHooksEnabled(async () => {
+        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+        for (const key of wrapperHandlerKeys) {
+          expect(typeof asRecord(plugin)[key]).toBe("function");
+        }
+      });
+    });
+
+    test("should reject the plugin factory when a hook entry fails digest validation", async () => {
+      writeHookFile("unknown-event.sh", "#!/bin/bash\n");
+
+      await withHooksEnabled(async () => {
+        await expect(
+          OwflowPlugin(mockPluginInput(tmpDir)),
+        ).rejects.toThrow(/\[owflow\] 1 invalid entry/);
+      });
+    });
+
+    test("should reject with the failing file path and recovery hint when an in-process hook cannot be imported", async () => {
+      const hookPath = writeHookFile(
+        "tool-execute-before.js",
+        'throw new Error("top-level boom");\n',
+      );
+
+      await withHooksEnabled(async () => {
+        const failure = await OwflowPlugin(mockPluginInput(tmpDir)).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+
+        expect(failure).toBeInstanceOf(Error);
+        const message = (failure as Error).message;
+        expect(message).toContain(`[owflow] ${hookPath}: top-level boom`);
+        expect(message).toContain("The owflow plugin");
+        expect(message).toContain("OWFLOW_HOOKS_DISABLED=1");
+      });
+    });
+
+    test("should run the destructive guard before dispatching tool.execute.before", async () => {
+      const order: string[] = [];
+      const guardSpy = spyOn(
+        beforeTool,
+        "guardAgainstDestructiveActions",
+      ).mockImplementation(async () => {
+        order.push("guard");
+      });
+      const calls: DispatchRecord[] = [];
+      const dispatcherSpy = spyOn(
+        dispatcherModule,
+        "createDispatcher",
+      ).mockReturnValue(
+        stubDispatcher((record) => {
+          order.push(`dispatch:${record.event}`);
+          calls.push(record);
+        }),
+      );
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const input = {
+            tool: "bash",
+            sessionID: "sess-order",
+            callID: "call-order",
+          };
+          const output = { args: { command: "ls -la" } };
+
+          await plugin["tool.execute.before"]!(input, output);
+
+          expect(order).toEqual(["guard", "dispatch:tool.execute.before"]);
+          expect(calls[0]?.event).toBe("tool.execute.before");
+          expect(calls[0]?.input).toBe(input);
+          expect(calls[0]?.output).toBe(output);
+        });
+      } finally {
+        guardSpy.mockRestore();
+        dispatcherSpy.mockRestore();
+      }
+    });
+
+    test("should keep the built-in reminder first and append script context on compaction", async () => {
+      const order: string[] = [];
+      const rereadSpy = spyOn(
+        sessionCompaction,
+        "rereadOrchestratorState",
+      ).mockImplementation(async (_directory, output) => {
+        order.push("reread");
+        output.context.push("built-in reminder");
+      });
+      const calls: DispatchRecord[] = [];
+      const dispatcherSpy = spyOn(
+        dispatcherModule,
+        "createDispatcher",
+      ).mockReturnValue(
+        stubDispatcher((record) => {
+          order.push(`dispatch:${record.event}`);
+          calls.push(record);
+          const context = record.output?.["context"];
+          if (Array.isArray(context)) context.push("script context");
+        }),
+      );
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const input = { sessionID: "sess-compact" };
+          const output: { context: string[]; prompt?: string } = { context: [] };
+
+          await plugin["experimental.session.compacting"]!(input, output);
+
+          expect(order).toEqual([
+            "reread",
+            "dispatch:experimental.session.compacting",
+          ]);
+          expect(output.context).toEqual([
+            "built-in reminder",
+            "script context",
+          ]);
+          expect(output.prompt).toBeUndefined();
+          expect(calls[0]?.output).toBe(output);
+        });
+      } finally {
+        rereadSpy.mockRestore();
+        dispatcherSpy.mockRestore();
+      }
+    });
+
+    test("should update the session map before chat.message dispatch and propagate gate errors", async () => {
+      const dispatcherSpy = spyOn(
+        dispatcherModule,
+        "createDispatcher",
+      ).mockReturnValue(
+        stubDispatcher((record) => {
+          if (record.event === "chat.message") {
+            throw new Error("chat dispatch exploded");
+          }
+        }),
+      );
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const chatInput = {
+            sessionID: "sess-gate",
+            agent: "codebase-analyzer",
+          };
+
+          await expect(
+            plugin["chat.message"]!(chatInput as any, {} as any),
+          ).rejects.toThrow("chat dispatch exploded");
+
+          // The map update ran before the throwing dispatch: the destructive
+          // guard now sees the tracked agent instead of the "main" default.
+          await expect(
+            plugin["tool.execute.before"]!(
+              { tool: "bash", sessionID: "sess-gate", callID: "call-gate" },
+              { args: { command: "git reset --hard" } },
+            ),
+          ).rejects.toThrow(
+            'Blocked: destructive command not permitted for agent "codebase-analyzer"',
+          );
+        });
+      } finally {
+        dispatcherSpy.mockRestore();
+      }
+    });
+
+    test("should configure first and swallow config dispatch errors with a log", async () => {
+      const order: string[] = [];
+      const calls: DispatchRecord[] = [];
+      const skillsSpy = spyOn(
+        skillsConfig,
+        "configureSkills",
+      ).mockImplementation(() => {
+        order.push("skills");
+      });
+      const commandsSpy = spyOn(
+        commandsConfig,
+        "configureCommands",
+      ).mockImplementation(() => {
+        order.push("commands");
+      });
+      const agentsSpy = spyOn(
+        agentsConfig,
+        "configureAgents",
+      ).mockImplementation(() => {
+        order.push("agents");
+      });
+      const dispatcherSpy = spyOn(
+        dispatcherModule,
+        "createDispatcher",
+      ).mockReturnValue(
+        stubDispatcher((record) => {
+          order.push(`dispatch:${record.event}`);
+          calls.push(record);
+          throw new Error("config script exploded");
+        }),
+      );
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      const consoleLogSpy = spyOn(console, "log").mockImplementation(
+        () => {},
+      );
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const inputConfig = { small_model: "test-haiku" };
+
+          await plugin.config!(inputConfig as any);
+
+          expect(order).toEqual([
+            "skills",
+            "commands",
+            "agents",
+            "dispatch:config",
+          ]);
+          expect(calls[0]?.input).toBe(inputConfig);
+          expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining("[owflow]"),
+          );
+        });
+      } finally {
+        skillsSpy.mockRestore();
+        commandsSpy.mockRestore();
+        agentsSpy.mockRestore();
+        dispatcherSpy.mockRestore();
+        warnSpy.mockRestore();
+        consoleLogSpy.mockRestore();
+      }
+    });
+
+    test("should keep only the built-in hook shape and skip the scan when OWFLOW_HOOKS_DISABLED=1", async () => {
+      const previous = process.env.OWFLOW_HOOKS_DISABLED;
+      process.env.OWFLOW_HOOKS_DISABLED = "1";
+      writeHookFixture("tool-execute-before");
+      const digestSpy = spyOn(digestModule, "digest");
+      const dispatcherSpy = spyOn(dispatcherModule, "createDispatcher");
+      const consoleLogSpy = spyOn(console, "log").mockImplementation(
+        () => {},
+      );
+
+      try {
+        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+        expect(Object.keys(plugin).sort()).toEqual([...builtInKeys].sort());
+        for (const key of wrapperHandlerKeys) {
+          expect(asRecord(plugin)[key]).toBeUndefined();
+        }
+        expect(typeof plugin.config).toBe("function");
+        expect(typeof plugin["experimental.session.compacting"]).toBe(
+          "function",
+        );
+        expect(typeof plugin["chat.message"]).toBe("function");
+        expect(typeof plugin["tool.execute.before"]).toBe("function");
+        expect(digestSpy).not.toHaveBeenCalled();
+        expect(dispatcherSpy).not.toHaveBeenCalled();
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+          expect.stringContaining("OWFLOW_HOOKS_DISABLED=1"),
+        );
+      } finally {
+        digestSpy.mockRestore();
+        dispatcherSpy.mockRestore();
+        consoleLogSpy.mockRestore();
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
+        else process.env.OWFLOW_HOOKS_DISABLED = previous;
+      }
+    });
+
+    test("should resolve with no-op wrapper handlers when the hooks directory is absent", async () => {
+      await withHooksEnabled(async () => {
+        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+        for (const key of wrapperHandlerKeys) {
+          const handler = asRecord(plugin)[key];
+          expect(typeof handler).toBe("function");
+          await (handler as (input: unknown, output: unknown) => Promise<void>)(
+            {},
+            {},
+          );
+        }
+      });
     });
   });
 });

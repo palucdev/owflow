@@ -230,6 +230,38 @@ Standards live in `.owflow/docs/standards/` and are indexed in `.owflow/docs/IND
 
 **Important**: Do not use plan mode with workflows (see [Best Practices](#best-practices) below).
 
+## User Hooks
+
+Extend OpenCode's lifecycle with your project's own scripts. Drop hook scripts into `.owflow/hooks/` and owflow dispatches them through its hook handlers - no plugin code required.
+
+Script names map to events: the kebab-case filename stem becomes the dotted event name (`tool-execute-before.sh` → `tool.execute.before`), and the extension selects the interpreter:
+
+| Extension | Runner | Transport |
+| --------- | ------ | --------- |
+| `.ts`, `.js` | in-process (`import()`, default export `async (envelope) => result`) | envelope in, result returned |
+| `.sh` | subprocess via `bash` | envelope on stdin, JSON result on stdout |
+| `.ps1` | subprocess via `pwsh`/`powershell.exe` | **verification-pending** (see below) |
+
+Each event is either a **gate** or an **observe** event. Gate hooks (13 events, including `tool.execute.before`, `chat.message`, and `experimental.session.compacting`) can block or rewrite the operation; a non-`ok` outcome fails closed with a `Blocked:` error and an actionable `Hint:`. Observe hooks (`config`, `event`, `dispose`) can never break the session - their failures are logged with the `[owflow]` prefix and ignored.
+
+The wrapper and your scripts exchange one JSON envelope, `owflow-hooks/1`: the wrapper sends `{ protocol, event, class, session?, context }`; a script returns `{ protocol, status: "ok" | "blocked" | "failed", reason?, mutations? }`, where `mutations` may only touch the event's whitelisted fields (e.g. `args` for `tool.execute.before`). The full schema, event table, ordering rules, and mutation whitelist live in the [user hooks reference](.owflow/docs/project/user-hooks.md).
+
+> **Strict digest - important**: `.owflow/hooks/` may contain **only** hook scripts. Any other entry - a directory, a `.md` readme, a dotfile - is a fatal registration error that drops the entire owflow plugin (including the destructive-command guard) until you fix or remove the file. Keep notes and fixtures elsewhere.
+
+Hooks are digested once at startup: **restart OpenCode to reload** after adding, editing, or removing a script (there is no watcher). Registration is fail-fast - a broken gate hook blocks the operation when it fires, it is never silently skipped. To start with user hooks disabled, set `OWFLOW_HOOKS_DISABLED=1`; the two built-in hooks (destructive-command guard and post-compaction reminder) remain active.
+
+**Trust model**: scripts are the host project's own code, executed with the user's full privileges, with inherited environment, no name/path validation, no timeouts, no output caps, no audit trail — the git-hooks/husky convention; the bypass switch is the only control.
+
+**Visibility surfaces** (all are "effective after next restart"):
+
+- Startup: the `[owflow]` banner logs every registered hook (`path -> event [class] interpreter - status`), invalid entries, and the bypass state
+- CLI: `owflow-hooks` prints a table (or `--json`), scanning `./.owflow/hooks/` relative to the current directory; it exits 1 when invalid entries are found. The CLI runs on `bun` (same runtime as OpenCode), so it needs `bun` on your PATH
+- TUI: `/owflow:show-hooks` in the palette shows the same report as a toast - **verification-pending** (see below)
+
+The CLI and TUI scans are **structural only** - they validate names, extensions, and event derivations but do not import `.ts`/`.js` scripts. A hook that is structurally valid but throws at import (or lacks a default export) still appears as `registered` there; import validation happens exclusively at plugin startup, where one bad file is fatal. The startup banner is the surface that reflects the import-validated set.
+
+**Verification-pending (A7)**: PowerShell (`.ps1`) support and the TUI command ship implemented but are documented as verification-pending until the dev-verify PowerShell parity spike (S10) and TUI in-UI pass (S11) complete. The CLI and the startup banner are the unconditional fallback surfaces.
+
 ## Beta Channel
 
 Want to try experimental features before they hit stable? Install from the beta channel:
