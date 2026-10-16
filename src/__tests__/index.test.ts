@@ -11,7 +11,7 @@ import * as agentsConfig from "../configuration/agents-config.js";
 import * as sessionCompaction from "../hooks/session-compaction.js";
 import * as beforeTool from "../hooks/before-tool.js";
 import * as dispatcherModule from "../hooks-wrapper/dispatcher.js";
-import * as digestModule from "../hooks-wrapper/digest.js";
+import * as registryModule from "../hooks-wrapper/registry.js";
 import type { Dispatcher } from "../hooks-wrapper/dispatcher.js";
 import { verify_template } from "../tools/verify_template.js";
 import { fork_task } from "../tools/fork_task.js";
@@ -595,7 +595,7 @@ describe("OwflowPlugin index", () => {
       const previous = process.env.OWFLOW_HOOKS_DISABLED;
       process.env.OWFLOW_HOOKS_DISABLED = "1";
       writeHookFixture("tool-execute-before");
-      const digestSpy = spyOn(digestModule, "digest");
+      const scanSpy = spyOn(registryModule, "scanHooks");
       const dispatcherSpy = spyOn(dispatcherModule, "createDispatcher");
       const consoleLogSpy = spyOn(console, "log").mockImplementation(
         () => {},
@@ -614,13 +614,13 @@ describe("OwflowPlugin index", () => {
         );
         expect(typeof plugin["chat.message"]).toBe("function");
         expect(typeof plugin["tool.execute.before"]).toBe("function");
-        expect(digestSpy).not.toHaveBeenCalled();
+        expect(scanSpy).not.toHaveBeenCalled();
         expect(dispatcherSpy).not.toHaveBeenCalled();
         expect(consoleLogSpy).toHaveBeenCalledWith(
           expect.stringContaining("OWFLOW_HOOKS_DISABLED=1"),
         );
       } finally {
-        digestSpy.mockRestore();
+        scanSpy.mockRestore();
         dispatcherSpy.mockRestore();
         consoleLogSpy.mockRestore();
         if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;

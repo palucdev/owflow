@@ -17,10 +17,9 @@ import { guardAgainstDestructiveActions } from "./hooks/before-tool.js";
 import { configureSkills } from "./configuration/skills-config.js";
 import { configureCommands } from "./configuration/commands-config.js";
 import { configureAgents } from "./configuration/agents-config.js";
-import { digest } from "./hooks-wrapper/digest.js";
-import { resolveInterpreterAvailability } from "./hooks-wrapper/interpreters.js";
-import { buildRegistry } from "./hooks-wrapper/registry.js";
-import { createExecutionCore } from "./hooks-wrapper/execution-core.js";
+import { scanHooks } from "./hooks-wrapper/registry.js";
+import type { DispatchableEvent } from "./hooks-wrapper/registry.js";
+import { createExecutionCore } from "./hooks-wrapper/runners.js";
 import { createDispatcher } from "./hooks-wrapper/dispatcher.js";
 import type { Dispatcher } from "./hooks-wrapper/dispatcher.js";
 import { renderSnapshot } from "./hooks-wrapper/report.js";
@@ -40,8 +39,7 @@ interface HooksWrapper {
 const initializeHooksWrapper = async (
   directory: string,
 ): Promise<HooksWrapper> => {
-  const { entries } = digest(path.join(directory, ".owflow/hooks"), "throw");
-  const registry = buildRegistry(entries, resolveInterpreterAvailability());
+  const { registry } = scanHooks(path.join(directory, ".owflow/hooks"));
   const core = createExecutionCore({ cwd: directory });
   try {
     // R1.3: importing every in-process script now makes a broken default
@@ -57,44 +55,29 @@ const initializeHooksWrapper = async (
   };
 };
 
-const createDispatchHandlers = (dispatch: Dispatcher): Hooks => ({
-  "tool.execute.after": async (input, output) => {
-    await dispatch("tool.execute.after", input, output);
-  },
-  "tool.definition": async (input, output) => {
-    await dispatch("tool.definition", input, output);
-  },
-  "chat.params": async (input, output) => {
-    await dispatch("chat.params", input, output);
-  },
-  "chat.headers": async (input, output) => {
-    await dispatch("chat.headers", input, output);
-  },
-  "command.execute.before": async (input, output) => {
-    await dispatch("command.execute.before", input, output);
-  },
-  "shell.env": async (input, output) => {
-    await dispatch("shell.env", input, output);
-  },
-  "experimental.chat.messages.transform": async (input, output) => {
-    await dispatch("experimental.chat.messages.transform", input, output);
-  },
-  "experimental.chat.system.transform": async (input, output) => {
-    await dispatch("experimental.chat.system.transform", input, output);
-  },
-  "experimental.compaction.autocontinue": async (input, output) => {
-    await dispatch("experimental.compaction.autocontinue", input, output);
-  },
-  "experimental.text.complete": async (input, output) => {
-    await dispatch("experimental.text.complete", input, output);
-  },
-  event: async (input) => {
-    await dispatch("event", input);
-  },
-  dispose: async () => {
-    await dispatch("dispose");
-  },
-});
+const PASSTHROUGH_EVENTS = [
+  "tool.execute.after",
+  "tool.definition",
+  "chat.params",
+  "chat.headers",
+  "command.execute.before",
+  "shell.env",
+  "experimental.chat.messages.transform",
+  "experimental.chat.system.transform",
+  "experimental.compaction.autocontinue",
+  "experimental.text.complete",
+  "event",
+  "dispose",
+] as const satisfies readonly DispatchableEvent[];
+
+const createDispatchHandlers = (dispatch: Dispatcher): Hooks =>
+  Object.fromEntries(
+    PASSTHROUGH_EVENTS.map((event) => [
+      event,
+      (input?: unknown, output?: Record<string, unknown>) =>
+        dispatch(event, input, output),
+    ]),
+  ) as Hooks;
 
 const OwflowPlugin: Plugin = async ({ $, directory }) => {
   const agentBySession = new Map();

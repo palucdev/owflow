@@ -1,12 +1,14 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { DISPATCHABLE_EVENT_NAMES } from "../../hooks-wrapper/derivation.js";
 import {
   createDispatcher,
   isWhitelistedMutation,
   MUTATION_FIELDS,
 } from "../../hooks-wrapper/dispatcher.js";
 import type { Dispatcher } from "../../hooks-wrapper/dispatcher.js";
-import { buildRegistry } from "../../hooks-wrapper/registry.js";
+import {
+  DISPATCHABLE_EVENT_NAMES,
+  buildRegistry,
+} from "../../hooks-wrapper/registry.js";
 import type {
   DispatchableEvent,
   EnvelopeContext,
@@ -15,7 +17,7 @@ import type {
   HookScript,
   InterpreterAvailability,
   Outcome,
-} from "../../hooks-wrapper/types.js";
+} from "../../hooks-wrapper/registry.js";
 
 const entry = (
   overrides: Partial<HookRegistryEntry> = {},
@@ -302,7 +304,6 @@ describe("mutation whitelist", () => {
     try {
       // R6.5 table shape: one entry per dispatchable event; rich-object and
       // observe events accept no JSON-representable mutations.
-      expect(Object.isFrozen(MUTATION_FIELDS)).toBe(true);
       expect(Object.keys(MUTATION_FIELDS).sort()).toEqual(
         [...DISPATCHABLE_EVENT_NAMES].sort(),
       );

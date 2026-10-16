@@ -4,9 +4,7 @@ import type {
   TuiPluginModule,
   TuiToast,
 } from "@opencode-ai/plugin/tui";
-import { digest } from "./hooks-wrapper/digest.js";
-import { resolveInterpreterAvailability } from "./hooks-wrapper/interpreters.js";
-import { buildRegistry } from "./hooks-wrapper/registry.js";
+import { scanHooks } from "./hooks-wrapper/registry.js";
 import { renderTable } from "./hooks-wrapper/report.js";
 
 const TOAST_TITLE = "owflow user hooks";
@@ -19,16 +17,14 @@ const WORKSPACE_UNAVAILABLE_MESSAGE =
  * unreachable; this re-derives the would-load set with the same pure modules.
  */
 export const buildShowHooksToast = (directory: string): TuiToast => {
-  const scan = digest(path.join(directory, ".owflow", "hooks"), "report");
-  const registry = buildRegistry(
-    scan.entries,
-    resolveInterpreterAvailability(),
-  );
+  const scan = scanHooks(path.join(directory, ".owflow", "hooks"), {
+    mode: "report",
+  });
   return {
     variant: scan.failures.length > 0 ? "warning" : "info",
     title: TOAST_TITLE,
     message: renderTable({
-      entries: registry.entries,
+      entries: scan.registry.entries,
       failures: scan.failures,
     }),
   };

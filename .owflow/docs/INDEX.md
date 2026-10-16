@@ -20,7 +20,7 @@ Located in `.owflow/docs/project/`
 
 ### Vision (`project/vision.md`)
 
-Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status (v0.7.0, pre-1.0, solo-maintained MIT), package surface (51 skills, 23 subagents, 52 commands), test posture (205 tests across 22 suites, ~98.6% line / 100% function coverage), 6–12 month goals (grow workflow features, deterministic gates, registration smoke test, CI/type declarations), and evolution to four decomposed workflows (development 0.3.0, research 0.4.2, migration 0.5.0, performance 0.6.0) sharing dispatcher + subskill + `goal-*` architecture.
+Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status (v0.7.0, pre-1.0, solo-maintained MIT), package surface (51 skills, 23 subagents, 52 commands), test posture (208 tests across 16 suites, ~98.5% line / 100% function coverage), 6–12 month goals (grow workflow features, deterministic gates, registration smoke test, CI/type declarations), and evolution to four decomposed workflows (development 0.3.0, research 0.4.2, migration 0.5.0, performance 0.6.0) sharing dispatcher + subskill + `goal-*` architecture.
 
 ### Roadmap (`project/roadmap.md`)
 
@@ -28,7 +28,7 @@ v0.7.0 feature inventory (4 workflows, 51 skills, 23 subagents, 52 commands, 2 c
 
 ### Tech Stack (`project/tech-stack.md`)
 
-Languages (TypeScript 5 strict ESM; markdown + YAML frontmatter product surface: 51 skills, ~13.3K lines), Bun/Node tooling (single `bun.lock`), three runtime dependencies, build & runtime flow diagram, testing (bun:test, 205 tests across 22 suites, coverage ≥ 0.8), dist payload (164 files), version management, and absent infrastructure (no CI, DB, or containers).
+Languages (TypeScript 5 strict ESM; markdown + YAML frontmatter product surface: 51 skills, ~13.3K lines), Bun/Node tooling (single `bun.lock`), three runtime dependencies, build & runtime flow diagram, testing (bun:test, 208 tests across 16 suites, coverage ≥ 0.8), dist payload (155 files), version management, and absent infrastructure (no CI, DB, or containers).
 
 ### Architecture (`project/architecture.md`)
 

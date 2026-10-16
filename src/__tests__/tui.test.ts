@@ -4,9 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { TuiPluginApi, TuiToast } from "@opencode-ai/plugin/tui";
 import tuiModule, { workspaceUnavailableToast } from "../tui.js";
-import { digest } from "../hooks-wrapper/digest.js";
-import { resolveInterpreterAvailability } from "../hooks-wrapper/interpreters.js";
-import { buildRegistry } from "../hooks-wrapper/registry.js";
+import { scanHooks } from "../hooks-wrapper/registry.js";
 import {
   EFFECTIVE_AFTER_RESTART,
   renderTable,
@@ -120,13 +118,9 @@ describe("owflow TUI plugin", () => {
     await tuiModule.tui(api);
     layers[0]!.commands[0]!.run();
 
-    const scan = digest(hooksDir, "report");
-    const registry = buildRegistry(
-      scan.entries,
-      resolveInterpreterAvailability(),
-    );
+    const scan = scanHooks(hooksDir, { mode: "report" });
     const expected = renderTable({
-      entries: registry.entries,
+      entries: scan.registry.entries,
       failures: scan.failures,
     });
 

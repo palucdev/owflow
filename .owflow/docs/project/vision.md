@@ -10,7 +10,7 @@ owflow is an OpenCode plugin that turns AI-assisted software development into a 
 - **Status**: Active development, pre-1.0 (v0.7.0)
 - **Users**: OpenCode users and plugin/skill authors; open source under MIT, solo-maintained
 - **Tech Stack**: TypeScript 5 (strict, ESM) built and tested with Bun, targeting Node ^25; `@opencode-ai/plugin` as the only framework dependency (3 runtime dependencies total)
-- **Test posture**: 205 tests passing across 22 suites, ~98.6% line / 100% function coverage, 0.8 threshold enforced in `bunfig.toml`
+- **Test posture**: 208 tests passing across 16 suites, ~98.5% line / 100% function coverage, 0.8 threshold enforced in `bunfig.toml`
 
 ## Purpose
 

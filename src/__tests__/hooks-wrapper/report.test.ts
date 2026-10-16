@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { buildRegistry } from "../../hooks-wrapper/registry.js";
 import type {
+  HookScript,
+  InterpreterAvailability,
+} from "../../hooks-wrapper/registry.js";
+import type {
   HookReportInput,
   HookReportRow,
 } from "../../hooks-wrapper/report.js";
@@ -12,10 +16,6 @@ import {
   renderSnapshot,
   renderTable,
 } from "../../hooks-wrapper/report.js";
-import type {
-  HookScript,
-  InterpreterAvailability,
-} from "../../hooks-wrapper/types.js";
 
 const AVAILABLE: InterpreterAvailability = {
   ".ts": { available: true },
@@ -77,7 +77,6 @@ describe("report formatting", () => {
           error: 'stem "bad_stem" is not lowercase kebab-case',
         },
       ],
-      divergence: "would-load scan of /project/.owflow/hooks",
     };
 
     const rows = buildReportRows(input);
@@ -85,7 +84,6 @@ describe("report formatting", () => {
     const snapshot = renderSnapshot(input);
     const json = JSON.parse(renderJson(input)) as {
       label: string;
-      divergence?: string;
       rows: readonly HookReportRow[];
     };
 
@@ -96,7 +94,6 @@ describe("report formatting", () => {
     ]);
     expect(json.rows).toEqual([...rows]);
     expect(json.label).toBe(EFFECTIVE_AFTER_RESTART);
-    expect(json.divergence).toBe("would-load scan of /project/.owflow/hooks");
 
     for (const column of TABLE_COLUMNS) {
       expect(table.split("\n")[0]!).toContain(column);

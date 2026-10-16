@@ -161,14 +161,8 @@ There is no file watcher and no persisted snapshot: the hook set is digested exa
 
 ## Implementation Map
 
-- `src/hooks-wrapper/types.ts` - shared vocabulary (type-only)
-- `src/hooks-wrapper/derivation.ts` - naming, extension rank, event table, comparator
-- `src/hooks-wrapper/digest.ts` - strict directory enumeration (`throw` fail-fast / `report` CLI modes)
-- `src/hooks-wrapper/registry.ts` - frozen registry with interpreter availability
-- `src/hooks-wrapper/interpreters.ts` - `.sh`/`.ps1` interpreter resolution (`Bun.which`)
-- `src/hooks-wrapper/envelope.ts` - `owflow-hooks/1` build/parse
-- `src/hooks-wrapper/runners.ts` - in-process and subprocess runners
-- `src/hooks-wrapper/execution-core.ts` - `run(entry, envelope) → Outcome` seam
+- `src/hooks-wrapper/registry.ts` - shared vocabulary, naming/extension tables and event map, interpreter resolution (`Bun.which`), strict directory digest, registry builder, and the unified `scanHooks` one-call scan
+- `src/hooks-wrapper/runners.ts` - `owflow-hooks/1` envelope build/parse, in-process and subprocess runners, and the combined `{ load, run }` execution core
 - `src/hooks-wrapper/dispatcher.ts` - per-event gate/observe translation and mutation whitelist
 - `src/hooks-wrapper/report.ts` - shared row model and three renderers
 - `src/index.ts` - server adapter (banner snapshot, guard-first dispatch)

@@ -8,7 +8,7 @@ This document describes the technology choices and rationale for owflow, an Open
 
 ### TypeScript 5 (peer `^5`)
 
-- **Usage**: ~100% of source code (`src/`, 25 modules, ~2,202 lines of TS plus ~4,545 lines of tests)
+- **Usage**: ~100% of source code (`src/`, 19 modules, ~2,131 lines of TS plus ~4,566 lines of tests)
 - **Rationale**: The OpenCode plugin API is typed; strict typing protects a logic-heavy registration and state-machine layer; declarations are the intended public interface
 - **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
 
@@ -31,8 +31,8 @@ None. No server framework, HTTP API, or long-running service. The only runtime f
 
 ### Testing
 
-- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 205 tests across 22 suites with 19 YAML fixtures
-- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored); currently ~98.6% line / 100% function coverage
+- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 208 tests across 16 suites with 19 YAML fixtures
+- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored); currently ~98.5% line / 100% function coverage
 
 ## Database
 
@@ -42,7 +42,7 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
 
 - **Bun** (`bunfig.toml`, `bun.lock`) — dev, build, and test runtime
 - **`bun tsc`** — type-check and emit ESM JavaScript to `dist/`
-- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS and html-renderer assets — 164 files total in the payload)
+- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS and html-renderer assets — 155 files total in the payload)
 - **npm** — publish path only (`prepack` runs the full build as a publish guard); `package-lock.json` has been removed, leaving `bun.lock` as the single lockfile
 - **Node ^25** — host engine requirement (`engines` field)
 

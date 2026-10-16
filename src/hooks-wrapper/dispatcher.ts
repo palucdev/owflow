@@ -1,15 +1,13 @@
-import { DISPATCHABLE_EVENTS } from "./derivation.js";
-import { buildEnvelope } from "./envelope.js";
-import { interpreterName } from "./interpreters.js";
-import type { HookRunner } from "./runners.js";
+import { DISPATCHABLE_EVENTS, interpreterName } from "./registry.js";
 import type {
   DispatchableEvent,
   EnvelopeContext,
-  EnvelopeSession,
   HookRegistry,
   HookRegistryEntry,
   Outcome,
-} from "./types.js";
+} from "./registry.js";
+import { buildEnvelope } from "./runners.js";
+import type { HookRunner } from "./runners.js";
 
 /**
  * Per-event dispatch: the one place where a normalized `Outcome` becomes
@@ -23,30 +21,30 @@ const BLOCKED_PREFIX = "Blocked:";
 /** R6.5: rich-object events and observe events accept no JSON-representable mutations. */
 export const MUTATION_FIELDS: Readonly<
   Record<DispatchableEvent, readonly string[]>
-> = Object.freeze({
-  "tool.execute.before": Object.freeze(["args"]),
-  "tool.execute.after": Object.freeze(["title", "output", "metadata"]),
-  "tool.definition": Object.freeze(["description", "parameters"]),
-  "chat.message": Object.freeze([]),
-  "chat.params": Object.freeze([
+> = {
+  "tool.execute.before": ["args"],
+  "tool.execute.after": ["title", "output", "metadata"],
+  "tool.definition": ["description", "parameters"],
+  "chat.message": [],
+  "chat.params": [
     "temperature",
     "topP",
     "topK",
     "maxOutputTokens",
     "options",
-  ]),
-  "chat.headers": Object.freeze(["headers"]),
-  "command.execute.before": Object.freeze([]),
-  "shell.env": Object.freeze(["env"]),
-  "experimental.chat.messages.transform": Object.freeze([]),
-  "experimental.chat.system.transform": Object.freeze(["system"]),
-  "experimental.session.compacting": Object.freeze(["context"]),
-  "experimental.compaction.autocontinue": Object.freeze(["enabled"]),
-  "experimental.text.complete": Object.freeze(["text"]),
-  config: Object.freeze([]),
-  event: Object.freeze([]),
-  dispose: Object.freeze([]),
-});
+  ],
+  "chat.headers": ["headers"],
+  "command.execute.before": [],
+  "shell.env": ["env"],
+  "experimental.chat.messages.transform": [],
+  "experimental.chat.system.transform": ["system"],
+  "experimental.session.compacting": ["context"],
+  "experimental.compaction.autocontinue": ["enabled"],
+  "experimental.text.complete": ["text"],
+  config: [],
+  event: [],
+  dispose: [],
+};
 
 export const isWhitelistedMutation = (
   event: DispatchableEvent,
@@ -75,14 +73,12 @@ const contextFrom = (
   return context;
 };
 
-const sessionFrom = (input: unknown): EnvelopeSession | undefined => {
-  if (isRecord(input)) {
-    const sessionID = input.sessionID;
-    if (typeof sessionID === "string" && sessionID.length > 0) {
-      return { sessionID };
-    }
-  }
-  return undefined;
+const sessionIDFrom = (input: unknown): string | undefined => {
+  if (!isRecord(input)) return undefined;
+  const sessionID = input.sessionID;
+  return typeof sessionID === "string" && sessionID.length > 0
+    ? sessionID
+    : undefined;
 };
 
 const gateRejection = (entry: HookRegistryEntry, outcome: Outcome): Error => {
@@ -192,9 +188,8 @@ export const createDispatcher = ({
     const envelope = buildEnvelope({
       event,
       context: contextFrom(input, output),
-      session: sessionFrom(input),
+      sessionID: sessionIDFrom(input),
     });
-    const sharedOutput = output ?? {};
     const isGate = DISPATCHABLE_EVENTS[event] === "gate";
 
     for (const entry of eventEntries) {
@@ -216,8 +211,8 @@ export const createDispatcher = ({
         continue;
       }
 
-      if (outcome.mutations !== undefined) {
-        applyMutations(event, entry, outcome.mutations, sharedOutput);
+      if (output !== undefined && outcome.mutations !== undefined) {
+        applyMutations(event, entry, outcome.mutations, output);
       }
     }
   };

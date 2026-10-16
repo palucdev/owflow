@@ -1,20 +1,234 @@
-import { describe, expect, test } from "bun:test";
-import { buildEnvelope } from "../../hooks-wrapper/envelope.js";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
+  buildEnvelope,
+  createExecutionCore,
   createInProcessRunner,
   createSubprocessRunner,
+  parseEnvelopeResult,
 } from "../../hooks-wrapper/runners.js";
 import type {
+  HookRunner,
+  InProcessRunner,
   ModuleImporter,
   SpawnProcess,
   SpawnProcessOptions,
   SpawnedProcess,
 } from "../../hooks-wrapper/runners.js";
+import {
+  buildRegistry,
+  resolveInterpreterAvailability,
+} from "../../hooks-wrapper/registry.js";
 import type {
   EnvelopeContext,
   HookRegistryEntry,
+  HookScript,
   Outcome,
-} from "../../hooks-wrapper/types.js";
+} from "../../hooks-wrapper/registry.js";
+
+describe("buildEnvelope", () => {
+  class FakeModel {
+    constructor(
+      readonly id: string,
+      readonly providerID: string,
+      readonly name: string,
+      readonly apiKey: string,
+    ) {}
+  }
+
+  class FakeProvider {
+    constructor(
+      readonly id: string,
+      readonly name: string,
+      readonly options: Record<string, unknown>,
+    ) {}
+  }
+
+  class FakePart {
+    constructor(
+      readonly id: string,
+      readonly sessionID: string,
+      readonly messageID: string,
+      readonly type: string,
+      readonly text: string,
+    ) {}
+  }
+
+  test("should emit the versioned envelope with derived class, session, and a projected context", () => {
+    const envelope = buildEnvelope({
+      event: "tool.execute.before",
+      sessionID: "ses_abc",
+      context: {
+        tool: "bash",
+        args: { command: "rm -rf build" },
+        model: new FakeModel(
+          "claude-sonnet-4",
+          "anthropic",
+          "Claude Sonnet 4",
+          "sk-secret",
+        ),
+        provider: new FakeProvider("anthropic", "Anthropic", {
+          key: "sk-provider",
+        }),
+        parts: [new FakePart("prt_1", "ses_abc", "msg_1", "text", "hello")],
+        opaque: new (class {
+          readonly secret = "hide me";
+        })(),
+      },
+    });
+
+    expect(envelope.protocol).toBe("owflow-hooks/1");
+    expect(envelope.event).toBe("tool.execute.before");
+    expect(envelope.class).toBe("gate");
+    expect(envelope.session).toEqual({ sessionID: "ses_abc" });
+
+    expect(envelope.context).toEqual({
+      tool: "bash",
+      args: { command: "rm -rf build" },
+      model: {
+        id: "claude-sonnet-4",
+        providerID: "anthropic",
+        name: "Claude Sonnet 4",
+      },
+      provider: { id: "anthropic", name: "Anthropic" },
+      parts: [
+        {
+          id: "prt_1",
+          sessionID: "ses_abc",
+          messageID: "msg_1",
+          type: "text",
+        },
+      ],
+    });
+
+    // Projection must keep non-identity instance fields out of the envelope.
+    const serialized = JSON.stringify(envelope);
+    expect(serialized).not.toContain("sk-secret");
+    expect(serialized).not.toContain("sk-provider");
+    expect(serialized).not.toContain("hide me");
+    expect(serialized).not.toContain("hello");
+    expect(JSON.parse(serialized)).toEqual(envelope);
+
+    const observeEnvelope = buildEnvelope({ event: "config", context: {} });
+    expect(observeEnvelope.class).toBe("observe");
+    expect(observeEnvelope.session).toBeUndefined();
+
+    const emptySession = buildEnvelope({
+      event: "config",
+      context: {},
+      sessionID: "",
+    });
+    expect(emptySession.session).toBeUndefined();
+  });
+});
+
+describe("parseEnvelopeResult", () => {
+  test("should parse ok, blocked, and failed results with reason and mutations", () => {
+    const ok = parseEnvelopeResult(
+      '{"protocol":"owflow-hooks/1","status":"ok","mutations":{"args":{"command":"ls -la"}}}',
+    );
+    expect(ok).toEqual({
+      ok: true,
+      data: {
+        protocol: "owflow-hooks/1",
+        status: "ok",
+        mutations: { args: { command: "ls -la" } },
+      },
+    });
+
+    const blocked = parseEnvelopeResult(
+      '{"protocol":"owflow-hooks/1","status":"blocked","reason":"rm -rf is not allowed for this agent"}',
+    );
+    expect(blocked).toEqual({
+      ok: true,
+      data: {
+        protocol: "owflow-hooks/1",
+        status: "blocked",
+        reason: "rm -rf is not allowed for this agent",
+      },
+    });
+
+    const failed = parseEnvelopeResult(
+      '{"protocol":"owflow-hooks/1","status":"failed","reason":"missing jq"}',
+    );
+    expect(failed).toEqual({
+      ok: true,
+      data: {
+        protocol: "owflow-hooks/1",
+        status: "failed",
+        reason: "missing jq",
+      },
+    });
+
+    // In-process handlers return the result object instead of stdout JSON.
+    expect(
+      parseEnvelopeResult({ protocol: "owflow-hooks/1", status: "ok" }),
+    ).toEqual({
+      ok: true,
+      data: { protocol: "owflow-hooks/1", status: "ok" },
+    });
+  });
+
+  test("should return a parse-error sentinel — never a throw, never a log — for malformed and mismatched results", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const throwingGetter = Object.defineProperty({}, "protocol", {
+        get() {
+          throw new Error("exotic getter");
+        },
+      });
+
+      const malformed: readonly unknown[] = [
+        "not json at all",
+        '{"protocol":',
+        "",
+        "null",
+        "[]",
+        "42",
+        '{"status":"ok"}',
+        '{"protocol":null,"status":"ok"}',
+        '{"protocol":"owflow-hooks/2","status":"ok"}',
+        '{"protocol":"owflow-hooks/1","status":"bogus"}',
+        '{"protocol":"owflow-hooks/1","status":"ok","reason":42}',
+        '{"protocol":"owflow-hooks/1","status":"ok","mutations":[]}',
+        throwingGetter,
+        undefined,
+      ];
+
+      for (const raw of malformed) {
+        const parsed = parseEnvelopeResult(raw);
+        expect(parsed.ok).toBe(false);
+        expect(typeof parsed.error).toBe("string");
+        expect(parsed.error ?? "").not.toBe("");
+        expect(parsed.data).toBeUndefined();
+      }
+
+      expect(parseEnvelopeResult("not json at all").error ?? "").toContain(
+        "unparseable",
+      );
+      expect(parseEnvelopeResult('{"status":"ok"}').error ?? "").toContain(
+        "missing protocol",
+      );
+      expect(
+        parseEnvelopeResult('{"protocol":"owflow-hooks/2","status":"ok"}')
+          .error ?? "",
+      ).toContain("owflow-hooks/2");
+
+      expect(logSpy).not.toHaveBeenCalled();
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+});
 
 const inProcessEntry = (
   overrides: Partial<HookRegistryEntry> = {},
@@ -42,7 +256,7 @@ const subprocessEntry = (
 
 const envelope = buildEnvelope({
   event: "tool.execute.before",
-  session: { sessionID: "ses_abc" },
+  sessionID: "ses_abc",
   context: { tool: "bash", args: { command: "rm -rf build" } },
 });
 
@@ -234,6 +448,11 @@ describe("createSubprocessRunner", () => {
         exitCode: 0,
         stdout: JSON.stringify({ status: "blocked", reason: "policy" }),
       }),
+      fakeProcess({
+        exitCode: 7,
+        stdout: "not json at all",
+        stderr: "script died\n",
+      }),
     ];
     let index = 0;
     const spawn: SpawnProcess = () => processes[index++]!;
@@ -248,7 +467,12 @@ describe("createSubprocessRunner", () => {
     const missingProtocol = await runner.run(subprocessEntry(), envelope);
     expect(missingProtocol.status).toBe("failed");
     expect(missingProtocol.reason ?? "").toContain("missing protocol");
-    expect(index).toBe(2);
+
+    // A non-zero exit keeps its stderr diagnostics over the stdout parse error.
+    const nonZero = await runner.run(subprocessEntry(), envelope);
+    expect(nonZero.status).toBe("failed");
+    expect(nonZero.reason).toContain("script died");
+    expect(index).toBe(3);
   });
 
   test("should spawn the resolved interpreter with an argument array, piped stdio, and no timeout or signal options", async () => {
@@ -294,4 +518,176 @@ describe("createSubprocessRunner", () => {
     expect(missing.reason).toContain("no interpreter resolved");
     expect(calls).toHaveLength(1);
   });
+});
+
+const entryFor = (
+  runnerClass: HookRegistryEntry["runnerClass"],
+  path: string,
+): HookRegistryEntry => ({
+  path,
+  event: "tool.execute.before",
+  class: "gate",
+  runnerClass,
+  interpreter:
+    runnerClass === "in-process"
+      ? { available: true }
+      : { resolved: "/usr/bin/bash", available: true },
+  status: "registered",
+});
+
+const coreEnvelope = buildEnvelope({
+  event: "tool.execute.before",
+  context: { tool: "bash", args: { command: "rm -rf build" } },
+});
+
+const OUTCOME_KEYS = ["mutations", "reason", "status"];
+
+describe("createExecutionCore", () => {
+  test("should load only in-process entries and delegate an in-process run to the in-process runner", async () => {
+    const tsEntry = entryFor("in-process", "/project/hooks/a.ts");
+    const shEntry = entryFor("subprocess", "/project/hooks/a.sh");
+    const loaded: HookRegistryEntry[] = [];
+    const inProcessRuns: Array<{ entry: HookRegistryEntry; envelope: EnvelopeContext }> =
+      [];
+    const subprocessRuns: HookRegistryEntry[] = [];
+
+    const inProcess: InProcessRunner = {
+      load: async (entry) => {
+        loaded.push(entry);
+      },
+      run: async (entry, input) => {
+        inProcessRuns.push({ entry, envelope: input });
+        return { status: "ok", mutations: { args: { command: "ls -la" } } };
+      },
+    };
+    const subprocess: HookRunner = {
+      run: async (entry) => {
+        subprocessRuns.push(entry);
+        return { status: "failed", reason: "subprocess unsupported" };
+      },
+    };
+
+    const core = createExecutionCore({
+      cwd: "/project",
+      inProcess,
+      subprocess,
+    });
+
+    expect(core.run.length).toBe(2);
+
+    await core.load([tsEntry, shEntry]);
+    expect(loaded).toEqual([tsEntry]);
+
+    const outcome = await core.run(tsEntry, coreEnvelope);
+    expect(outcome).toEqual({
+      status: "ok",
+      mutations: { args: { command: "ls -la" } },
+    });
+    expect(inProcessRuns).toEqual([{ entry: tsEntry, envelope: coreEnvelope }]);
+    expect(subprocessRuns).toHaveLength(0);
+    expect(Object.keys(outcome).every((key) => OUTCOME_KEYS.includes(key))).toBe(
+      true,
+    );
+  });
+
+  test("should delegate a subprocess run to the subprocess runner and never touch the in-process runner", async () => {
+    const tsEntry = entryFor("in-process", "/project/hooks/a.ts");
+    const shEntry = entryFor("subprocess", "/project/hooks/a.sh");
+    const inProcessRuns: HookRegistryEntry[] = [];
+    const subprocessRuns: Array<{ entry: HookRegistryEntry; envelope: EnvelopeContext }> =
+      [];
+
+    const inProcess: InProcessRunner = {
+      load: async () => {},
+      run: async (entry) => {
+        inProcessRuns.push(entry);
+        return { status: "ok" };
+      },
+    };
+    const subprocess: HookRunner = {
+      run: async (entry, input) => {
+        subprocessRuns.push({ entry, envelope: input });
+        return { status: "blocked", reason: "policy" };
+      },
+    };
+
+    const core = createExecutionCore({
+      cwd: "/project",
+      inProcess,
+      subprocess,
+    });
+
+    const outcome: Outcome = await core.run(shEntry, coreEnvelope);
+    expect(outcome).toEqual({ status: "blocked", reason: "policy" });
+    expect(subprocessRuns).toEqual([{ entry: shEntry, envelope: coreEnvelope }]);
+    expect(inProcessRuns).toHaveLength(0);
+    expect(tsEntry.runnerClass).toBe("in-process");
+    expect(Object.keys(outcome).every((key) => OUTCOME_KEYS.includes(key))).toBe(
+      true,
+    );
+  });
+});
+
+describe("createExecutionCore with real runners", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-hooks-real-test-"));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  const realEntry = (
+    fileName: string,
+    extension: ".ts" | ".sh",
+  ): HookRegistryEntry => {
+    const script: HookScript = {
+      path: path.join(tempDir, fileName),
+      stem: "tool-execute-before",
+      event: "tool.execute.before",
+      class: "gate",
+      runnerClass: extension === ".ts" ? "in-process" : "subprocess",
+      extension,
+    };
+    return buildRegistry([script], resolveInterpreterAvailability()).entries[0]!;
+  };
+
+  test("should import, load, and run a real in-process .ts hook", async () => {
+    fs.writeFileSync(
+      path.join(tempDir, "tool-execute-before.ts"),
+      'export default async () => ({\n  protocol: "owflow-hooks/1",\n  status: "ok",\n  mutations: { args: { command: "ls -la" } },\n});\n',
+      "utf8",
+    );
+    const entry = realEntry("tool-execute-before.ts", ".ts");
+    const core = createExecutionCore({ cwd: tempDir });
+
+    await core.load([entry]);
+    const outcome = await core.run(entry, envelope);
+
+    expect(outcome).toEqual({
+      status: "ok",
+      mutations: { args: { command: "ls -la" } },
+    });
+  });
+
+  test.skipIf(Bun.which("bash") === null)(
+    "should spawn a real bash hook and trust its stdout status over the exit code",
+    async () => {
+      fs.writeFileSync(
+        path.join(tempDir, "tool-execute-before.sh"),
+        '#!/bin/bash\nread -r _envelope\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"blocked","reason":"nope"}\'\nexit 1\n',
+        "utf8",
+      );
+      const entry = realEntry("tool-execute-before.sh", ".sh");
+      const core = createExecutionCore({ cwd: tempDir });
+
+      const outcome = await core.run(entry, envelope);
+
+      expect(outcome).toEqual({ status: "blocked", reason: "nope" });
+    },
+  );
 });

@@ -1,8 +1,6 @@
 #!/usr/bin/env bun
 import path from "node:path";
-import { digest } from "../hooks-wrapper/digest.js";
-import { resolveInterpreterAvailability } from "../hooks-wrapper/interpreters.js";
-import { buildRegistry } from "../hooks-wrapper/registry.js";
+import { scanHooks } from "../hooks-wrapper/registry.js";
 import type { HookReportInput } from "../hooks-wrapper/report.js";
 import { renderJson, renderTable } from "../hooks-wrapper/report.js";
 
@@ -24,13 +22,9 @@ export const runShowHooks = (options: ShowHooksOptions = {}): number => {
   const log = options.log ?? console.log;
 
   const anchor = path.join(cwd, ".owflow", "hooks");
-  const scan = digest(anchor, "report");
-  const registry = buildRegistry(
-    scan.entries,
-    resolveInterpreterAvailability(),
-  );
+  const scan = scanHooks(anchor, { mode: "report" });
   const input: HookReportInput = {
-    entries: registry.entries,
+    entries: scan.registry.entries,
     failures: scan.failures,
   };
 
