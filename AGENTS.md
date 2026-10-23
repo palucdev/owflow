@@ -70,12 +70,12 @@ Fires after context compaction. Injects a reminder to re-read `orchestrator-stat
 
 ### User Hooks Wrapper (`.owflow/hooks/`)
 
-Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts) and dispatched through owflow's handlers, guard-first. The platform-agnostic core lives in `src/hooks-wrapper/`; only `src/index.ts` (server) and `src/tui.ts` (TUI) know the host contract.
+Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. The platform-agnostic core lives in `src/hooks-wrapper/`; `src/hooks/plugin-hooks.ts` (server wiring) and `src/tui.ts` (TUI) hold the host-specific surfaces.
 
 - Scripts are named `kebab-event.ext` (`tool-execute-before.sh` → `tool.execute.before`); `.ts`/`.js` run in-process, `.sh`/`.ps1` as subprocesses.
-- 13 gate events fail closed on a non-`ok` outcome (`Blocked:` + `Hint:`); 3 observe events (`config`, `event`, `dispose`) log and continue.
+- 13 gate events fail closed on a non-`ok` outcome (`Blocked:` + `Hint:`); a `failed` gate also ends the current session, while `blocked` only rejects the operation. 3 observe events (`config`, `event`, `dispose`) log and continue.
 - The wrapper ↔ script contract is the `owflow-hooks/1` JSON envelope; mutations are restricted to a per-event whitelist.
-- Visibility: startup `[owflow]` banner snapshot, `owflow-hooks` CLI, and the TUI `/owflow:show-hooks` command (verification-pending) — all "effective after next restart". Hooks load once, so restart OpenCode to reload.
+- Visibility: startup `[owflow]` banner snapshot, `owflow-hooks` CLI, and the always-on TUI **Active hooks** right-sidebar panel — all "effective after next restart". Hooks load once, so restart OpenCode to reload.
 - `OWFLOW_HOOKS_DISABLED=1` bypasses user hooks (built-ins stay active). Baseline trust: scripts are host-project code run with the user's full privileges — inherited environment, no name/path validation, no timeouts, no output caps, no audit trail (the git-hooks/husky convention); the bypass switch is the only control.
 - Full operator reference: @.owflow/docs/project/user-hooks.md
 

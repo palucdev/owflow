@@ -1,8 +1,11 @@
-import { interpreterLabel } from "./registry.js";
 import type {
   HookRegistryEntry,
-  HookValidationFailure,
-} from "./registry.js";
+  HookReportInput,
+  HookReportRow,
+} from "../types/hook-types.js";
+import { interpreterLabel } from "./registry.js";
+
+export type { HookReportInput, HookReportRow };
 
 /**
  * One row model and three pure renderers — startup snapshot (banner), table
@@ -22,25 +25,6 @@ export const TABLE_COLUMNS = [
   "interpreter",
   "status",
 ] as const;
-
-export interface HookReportRow {
-  readonly path: string;
-  readonly event: string;
-  readonly class: string;
-  readonly interpreter: string;
-  readonly status: string;
-}
-
-/**
- * Accepts a live registry snapshot (`entries` only) or a CLI would-load scan
- * (digest entries normalized through `buildRegistry`, plus its `failures`);
- * `bypassed` renders the disabled-scan state.
- */
-export interface HookReportInput {
-  readonly entries: readonly HookRegistryEntry[];
-  readonly failures?: readonly HookValidationFailure[];
-  readonly bypassed?: boolean;
-}
 
 const STATUS_LABELS: Readonly<Record<HookRegistryEntry["status"], string>> = {
   registered: "registered",

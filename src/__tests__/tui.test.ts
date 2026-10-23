@@ -1,26 +1,31 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { TuiPluginApi, TuiToast } from "@opencode-ai/plugin/tui";
-import tuiModule, { workspaceUnavailableToast } from "../tui.js";
+import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
+import tuiModule, {
+  activeHookNames,
+  buildActiveHooksView,
+  registerActiveHooksSidebar,
+} from "../tui.js";
 import { scanHooks } from "../hooks-wrapper/registry.js";
-import {
-  EFFECTIVE_AFTER_RESTART,
-  renderTable,
-} from "../hooks-wrapper/report.js";
+import { HookDigestMode } from "../types/hook-types.js";
 
-interface FakeLayerCommand {
-  readonly name: string;
-  readonly title: string;
-  readonly namespace: string;
-  readonly slashName: string;
-  readonly run: () => void;
+interface FakeNode {
+  readonly tag: string;
+  readonly props: Record<string, unknown>;
+  readonly children: (FakeNode | string)[];
 }
 
-interface FakeLayer {
-  readonly commands: readonly FakeLayerCommand[];
-  readonly bindings: readonly unknown[];
+interface FakeSlotRegistration {
+  readonly order?: number;
+  readonly slots: Record<string, (ctx: unknown, props: unknown) => unknown>;
+}
+
+interface FakeApi {
+  readonly api: TuiPluginApi;
+  readonly slots: FakeSlotRegistration[];
+  readonly accessed: string[];
 }
 
 const makeWorkspace = (): { root: string; hooksDir: string } => {
@@ -33,28 +38,24 @@ const makeWorkspace = (): { root: string; hooksDir: string } => {
 
 const tempDirs: string[] = [];
 
-interface FakeApi {
-  readonly api: TuiPluginApi;
-  readonly layers: FakeLayer[];
-  readonly toasts: TuiToast[];
-  readonly accessed: string[];
-}
+const slotContext = () => ({
+  theme: {
+    current: { text: "text-color", textMuted: "muted-color" },
+  },
+});
 
-const makeFakeApi = (directory: string, record = true): FakeApi => {
-  const layers: FakeLayer[] = [];
-  const toasts: TuiToast[] = [];
+const makeFakeApi = (directory: string): FakeApi => {
+  const slots: FakeSlotRegistration[] = [];
   const accessed: string[] = [];
   const base = {
-    keymap: {
-      registerLayer: (layer: FakeLayer): (() => void) => {
-        layers.push(layer);
-        return () => {};
+    slots: {
+      register: (registration: FakeSlotRegistration): string => {
+        slots.push(registration);
+        return "owflow:0";
       },
     },
-    ui: {
-      toast: (toast: TuiToast): void => {
-        toasts.push(toast);
-      },
+    theme: {
+      current: { text: "text-color", textMuted: "muted-color" },
     },
     state: { path: { directory } },
     client: new Proxy(
@@ -68,15 +69,43 @@ const makeFakeApi = (directory: string, record = true): FakeApi => {
   };
   const api = new Proxy(base, {
     get(target, property, receiver) {
-      if (record) accessed.push(String(property));
+      accessed.push(String(property));
       return Reflect.get(target, property, receiver);
     },
   }) as unknown as TuiPluginApi;
-  return { api, layers, toasts, accessed };
+  return { api, slots, accessed };
+};
+
+const makeSolid = (): {
+  readonly runtime: {
+    createElement: (tag: string) => FakeNode;
+    insert: (parent: unknown, child: unknown) => void;
+    setProp: (node: unknown, name: string, value: unknown) => void;
+  };
+  readonly roots: FakeNode[];
+} => {
+  const roots: FakeNode[] = [];
+  return {
+    roots,
+    runtime: {
+      createElement: (tag: string): FakeNode => {
+        const node: FakeNode = { tag, props: {}, children: [] };
+        if (tag === "box") roots.push(node);
+        return node;
+      },
+      insert: (parent: unknown, child: unknown): void => {
+        (parent as FakeNode).children.push(child as FakeNode | string);
+      },
+      setProp: (node: unknown, name: string, value: unknown): void => {
+        (node as FakeNode).props[name] = value;
+      },
+    },
+  };
 };
 
 describe("owflow TUI plugin", () => {
   afterEach(() => {
+    mock.restore();
     for (const dir of tempDirs.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -88,63 +117,99 @@ describe("owflow TUI plugin", () => {
     expect("server" in tuiModule).toBe(false);
   });
 
-  test("should register one palette command whose run renders the report through api.ui.toast", async () => {
-    const { root } = makeWorkspace();
-    const { api, layers, toasts } = makeFakeApi(root);
-
-    await tuiModule.tui(api);
-
-    expect(layers).toHaveLength(1);
-    const layer = layers[0]!;
-    expect(layer.bindings).toEqual([]);
-    expect(layer.commands).toHaveLength(1);
-    const command = layer.commands[0]!;
-    expect(command.name).toBe("show-hooks");
-    expect(command.namespace).toBe("palette");
-    expect(command.slashName).toBe("owflow:show-hooks");
-    expect(typeof command.run).toBe("function");
-    expect(toasts).toHaveLength(0);
-
-    command.run();
-
-    expect(toasts).toHaveLength(1);
-  });
-
-  test("should toast exactly the shared report table for the same would-load scan", async () => {
+  test("should list loaded hook names without extensions in registry order", () => {
     const { root, hooksDir } = makeWorkspace();
     fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const { api, layers, toasts } = makeFakeApi(root);
+    fs.writeFileSync(path.join(hooksDir, "config.ts"), "");
 
-    await tuiModule.tui(api);
-    layers[0]!.commands[0]!.run();
-
-    const scan = scanHooks(hooksDir, { mode: "report" });
-    const expected = renderTable({
-      entries: scan.registry.entries,
-      failures: scan.failures,
+    const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report });
+    expect(activeHookNames(scan.registry.entries)).toEqual([
+      "config",
+      "tool-execute-before",
+    ]);
+    expect(buildActiveHooksView(root)).toEqual({
+      title: "Active hooks:",
+      names: ["config", "tool-execute-before"],
     });
-
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0]!.message).toBe(expected);
-    expect(toasts[0]!.message).toContain(EFFECTIVE_AFTER_RESTART);
   });
 
-  test("should touch only keymap, state.path, and ui — never client, session, or model surfaces", async () => {
+  test("should render an always-on right sidebar panel with one line per hook", async () => {
+    const { root, hooksDir } = makeWorkspace();
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+    const { api, slots } = makeFakeApi(root);
+    const { runtime, roots } = makeSolid();
+
+    const registered = await registerActiveHooksSidebar(
+      api,
+      root,
+      async () => runtime,
+    );
+
+    expect(registered).toBe(true);
+    expect(slots).toHaveLength(1);
+    expect(slots[0]!.order).toBe(50);
+    expect(Object.keys(slots[0]!.slots)).toEqual(["sidebar_content"]);
+
+    const rendered = slots[0]!.slots.sidebar_content!(slotContext(), {}) as FakeNode;
+    expect(rendered).toBe(roots[0]!);
+    expect(rendered.tag).toBe("box");
+    expect(rendered.props.flexDirection).toBe("column");
+    expect(rendered.children).toHaveLength(2);
+
+    const [title, hook] = rendered.children as FakeNode[];
+    expect(title!.tag).toBe("text");
+    expect(title!.children).toEqual(["Active hooks:"]);
+    expect(title!.props.fg).toBe("muted-color");
+    expect(hook!.children).toEqual(["- tool-execute-before"]);
+    expect(hook!.props.fg).toBe("text-color");
+  });
+
+  test("should show '(none)' when no hooks are registered", async () => {
     const { root } = makeWorkspace();
-    const { api, layers, accessed } = makeFakeApi(root);
+    const { api, slots } = makeFakeApi(root);
+    const { runtime } = makeSolid();
 
-    await tuiModule.tui(api);
-    layers[0]!.commands[0]!.run();
+    await registerActiveHooksSidebar(api, root, async () => runtime);
+    const rendered = slots[0]!.slots.sidebar_content!(slotContext(), {}) as FakeNode;
 
-    expect([...new Set(accessed)].sort()).toEqual(["keymap", "state", "ui"]);
+    expect((rendered.children[1] as FakeNode).children).toEqual(["- (none)"]);
   });
 
-  test("should warn when the workspace directory is unavailable", async () => {
-    const { api, layers, toasts } = makeFakeApi("");
+  test("should register the sidebar through the host Solid runtime at activation", async () => {
+    const { root, hooksDir } = makeWorkspace();
+    fs.writeFileSync(path.join(hooksDir, "chat-message.ts"), "");
+    const { api, slots } = makeFakeApi(root);
+    const { runtime } = makeSolid();
+    mock.module("@opentui/solid", () => runtime);
 
     await tuiModule.tui(api);
-    layers[0]!.commands[0]!.run();
 
-    expect(toasts).toEqual([workspaceUnavailableToast()]);
+    expect(slots).toHaveLength(1);
+    expect(Object.keys(slots[0]!.slots)).toEqual(["sidebar_content"]);
+  });
+
+  test("should touch only the sidebar slot — never client, session, or model surfaces", async () => {
+    const { root } = makeWorkspace();
+    const { api, slots, accessed } = makeFakeApi(root);
+    const { runtime } = makeSolid();
+
+    await registerActiveHooksSidebar(api, root, async () => runtime);
+    slots[0]!.slots.sidebar_content!(slotContext(), {});
+
+    expect([...new Set(accessed)].sort()).toEqual(["slots"]);
+  });
+
+  test("should warn and skip registration when the workspace directory is unavailable", async () => {
+    const { api, slots } = makeFakeApi("");
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      await tuiModule.tui(api);
+
+      expect(slots).toHaveLength(0);
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

@@ -1,116 +1,73 @@
 /**
- * Hook registry: shared vocabulary, naming/extension tables, interpreter
- * resolution, strict directory digest, and the unified `scanHooks` scan.
- *
- * Every module under `src/hooks-wrapper/` stays platform-agnostic by contract
- * (R11.1): no host-framework imports or identifiers anywhere in these modules.
+ * Hook registry: naming/extension tables, interpreter resolution, strict
+ * directory digest, and the unified `scanHooks` scan. The shared model and
+ * event table live in `src/types/hook-types.ts`; every module under
+ * `src/hooks-wrapper/` stays platform-agnostic by contract.
  */
 
 import fs from "node:fs";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 
-/* ── Shared vocabulary ────────────────────────────────────────────────────── */
+import {
+  DISPATCHABLE_EVENTS,
+  DISPATCHABLE_EVENT_NAMES,
+  EXCLUDED_EVENT_NAMES,
+  HookDigestMode,
+} from "../types/hook-types.js";
+import type {
+  DispatchableEvent,
+  EnvelopeContext,
+  EnvelopeResult,
+  HookClass,
+  HookDerivation,
+  HookDigest,
+  HookEntryStatus,
+  HookExtension,
+  HookRegistry,
+  HookRegistryEntry,
+  HookScan,
+  HookScanOptions,
+  HookScript,
+  HookValidationFailure,
+  InterpreterAvailability,
+  InterpreterResolution,
+  Outcome,
+  OutcomeStatus,
+  RunnerClass,
+  WhichInterpreter,
+} from "../types/hook-types.js";
+import { hooksLocationLabel } from "../utils/workflow-paths.js";
+import { compareStrings } from "./shared.js";
 
-export type HookClass = "gate" | "observe";
-
-export type RunnerClass = "in-process" | "subprocess";
-
-export type HookExtension = ".ts" | ".js" | ".sh" | ".ps1";
-
-export type DispatchableEvent =
-  | "tool.execute.before"
-  | "tool.execute.after"
-  | "tool.definition"
-  | "chat.message"
-  | "chat.params"
-  | "chat.headers"
-  | "command.execute.before"
-  | "shell.env"
-  | "experimental.chat.messages.transform"
-  | "experimental.chat.system.transform"
-  | "experimental.session.compacting"
-  | "experimental.compaction.autocontinue"
-  | "experimental.text.complete"
-  | "config"
-  | "event"
-  | "dispose";
-
-export type HookEntryStatus =
-  | "registered"
-  | "will-fail-closed"
-  | "skipped-no-interpreter";
-
-export interface InterpreterResolution {
-  readonly resolved?: string;
-  /** First candidate name, recorded when nothing resolved (R2.2 report labels). */
-  readonly expected?: string;
-  readonly available: boolean;
-}
-
-export type InterpreterAvailability = Readonly<
-  Record<HookExtension, InterpreterResolution>
->;
-
-export interface HookScript {
-  readonly path: string;
-  readonly stem: string;
-  readonly event: DispatchableEvent;
-  readonly class: HookClass;
-  readonly runnerClass: RunnerClass;
-  readonly extension: HookExtension;
-}
-
-export interface HookValidationFailure {
-  readonly path: string;
-  readonly error: string;
-}
-
-export type HookDigestMode = "throw" | "report";
-
-export interface HookDigest {
-  readonly entries: readonly HookScript[];
-  readonly failures: readonly HookValidationFailure[];
-}
-
-export interface HookRegistryEntry {
-  readonly path: string;
-  readonly event: DispatchableEvent;
-  readonly class: HookClass;
-  readonly runnerClass: RunnerClass;
-  readonly interpreter: InterpreterResolution;
-  readonly status: HookEntryStatus;
-}
-
-export interface HookRegistry {
-  readonly entries: readonly HookRegistryEntry[];
-  readonly byEvent: Readonly<
-    Record<DispatchableEvent, readonly HookRegistryEntry[]>
-  >;
-}
-
-export type OutcomeStatus = "ok" | "blocked" | "failed";
-
-export interface Outcome {
-  readonly status: OutcomeStatus;
-  readonly reason?: string;
-  readonly mutations?: Record<string, unknown>;
-}
-
-export interface EnvelopeContext {
-  readonly protocol: "owflow-hooks/1";
-  readonly event: DispatchableEvent;
-  readonly class: HookClass;
-  readonly session?: { readonly sessionID: string };
-  readonly context: Record<string, unknown>;
-}
-
-export interface EnvelopeResult {
-  readonly protocol: "owflow-hooks/1";
-  readonly status: OutcomeStatus;
-  readonly reason?: string;
-  readonly mutations?: Record<string, unknown>;
-}
+export {
+  DISPATCHABLE_EVENTS,
+  DISPATCHABLE_EVENT_NAMES,
+  EXCLUDED_EVENT_NAMES,
+  HookDigestMode,
+};
+export type {
+  DispatchableEvent,
+  EnvelopeContext,
+  EnvelopeResult,
+  HookClass,
+  HookDerivation,
+  HookDigest,
+  HookEntryStatus,
+  HookExtension,
+  HookRegistry,
+  HookRegistryEntry,
+  HookScan,
+  HookScanOptions,
+  HookScript,
+  HookValidationFailure,
+  InterpreterAvailability,
+  InterpreterResolution,
+  Outcome,
+  OutcomeStatus,
+  RunnerClass,
+  WhichInterpreter,
+};
 
 /* ── Naming, extensions, and the event table ──────────────────────────────── */
 
@@ -124,7 +81,7 @@ export const HOOK_EXTENSIONS: readonly HookExtension[] = [
   ".ps1",
 ];
 
-/** Fixed rank decides same-stem collisions; both entries register and run in rank order (A4). */
+/** Fixed rank keeps the report order deterministic (one format per hook name). */
 export const EXTENSION_RANK: Readonly<Record<HookExtension, number>> = {
   ".ts": 0,
   ".js": 1,
@@ -143,51 +100,8 @@ export const runnerClassForExtension = (
 export const toDottedEvent = (stem: string): string =>
   stem.split("-").join(".");
 
-/** The one event table shared by every surface, so classes agree by construction (R6.1). */
-export const DISPATCHABLE_EVENTS: Readonly<
-  Record<DispatchableEvent, HookClass>
-> = {
-  "tool.execute.before": "gate",
-  "tool.execute.after": "gate",
-  "tool.definition": "gate",
-  "chat.message": "gate",
-  "chat.params": "gate",
-  "chat.headers": "gate",
-  "command.execute.before": "gate",
-  "shell.env": "gate",
-  "experimental.chat.messages.transform": "gate",
-  "experimental.chat.system.transform": "gate",
-  "experimental.session.compacting": "gate",
-  "experimental.compaction.autocontinue": "gate",
-  "experimental.text.complete": "gate",
-  config: "observe",
-  event: "observe",
-  dispose: "observe",
-};
-
-export const DISPATCHABLE_EVENT_NAMES: readonly DispatchableEvent[] =
-  Object.keys(DISPATCHABLE_EVENTS) as DispatchableEvent[];
-
-/** Names that must never derive to a dispatchable event (R6.2). */
-export const EXCLUDED_EVENT_NAMES: readonly string[] = [
-  "permission.ask",
-  "tool",
-  "auth",
-  "provider",
-  "experimental.provider.small_model",
-];
-
 export const isExcludedEvent = (event: string): boolean =>
   EXCLUDED_EVENT_NAMES.includes(event);
-
-export type HookDerivation =
-  | {
-      readonly kind: "dispatchable";
-      readonly event: DispatchableEvent;
-      readonly class: HookClass;
-    }
-  | { readonly kind: "excluded" }
-  | { readonly kind: "unknown"; readonly event: string };
 
 /**
  * Classifies a stem without filesystem access. Excluded names return a marker
@@ -213,11 +127,6 @@ interface HookOrderKey {
   readonly extension: HookExtension;
 }
 
-// Plain code-unit comparison keeps ordering identical across locales; the
-// registry, CLI, and TUI agree because they all call this comparator.
-const compareStrings = (a: string, b: string): number =>
-  a < b ? -1 : a > b ? 1 : 0;
-
 const compareHookEntries = (a: HookOrderKey, b: HookOrderKey): number => {
   const byEvent = compareStrings(a.event, b.event);
   if (byEvent !== 0) return byEvent;
@@ -226,10 +135,7 @@ const compareHookEntries = (a: HookOrderKey, b: HookOrderKey): number => {
 
 /* ── Interpreter resolution ───────────────────────────────────────────────── */
 
-/** Injectable `Bun.which` seam; `null` means the executable is not on PATH. */
-export type WhichInterpreter = (command: string) => string | null;
-
-/** Display name shared by report rows and gate hints (R2.2). */
+/** Display name shared by report rows and gate hints. */
 export const interpreterName = (interpreter: InterpreterResolution): string =>
   interpreter.resolved ?? interpreter.expected ?? "runtime";
 
@@ -252,9 +158,9 @@ const firstAvailable = (
 
 /**
  * Resolves interpreters once at init. A missing executable is only an
- * availability flag — never a registration error (R3.2, R5.3). `.ts`/`.js`
- * run in-process, `.sh` needs `bash`, and `.ps1` probes `pwsh` first, then the
- * Windows PowerShell fallback.
+ * availability flag — never a registration error. `.ts`/`.js` run in-process,
+ * `.sh` needs `bash`, and `.ps1` probes `pwsh` first, then the Windows
+ * PowerShell fallback.
  */
 export const resolveInterpreterAvailability = (
   which: WhichInterpreter = Bun.which,
@@ -282,9 +188,6 @@ const EXPECTED_EXTENSIONS = ".ts, .js, .sh, or .ps1";
 const RECOVERY_HINT =
   "Hint: fix or remove the invalid file(s) and restart OpenCode. The owflow plugin — including the destructive-command guard — has been dropped until the hooks directory validates. To start without user hooks, set OWFLOW_HOOKS_DISABLED=1.";
 
-const comparePaths = (a: string, b: string): number =>
-  a < b ? -1 : a > b ? 1 : 0;
-
 /** The dirent (not stat) check is deliberate: symlinks never count as regular files. */
 const validateEntry = (
   dirent: Dirent,
@@ -293,7 +196,7 @@ const validateEntry = (
   if (!dirent.isFile()) {
     return {
       path: entryPath,
-      error: "not a regular file (only hook scripts belong in .owflow/hooks/)",
+      error: `not a regular file (only hook scripts belong in ${hooksLocationLabel}/)`,
     };
   }
   const extension = path.extname(dirent.name);
@@ -333,49 +236,84 @@ const validateEntry = (
   };
 };
 
+const duplicateStemFailures = (
+  entries: readonly HookScript[],
+): { readonly kept: HookScript[]; readonly failures: HookValidationFailure[] } => {
+  const byStem = new Map<string, HookScript[]>();
+  for (const entry of entries) {
+    const group = byStem.get(entry.stem);
+    if (group === undefined) byStem.set(entry.stem, [entry]);
+    else group.push(entry);
+  }
+
+  const kept: HookScript[] = [];
+  const failures: HookValidationFailure[] = [];
+  for (const group of byStem.values()) {
+    if (group.length === 1) {
+      kept.push(group[0]!);
+      continue;
+    }
+    const formats = group.map((entry) => path.basename(entry.path)).join(", ");
+    for (const entry of group) {
+      failures.push({
+        path: entry.path,
+        error: `hook name "${entry.stem}" is provided by multiple files (${formats}); define it in exactly one format`,
+      });
+    }
+  }
+  return { kept, failures };
+};
+
 const formatFatal = (failures: readonly HookValidationFailure[]): string => {
   const count =
     failures.length === 1 ? "1 invalid entry" : `${failures.length} invalid entries`;
   const rows = failures
     .map((failure) => `  - ${failure.path}: ${failure.error}`)
     .join("\n");
-  return [`[owflow] ${count} in .owflow/hooks/`, rows, RECOVERY_HINT].join(
+  return [`[owflow] ${count} in ${hooksLocationLabel}/`, rows, RECOVERY_HINT].join(
     "\n",
   );
 };
 
 /**
  * Enumerates one level of `hooksDir` and validates every entry. One
- * implementation serves both callers: `throw` is the fail-fast registry path,
- * `report` collects every violation as a row for the CLI. Entry order is
- * owned by `buildRegistry`; only failures are sorted here for stable reports.
+ * implementation serves both callers: `FailFast` is the fail-fast registry
+ * path, `Report` collects every violation as a row for the CLI/TUI. Entry
+ * order is owned by `buildRegistry`; only failures are sorted here for stable
+ * reports.
  */
 export const digest = (
   hooksDir: string,
-  mode: HookDigestMode = "throw",
+  mode: HookDigestMode = HookDigestMode.FailFast,
 ): HookDigest => {
   if (!fs.existsSync(hooksDir)) return { entries: [], failures: [] };
   if (!fs.statSync(hooksDir).isDirectory()) {
     const failures = [
-      { path: hooksDir, error: "the hooks anchor exists but is not a directory" },
+      {
+        path: hooksDir,
+        error: `the hooks anchor exists but is not a directory (${hooksLocationLabel})`,
+      },
     ];
-    if (mode === "throw") throw new Error(formatFatal(failures));
+    if (mode === HookDigestMode.FailFast) throw new Error(formatFatal(failures));
     return { entries: [], failures };
   }
 
-  const entries: HookScript[] = [];
+  const validated: HookScript[] = [];
   const failures: HookValidationFailure[] = [];
   for (const dirent of fs.readdirSync(hooksDir, { withFileTypes: true })) {
     const entryPath = path.join(hooksDir, dirent.name);
-    const validated = validateEntry(dirent, entryPath);
-    if ("error" in validated) failures.push(validated);
-    else entries.push(validated);
+    const validatedEntry = validateEntry(dirent, entryPath);
+    if ("error" in validatedEntry) failures.push(validatedEntry);
+    else validated.push(validatedEntry);
   }
 
-  failures.sort((a, b) => comparePaths(a.path, b.path));
-  if (mode === "throw" && failures.length > 0)
+  const duplicates = duplicateStemFailures(validated);
+  failures.push(...duplicates.failures);
+
+  failures.sort((a, b) => compareStrings(a.path, b.path));
+  if (mode === HookDigestMode.FailFast && failures.length > 0)
     throw new Error(formatFatal(failures));
-  return { entries, failures };
+  return { entries: duplicates.kept, failures };
 };
 
 /* ── Registry builder and unified scan ────────────────────────────────────── */
@@ -393,7 +331,7 @@ const statusFor = (
 /**
  * Builds the single source of truth for dispatch and every report surface.
  * Entries are ordered once by `(event, extension rank)` so all surfaces agree
- * by construction (R2.2); nothing is persisted.
+ * by construction; nothing is persisted.
  */
 export const buildRegistry = (
   scripts: readonly HookScript[],
@@ -420,17 +358,6 @@ export const buildRegistry = (
   return { entries, byEvent };
 };
 
-export interface HookScanOptions {
-  /** `throw` (default) is the fail-fast startup path; `report` collects violations. */
-  readonly mode?: HookDigestMode;
-  readonly which?: WhichInterpreter;
-}
-
-export interface HookScan {
-  readonly registry: HookRegistry;
-  readonly failures: readonly HookValidationFailure[];
-}
-
 /**
  * One-call scan shared by the startup, CLI, and TUI surfaces: digest the
  * directory, resolve interpreters, and build the registry. Callers stop
@@ -440,9 +367,15 @@ export const scanHooks = (
   hooksDir: string,
   options: HookScanOptions = {},
 ): HookScan => {
-  const { entries, failures } = digest(hooksDir, options.mode ?? "throw");
+  const { entries, failures } = digest(
+    hooksDir,
+    options.mode ?? HookDigestMode.FailFast,
+  );
   return {
-    registry: buildRegistry(entries, resolveInterpreterAvailability(options.which)),
+    registry: buildRegistry(
+      entries,
+      resolveInterpreterAvailability(options.which),
+    ),
     failures,
   };
 };

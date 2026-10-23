@@ -58,13 +58,16 @@ const registryOf = (entries: readonly HookRegistryEntry[]): HookRegistry => {
 interface Harness {
   readonly dispatch: Dispatcher;
   readonly calls: Array<{ entry: HookRegistryEntry; envelope: EnvelopeContext }>;
+  readonly endedSessions: string[];
 }
 
 const harness = (
   registry: HookRegistry,
   outcomes: readonly (Outcome | Error)[],
+  endSession?: (sessionID: string) => Promise<void> | void,
 ): Harness => {
   const calls: Harness["calls"] = [];
+  const endedSessions: string[] = [];
   let index = 0;
   const run = async (
     hookEntry: HookRegistryEntry,
@@ -75,7 +78,20 @@ const harness = (
     if (next instanceof Error) throw next;
     return next ?? { status: "ok" };
   };
-  return { dispatch: createDispatcher({ run, registry }), calls };
+  return {
+    dispatch: createDispatcher({
+      run,
+      registry,
+      endSession:
+        endSession === undefined
+          ? (sessionID) => {
+              endedSessions.push(sessionID);
+            }
+          : endSession,
+    }),
+    calls,
+    endedSessions,
+  };
 };
 
 const rejectionMessage = async (
@@ -191,6 +207,56 @@ describe("gate translation", () => {
     expect(thrownMessage).toContain("runner exploded");
     expect(thrownMessage).toContain("Hint:");
   });
+
+  test("should end the current session for a failed gate but not for a blocked gate", async () => {
+    const failed = harness(registryOf([entry()]), [
+      { status: "failed", reason: "missing jq" },
+    ]);
+    await rejectionMessage(
+      failed.dispatch,
+      "tool.execute.before",
+      { tool: "bash", sessionID: "ses_failed" },
+      { args: {} },
+    );
+    expect(failed.endedSessions).toEqual(["ses_failed"]);
+
+    const blocked = harness(registryOf([entry()]), [
+      { status: "blocked", reason: "policy says no" },
+    ]);
+    await rejectionMessage(
+      blocked.dispatch,
+      "tool.execute.before",
+      { tool: "bash", sessionID: "ses_blocked" },
+      { args: {} },
+    );
+    expect(blocked.endedSessions).toEqual([]);
+  });
+
+  test("should warn and still reject when ending the session fails", async () => {
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const failed = harness(
+        registryOf([entry()]),
+        [{ status: "failed", reason: "missing jq" }],
+        async () => {
+          throw new Error("abort endpoint down");
+        },
+      );
+      const message = await rejectionMessage(
+        failed.dispatch,
+        "tool.execute.before",
+        { tool: "bash", sessionID: "ses_failed" },
+        { args: {} },
+      );
+
+      expect(message).toContain("missing jq");
+      const warnings = warningTexts(warnSpy.mock.calls);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("abort endpoint down");
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
 });
 
 describe("observe translation", () => {
@@ -277,12 +343,13 @@ describe("missing interpreter at fire", () => {
       const message = await rejectionMessage(
         execution.dispatch,
         "tool.execute.before",
-        { tool: "bash" },
+        { tool: "bash", sessionID: "ses_missing" },
         { args: {} },
       );
       expect(message.startsWith("Blocked:")).toBe(true);
       expect(message).toContain("bash");
       expect(message).toContain("Hint:");
+      expect(execution.endedSessions).toEqual(["ses_missing"]);
 
       await expect(execution.dispatch("config", {})).resolves.toBeUndefined();
       const warnings = warningTexts(warnSpy.mock.calls);

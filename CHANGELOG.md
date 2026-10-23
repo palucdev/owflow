@@ -9,24 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **User hooks wrapper** — host projects can drop scripts into `.owflow/hooks/` and have owflow dispatch them through its lifecycle handlers, no plugin code required. The kebab-case filename stem maps mechanically to the dotted event name (`tool-execute-before.sh` → `tool.execute.before`), and the extension selects the runner: `.ts`/`.js` in-process via `import()`, `.sh` via `bash`, `.ps1` via `pwsh`/`powershell.exe` (PowerShell is verification-pending, see Notes).
-- Uniform versioned `owflow-hooks/1` JSON envelope (stdin/stdout) for every script type, with a per-event mutation whitelist.
-- Per-event gate/observe semantics: 13 gate events translate any non-`ok` outcome to a fail-closed `Blocked:` error with an actionable `Hint:`; the 3 observe events (`config`, `event`, `dispose`) log with the `[owflow]` prefix and never break the session.
+- **User hooks wrapper** — host projects can drop scripts into `.owflow/hooks/` and have owflow dispatch them through its lifecycle handlers, no plugin code required. The kebab-case filename stem maps mechanically to the dotted event name (`tool-execute-before.sh` → `tool.execute.before`), and the extension selects the runner: `.ts`/`.js` in-process via `import()`, `.sh` via `bash`, `.ps1` via `pwsh`/`powershell.exe`.
+- Uniform versioned `owflow-hooks/1` JSON envelope (stdin/stdout) for every script type, with a per-event mutation whitelist derived from the host `Hooks` output types.
+- Per-event gate/observe semantics: 13 gate events translate any non-`ok` outcome to a fail-closed `Blocked:` error with an actionable `Hint:`; a `failed` gate also ends the current session, while `blocked` only rejects the operation. The 3 observe events (`config`, `event`, `dispose`) log with the `[owflow]` prefix and never break the session.
 - `owflow-hooks` CLI (new bin) — standalone would-load scan of `./.owflow/hooks/` with a table default and `--json` output; exits 1 when invalid entries are found. Requires `bun` on `PATH`.
-- `/owflow:show-hooks` TUI command (new `./tui` entry) — no-model visibility in the palette as a toast; verification-pending (see Notes).
+- **TUI Active hooks panel** (new `./tui` entry) — an always-on right-hand sidebar panel listing `Active hooks:` and one `- <name>` line per loaded hook, with no command, session, message, or model turn.
 - `OWFLOW_HOOKS_DISABLED=1` bypass — user hooks off, the two built-in hooks (destructive-command guard, post-compaction reminder) stay active.
 
 ### Changed
 
 - `package.json`: new `owflow-hooks` bin and an `exports` map (`"."` server entry, `"./tui"` TUI entry).
+- Hook model centralized: event names are `HookEvent` enum values, all hook types/contracts live in `src/types/hook-types.ts`, and `.owflow` directory names live in `src/utils/workflow-paths.ts` and are referenced across the plugin.
+- Server hook wiring moved out of `src/index.ts` into `src/hooks/plugin-hooks.ts`.
 - Documentation: README "User Hooks" section, `.owflow/docs/project/user-hooks.md` reference page (INDEX-registered), and an AGENTS.md Hooks section covering the dispatch layer.
+
+### Fixed
+
+- **One format per hook name** — a duplicate stem (for example `check.ts` plus `check.sh`) is now a fatal digest error; each hook name registers exactly once.
+- **Failed gates stop the session** — a gate returning `failed` (or missing its interpreter) now aborts the current session in addition to rejecting the operation.
+- **Persistent TUI visibility** — the one-shot toast was replaced by the always-on sidebar panel, so loaded hooks are visible without invoking a command.
 
 ### Notes
 
-- **Strict digest** — `.owflow/hooks/` may contain only hook scripts: any other entry (directory, `.md` readme, dotfile) is a fatal registration error that drops the entire owflow plugin, including the destructive-command guard. Notes and fixtures belong elsewhere.
+- **Strict digest** — `.owflow/hooks/` may contain only hook scripts, one file per hook name: any other entry (directory, `.md` readme, dotfile) or duplicate name is a fatal registration error that drops the entire owflow plugin, including the destructive-command guard. Notes and fixtures belong elsewhere.
 - **Baseline trust** — scripts are the host project's own code, executed with the user's full privileges: inherited environment, no name/path validation, no timeouts, no output caps, no audit trail (the git-hooks/husky convention); the bypass switch is the only control.
 - Hooks are digested once at plugin startup — **restart OpenCode to reload** (there is no watcher). Registration is fail-fast; a broken gate hook blocks the operation when it fires and is never silently skipped.
-- **Verification-pending** — PowerShell (`.ps1`) support (S10 parity spike) and the TUI command (S11 in-UI pass) ship implemented but documented as verification-pending; the CLI and the startup banner are the unconditional visibility fallbacks.
+- PowerShell (`.ps1`) parity is verified against the same subprocess contract as `.sh`; the TUI panel is covered by the TUI test suite. The CLI and the startup banner remain the unconditional visibility fallbacks outside the TUI.
 - Zero new runtime dependencies; the execution core is deliberately platform-agnostic behind an internal `run(entry, envelope) → Outcome` seam, prepared for the staged OpenCode v2 port.
 
 ## [0.6.1] - 2026-10-08

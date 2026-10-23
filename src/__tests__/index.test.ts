@@ -398,6 +398,38 @@ describe("OwflowPlugin index", () => {
       });
     });
 
+    test("should abort the current session when a gate hook reports failed", async () => {
+      writeHookFile(
+        "tool-execute-before.sh",
+        '#!/bin/bash\ncat >/dev/null\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"failed","reason":"gate broke"}\'\n',
+      );
+      const aborts: Array<{ path: { id: string } }> = [];
+      const pluginInput = {
+        ...mockPluginInput(tmpDir),
+        client: {
+          session: {
+            abort: async (options: { path: { id: string } }) => {
+              aborts.push(options);
+            },
+          },
+        },
+      };
+
+      await withHooksEnabled(async () => {
+        const plugin = await OwflowPlugin(pluginInput);
+        const input = {
+          tool: "bash",
+          sessionID: "sess-failed-gate",
+          callID: "call-failed-gate",
+        };
+
+        await expect(
+          plugin["tool.execute.before"]!(input, { args: { command: "ls" } }),
+        ).rejects.toThrow(/gate broke/);
+        expect(aborts).toEqual([{ path: { id: "sess-failed-gate" } }]);
+      });
+    });
+
     test("should run the destructive guard before dispatching tool.execute.before", async () => {
       const order: string[] = [];
       const guardSpy = spyOn(

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { runShowHooks } from "../../cli/show-hooks.js";
 import { scanHooks } from "../../hooks-wrapper/registry.js";
+import { HookDigestMode } from "../../types/hook-types.js";
 import type { HookReportInput } from "../../hooks-wrapper/report.js";
 import {
   EFFECTIVE_AFTER_RESTART,
@@ -120,7 +121,7 @@ describe("owflow-hooks CLI", () => {
       log: jsonLog,
     });
 
-    const scan = scanHooks(hooksDir, { mode: "report" });
+    const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report });
     const input: HookReportInput = {
       entries: scan.registry.entries,
       failures: scan.failures,

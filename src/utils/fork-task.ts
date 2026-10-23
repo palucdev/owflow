@@ -1,10 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "yaml";
+
+import {
+  RESEARCH_DIRECTORY_NAME,
+  TASKS_DIRECTORY_NAME,
+  workflowRelativePath,
+} from "./workflow-paths.js";
 import { parseYamlFile } from "./yaml-structure.js";
 
 export interface ForkTaskInput {
-  /** Root of all tasks, e.g. ".owflow/tasks" */
+  /** Root of all tasks, e.g. the value of `workflowRelativePath(TASKS_DIRECTORY_NAME)`. */
   taskRoot: string;
   /** Source task: absolute/relative path or a bare identifier resolved under <taskRoot>/research/ */
   source: string;
@@ -51,12 +57,12 @@ export const forkTask = (input: ForkTaskInput): ForkTaskResult => {
   ].find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory());
   if (sourceDir === undefined) {
     throw new Error(
-      `INVALID_SOURCE: no task directory at ${input.source}. Hint: pass the task path or a directory name under .owflow/tasks/research/.`,
+      `INVALID_SOURCE: no task directory at ${input.source}. Hint: pass the task path or a directory name under ${workflowRelativePath(TASKS_DIRECTORY_NAME, RESEARCH_DIRECTORY_NAME)}/.`,
     );
   }
   if (!sourceDir.startsWith(researchRoot + path.sep)) {
     throw new Error(
-      `INVALID_SOURCE: ${input.source} is not a research task directory under .owflow/tasks/research/.`,
+      `INVALID_SOURCE: ${input.source} is not a research task directory under ${workflowRelativePath(TASKS_DIRECTORY_NAME, RESEARCH_DIRECTORY_NAME)}/.`,
     );
   }
 

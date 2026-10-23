@@ -1,13 +1,21 @@
-import { DISPATCHABLE_EVENTS, interpreterName } from "./registry.js";
+import {
+  DISPATCHABLE_EVENTS,
+  HookEvent,
+} from "../types/hook-types.js";
 import type {
   DispatchableEvent,
+  Dispatcher,
+  DispatcherOptions,
   EnvelopeContext,
-  HookRegistry,
   HookRegistryEntry,
   Outcome,
-} from "./registry.js";
+} from "../types/hook-types.js";
+import { interpreterName } from "./registry.js";
 import { buildEnvelope } from "./runners.js";
-import type { HookRunner } from "./runners.js";
+import type { HookRunner } from "../types/hook-types.js";
+import { BLOCKED_PREFIX, errorMessage, isRecord } from "./shared.js";
+
+export type { Dispatcher, DispatcherOptions };
 
 /**
  * Per-event dispatch: the one place where a normalized `Outcome` becomes
@@ -16,34 +24,51 @@ import type { HookRunner } from "./runners.js";
  * outside this path keep the documented fail-open posture (R5.4).
  */
 
-const BLOCKED_PREFIX = "Blocked:";
-
-/** R6.5: rich-object events and observe events accept no JSON-representable mutations. */
+/**
+ * Per-event mutation allowlist.
+ *
+ * The field names are not invented here: each entry mirrors the writable
+ * properties of the event's **output parameter** in the host's `Hooks`
+ * interface (`@opencode-ai/plugin`, `index.d.ts`), reduced to the values that
+ * can travel through JSON. For example:
+ *
+ * - `tool.execute.before` output is `{ args }`;
+ * - `tool.execute.after` output is `{ title, output, metadata }`;
+ * - `chat.params` output is `{ temperature, topP, topK, maxOutputTokens, options }`;
+ * - `experimental.session.compacting` output is `{ context, prompt? }`, where
+ *   only `context` is exposed (append-only strings);
+ * - `config`, `event`, and `dispose` are observe events, so they accept none.
+ *
+ * Events whose output contains rich host objects (`message`, `parts`,
+ * `messages`, …) expose no JSON-representable fields and therefore have an
+ * empty list. A script can only change the fields listed here; anything else
+ * is warned and ignored.
+ */
 export const MUTATION_FIELDS: Readonly<
   Record<DispatchableEvent, readonly string[]>
 > = {
-  "tool.execute.before": ["args"],
-  "tool.execute.after": ["title", "output", "metadata"],
-  "tool.definition": ["description", "parameters"],
-  "chat.message": [],
-  "chat.params": [
+  [HookEvent.ToolExecuteBefore]: ["args"],
+  [HookEvent.ToolExecuteAfter]: ["title", "output", "metadata"],
+  [HookEvent.ToolDefinition]: ["description", "parameters"],
+  [HookEvent.ChatMessage]: [],
+  [HookEvent.ChatParams]: [
     "temperature",
     "topP",
     "topK",
     "maxOutputTokens",
     "options",
   ],
-  "chat.headers": ["headers"],
-  "command.execute.before": [],
-  "shell.env": ["env"],
-  "experimental.chat.messages.transform": [],
-  "experimental.chat.system.transform": ["system"],
-  "experimental.session.compacting": ["context"],
-  "experimental.compaction.autocontinue": ["enabled"],
-  "experimental.text.complete": ["text"],
-  config: [],
-  event: [],
-  dispose: [],
+  [HookEvent.ChatHeaders]: ["headers"],
+  [HookEvent.CommandExecuteBefore]: [],
+  [HookEvent.ShellEnv]: ["env"],
+  [HookEvent.ExperimentalChatMessagesTransform]: [],
+  [HookEvent.ExperimentalChatSystemTransform]: ["system"],
+  [HookEvent.ExperimentalSessionCompacting]: ["context"],
+  [HookEvent.ExperimentalCompactionAutocontinue]: ["enabled"],
+  [HookEvent.ExperimentalTextComplete]: ["text"],
+  [HookEvent.Config]: [],
+  [HookEvent.Event]: [],
+  [HookEvent.Dispose]: [],
 };
 
 export const isWhitelistedMutation = (
@@ -54,9 +79,6 @@ export const isWhitelistedMutation = (
 const warn = (message: string): void => {
   console.warn(`[owflow] hooks: ${message}`);
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** The event-specific projection of the handler's input/output (R4.3). */
 const contextFrom = (
@@ -94,7 +116,7 @@ const gateRejection = (entry: HookRegistryEntry, outcome: Outcome): Error => {
   const hint =
     outcome.status === "blocked"
       ? `Hint: resolve the condition reported by ${entry.path}, or remove the script and restart OpenCode to disable it.`
-      : `Hint: fix the failing script ${entry.path} (failures fail closed), or remove it and restart OpenCode to proceed.`;
+      : `Hint: fix the failing script ${entry.path} (failure ends the current session; fail closed), or remove it and restart OpenCode to proceed.`;
   return new Error(`${body.endsWith(".") ? body : `${body}.`} ${hint}`);
 };
 
@@ -142,7 +164,10 @@ const applyMutations = (
       );
       continue;
     }
-    if (event === "experimental.session.compacting" && field === "context") {
+    if (
+      event === HookEvent.ExperimentalSessionCompacting &&
+      field === "context"
+    ) {
       appendContextStrings(entry, value, output);
       continue;
     }
@@ -161,40 +186,49 @@ const runOutcome = async (
     // Runners normalize their own failures; a raw throw still means failed.
     return {
       status: "failed",
-      reason: error instanceof Error ? error.message : "unknown error",
+      reason: errorMessage(error),
     };
   }
 };
 
-export interface DispatcherOptions {
-  readonly run: HookRunner["run"];
-  readonly registry: HookRegistry;
-}
-
-export type Dispatcher = (
-  event: DispatchableEvent,
-  input?: unknown,
-  output?: Record<string, unknown>,
-) => Promise<void>;
+const endSessionForFailure = async (
+  endSession: DispatcherOptions["endSession"],
+  sessionID: string | undefined,
+  entry: HookRegistryEntry,
+): Promise<void> => {
+  if (endSession === undefined || sessionID === undefined) return;
+  try {
+    await endSession(sessionID);
+  } catch (error) {
+    warn(
+      `failed to end session ${sessionID} after ${entry.path} failed: ${errorMessage(error)}`,
+    );
+  }
+};
 
 export const createDispatcher = ({
   run,
   registry,
+  endSession,
 }: DispatcherOptions): Dispatcher => {
   return async (event, input, output) => {
     const eventEntries = registry.byEvent[event];
     if (eventEntries.length === 0) return;
 
+    const sessionID = sessionIDFrom(input);
     const envelope = buildEnvelope({
       event,
       context: contextFrom(input, output),
-      sessionID: sessionIDFrom(input),
+      sessionID,
     });
     const isGate = DISPATCHABLE_EVENTS[event] === "gate";
 
     for (const entry of eventEntries) {
       if (!entry.interpreter.available) {
-        if (isGate) throw missingInterpreterRejection(entry);
+        if (isGate) {
+          await endSessionForFailure(endSession, sessionID, entry);
+          throw missingInterpreterRejection(entry);
+        }
         warn(
           `skipping ${entry.path}: the ${interpreterName(entry.interpreter)} interpreter is unavailable`,
         );
@@ -204,7 +238,14 @@ export const createDispatcher = ({
       const outcome = await runOutcome(run, entry, envelope);
 
       if (outcome.status !== "ok") {
-        if (isGate) throw gateRejection(entry, outcome);
+        if (isGate) {
+          // A blocked gate only rejects the operation; a failed gate is a
+          // broken gate, so the current session must stop as well.
+          if (outcome.status === "failed") {
+            await endSessionForFailure(endSession, sessionID, entry);
+          }
+          throw gateRejection(entry, outcome);
+        }
         warn(
           `${entry.path} ${outcome.status}: ${outcome.reason ?? "no reason given"}`,
         );

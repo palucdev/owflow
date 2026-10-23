@@ -17,70 +17,18 @@ import { guardAgainstDestructiveActions } from "./hooks/before-tool.js";
 import { configureSkills } from "./configuration/skills-config.js";
 import { configureCommands } from "./configuration/commands-config.js";
 import { configureAgents } from "./configuration/agents-config.js";
-import { scanHooks } from "./hooks-wrapper/registry.js";
-import type { DispatchableEvent } from "./hooks-wrapper/registry.js";
-import { createExecutionCore } from "./hooks-wrapper/runners.js";
-import { createDispatcher } from "./hooks-wrapper/dispatcher.js";
-import type { Dispatcher } from "./hooks-wrapper/dispatcher.js";
+import {
+  createDispatchHandlers,
+  initializeHooksWrapper,
+} from "./hooks/plugin-hooks.js";
 import { renderSnapshot } from "./hooks-wrapper/report.js";
-import type { HookReportInput } from "./hooks-wrapper/report.js";
+import { HookEvent } from "./types/hook-types.js";
+import type { HookReportInput } from "./types/hook-types.js";
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 
-const DROPPED_PLUGIN_HINT =
-  "The owflow plugin — including the destructive-command guard — has been dropped because a hook script failed to load. " +
-  "Hint: fix or remove the failing file and restart OpenCode, or set OWFLOW_HOOKS_DISABLED=1 to start without user hooks.";
-
-interface HooksWrapper {
-  readonly dispatch: Dispatcher;
-  readonly snapshot: HookReportInput;
-}
-
-const initializeHooksWrapper = async (
-  directory: string,
-): Promise<HooksWrapper> => {
-  const { registry } = scanHooks(path.join(directory, ".owflow/hooks"));
-  const core = createExecutionCore({ cwd: directory });
-  try {
-    // R1.3: importing every in-process script now makes a broken default
-    // export fatal at registration instead of at first fire.
-    await core.load(registry.entries);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`${detail}\n${DROPPED_PLUGIN_HINT}`);
-  }
-  return {
-    dispatch: createDispatcher({ run: core.run, registry }),
-    snapshot: { entries: registry.entries },
-  };
-};
-
-const PASSTHROUGH_EVENTS = [
-  "tool.execute.after",
-  "tool.definition",
-  "chat.params",
-  "chat.headers",
-  "command.execute.before",
-  "shell.env",
-  "experimental.chat.messages.transform",
-  "experimental.chat.system.transform",
-  "experimental.compaction.autocontinue",
-  "experimental.text.complete",
-  "event",
-  "dispose",
-] as const satisfies readonly DispatchableEvent[];
-
-const createDispatchHandlers = (dispatch: Dispatcher): Hooks =>
-  Object.fromEntries(
-    PASSTHROUGH_EVENTS.map((event) => [
-      event,
-      (input?: unknown, output?: Record<string, unknown>) =>
-        dispatch(event, input, output),
-    ]),
-  ) as Hooks;
-
-const OwflowPlugin: Plugin = async ({ $, directory }) => {
-  const agentBySession = new Map();
+const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
+  const agentBySession = new Map<string, string>();
   const hooksDisabled = process.env.OWFLOW_HOOKS_DISABLED === "1";
 
   if (hooksDisabled) {
@@ -88,9 +36,20 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
       "[owflow] User hooks disabled (OWFLOW_HOOKS_DISABLED=1); built-in hooks remain active.",
     );
   }
+  const endSession = async (sessionID: string): Promise<void> => {
+    if (typeof client?.session?.abort !== "function") return;
+    try {
+      await client.session.abort({ path: { id: sessionID } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[owflow] failed to end session ${sessionID} after a gate hook failed: ${message}`,
+      );
+    }
+  };
   const wrapper = hooksDisabled
     ? undefined
-    : await initializeHooksWrapper(directory);
+    : await initializeHooksWrapper(directory, endSession);
   const snapshot: HookReportInput =
     wrapper?.snapshot ?? { entries: [], bypassed: true };
 
@@ -103,7 +62,7 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
      * Register owflow's skills, commands, and agents so OpenCode discovers
      * them without requiring manual config file edits.
      */
-    config: async (config: unknown) => {
+    [HookEvent.Config]: async (config: unknown) => {
       console.log(
         `[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`,
       );
@@ -140,7 +99,7 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
       // their failures stay log-only and can never break installation.
       if (wrapper !== undefined) {
         try {
-          await wrapper.dispatch("config", typedConfig);
+          await wrapper.dispatch(HookEvent.Config, typedConfig);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -153,14 +112,18 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
       );
     },
 
-    "experimental.session.compacting": async (input, output) => {
+    [HookEvent.ExperimentalSessionCompacting]: async (input, output) => {
       await rereadOrchestratorState(directory, output);
       if (wrapper !== undefined) {
-        await wrapper.dispatch("experimental.session.compacting", input, output);
+        await wrapper.dispatch(
+          HookEvent.ExperimentalSessionCompacting,
+          input,
+          output,
+        );
       }
     },
 
-    "chat.message": async (input, output) => {
+    [HookEvent.ChatMessage]: async (input, output) => {
       try {
         agentBySession.set(input.sessionID, input.agent ?? "main");
       } catch {
@@ -169,15 +132,15 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
       // Dispatch deliberately outside the swallowing catch so gate throws
       // propagate even when the platform's input object misbehaves.
       if (wrapper !== undefined) {
-        await wrapper.dispatch("chat.message", input, output);
+        await wrapper.dispatch(HookEvent.ChatMessage, input, output);
       }
     },
 
-    "tool.execute.before": async (input, output) => {
+    [HookEvent.ToolExecuteBefore]: async (input, output) => {
       try {
         await guardAgainstDestructiveActions(input, output, agentBySession);
         if (wrapper !== undefined) {
-          await wrapper.dispatch("tool.execute.before", input, output);
+          await wrapper.dispatch(HookEvent.ToolExecuteBefore, input, output);
         }
       } catch (e) {
         // Re-throw only intentional blocks; swallow unexpected errors

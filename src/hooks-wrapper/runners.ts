@@ -4,31 +4,53 @@
  */
 
 import { pathToFileURL } from "node:url";
-import { DISPATCHABLE_EVENTS } from "./registry.js";
+
+import { DISPATCHABLE_EVENTS } from "../types/hook-types.js";
 import type {
   DispatchableEvent,
+  EnvelopeBuildInput,
   EnvelopeContext,
   EnvelopeResult,
+  ExecutionCore,
+  ExecutionCoreOptions,
+  HookHandler,
   HookRegistryEntry,
+  HookRunner,
+  InProcessRunner,
+  ModuleImporter,
   Outcome,
-} from "./registry.js";
+  ParsedEnvelopeResult,
+  SpawnProcess,
+  SpawnProcessOptions,
+  SpawnedProcess,
+  SpawnedStream,
+  SubprocessRunnerDeps,
+} from "../types/hook-types.js";
+import { BLOCKED_PREFIX, errorMessage, isRecord } from "./shared.js";
+
+export type {
+  EnvelopeBuildInput,
+  EnvelopeContext,
+  EnvelopeResult,
+  ExecutionCore,
+  ExecutionCoreOptions,
+  HookHandler,
+  HookRunner,
+  InProcessRunner,
+  ModuleImporter,
+  Outcome,
+  ParsedEnvelopeResult,
+  SpawnProcess,
+  SpawnProcessOptions,
+  SpawnedProcess,
+  SpawnedStream,
+  SubprocessRunnerDeps,
+};
 
 /* ── Envelope ─────────────────────────────────────────────────────────────── */
 
 /** The single wire version spoken by every script type and both runners (R4.1). */
 export const PROTOCOL_VERSION: EnvelopeContext["protocol"] = "owflow-hooks/1";
-
-export interface EnvelopeBuildInput {
-  readonly event: DispatchableEvent;
-  readonly context: Record<string, unknown>;
-  readonly sessionID?: string | undefined;
-}
-
-export interface ParsedEnvelopeResult {
-  ok: boolean;
-  data?: EnvelopeResult;
-  error?: string;
-}
 
 /**
  * Identity fields kept when a context value is a host-runtime class instance
@@ -123,8 +145,6 @@ const describeType = (value: unknown): string => {
   return typeof value;
 };
 
-const errorText = (error: unknown): string =>
-  error instanceof Error ? error.message : "unknown error";
 
 /**
  * Parses a script result from either class: stdout JSON for subprocesses or a
@@ -139,7 +159,7 @@ export const parseEnvelopeResult = (raw: unknown): ParsedEnvelopeResult => {
     } catch (error) {
       return {
         ok: false,
-        error: `unparseable JSON (${errorText(error)})`,
+        error: `unparseable JSON (${errorMessage(error)})`,
       };
     }
   }
@@ -188,75 +208,12 @@ export const parseEnvelopeResult = (raw: unknown): ParsedEnvelopeResult => {
       },
     };
   } catch (error) {
-    return { ok: false, error: `unreadable result (${errorText(error)})` };
+    return { ok: false, error: `unreadable result (${errorMessage(error)})` };
   }
 };
 
 /* ── Runners ──────────────────────────────────────────────────────────────── */
 
-/** One execution interface for every script class — the v2 seam unit (R11.1). */
-export interface HookRunner {
-  readonly run: (
-    entry: HookRegistryEntry,
-    envelope: EnvelopeContext,
-  ) => Promise<Outcome>;
-}
-
-export type HookHandler = (envelope: EnvelopeContext) => unknown;
-
-/** Injectable dynamic-import seam; the default is the real `import()`. */
-export type ModuleImporter = (specifier: string) => Promise<unknown>;
-
-export interface InProcessRunner extends HookRunner {
-  /** Imports once and validates the default-export handler (fail-fast, R1.3). */
-  readonly load: (entry: HookRegistryEntry) => Promise<void>;
-}
-
-export interface SpawnProcessOptions {
-  /** Host project directory the script runs in (A5). */
-  readonly cwd: string;
-  readonly stdin: Uint8Array;
-  readonly stdout: "pipe";
-  readonly stderr: "pipe";
-}
-
-export interface SpawnedStream {
-  text(): Promise<string>;
-}
-
-/**
- * The slice of a spawned process the runner reads. Deliberately narrower than
- * `Bun.Subprocess` so tests can fake it, and deliberately carries no
- * timeout/signal surface (ADR-007).
- */
-export interface SpawnedProcess {
-  readonly exited: Promise<number | null>;
-  readonly exitCode?: number | null;
-  readonly signalCode?: string | null;
-  readonly stdout?: SpawnedStream | null;
-  readonly stderr?: SpawnedStream | null;
-}
-
-/** Injectable `Bun.spawn` seam; argument arrays only, never a shell string. */
-export type SpawnProcess = (
-  command: string[],
-  options: SpawnProcessOptions,
-) => SpawnedProcess;
-
-export interface SubprocessRunnerDeps {
-  readonly cwd: string;
-  readonly spawn?: SpawnProcess;
-}
-
-const BLOCKED_PREFIX = "Blocked:";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const errorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  return typeof error === "string" ? error : "unknown error";
-};
 
 const toOutcome = (result: EnvelopeResult): Outcome => ({
   status: result.status,
@@ -416,22 +373,11 @@ export const createSubprocessRunner = ({
 
 /* ── Execution core ───────────────────────────────────────────────────────── */
 
-export interface ExecutionCoreOptions {
-  /** Host project directory used as the subprocess `cwd` (A5). */
-  readonly cwd: string;
-  readonly inProcess?: InProcessRunner;
-  readonly subprocess?: HookRunner;
-}
-
 /**
  * The v2 seam: `run(entry, envelope) → Outcome` over both runner classes
  * (R11.1). `load` is registration-time import validation, deliberately kept
  * off the `run` path so the seam signature stays exactly `(entry, envelope)`.
  */
-export interface ExecutionCore extends HookRunner {
-  readonly load: (entries: readonly HookRegistryEntry[]) => Promise<void>;
-}
-
 export const createExecutionCore = (
   options: ExecutionCoreOptions,
 ): ExecutionCore => {

@@ -14,6 +14,7 @@ import {
   EXCLUDED_EVENT_NAMES,
   EXTENSION_RANK,
   HOOK_EXTENSIONS,
+  HookDigestMode,
   buildRegistry,
   deriveHook,
   digest,
@@ -237,11 +238,11 @@ describe("digest", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-hooks-test-"));
     const hooksDir = path.join(tempDir, ".owflow", "hooks");
 
-    expect(digest(hooksDir, "throw")).toEqual({ entries: [], failures: [] });
+    expect(digest(hooksDir, HookDigestMode.FailFast)).toEqual({ entries: [], failures: [] });
 
     fs.mkdirSync(hooksDir, { recursive: true });
-    expect(digest(hooksDir, "throw")).toEqual({ entries: [], failures: [] });
-    expect(digest(hooksDir, "report")).toEqual({ entries: [], failures: [] });
+    expect(digest(hooksDir, HookDigestMode.FailFast)).toEqual({ entries: [], failures: [] });
+    expect(digest(hooksDir, HookDigestMode.Report)).toEqual({ entries: [], failures: [] });
   });
 
   test("should fail fast on every invalid entry and collect all violations without throwing in report mode", () => {
@@ -262,9 +263,9 @@ describe("digest", () => {
       path.join(hooksDir, "tool-execute-befor.ts"),
     ];
 
-    expect(() => digest(hooksDir, "throw")).toThrow();
+    expect(() => digest(hooksDir, HookDigestMode.FailFast)).toThrow();
     try {
-      digest(hooksDir, "throw");
+      digest(hooksDir, HookDigestMode.FailFast);
       throw new Error("expected the digest to fail fast");
     } catch (error) {
       const message = (error as Error).message;
@@ -277,7 +278,7 @@ describe("digest", () => {
       }
     }
 
-    const report = digest(hooksDir, "report");
+    const report = digest(hooksDir, HookDigestMode.Report);
     expect(report.failures.map((failure) => failure.path)).toEqual(failurePaths);
     for (const failure of report.failures) {
       expect(failure.error.length).toBeGreaterThan(0);
@@ -327,6 +328,54 @@ const UNAVAILABLE_SUBPROCESS: InterpreterAvailability = {
   ".sh": { expected: "bash", available: false },
   ".ps1": { expected: "pwsh", available: false },
 };
+
+describe("digest duplicate hook names", () => {
+  let tempDir: string | undefined;
+
+  afterEach(() => {
+    if (tempDir !== undefined) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      tempDir = undefined;
+    }
+  });
+
+  test("should reject the same hook name in more than one format", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-hooks-test-"));
+    const hooksDir = path.join(tempDir, ".owflow", "hooks");
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+
+    const report = digest(hooksDir, HookDigestMode.Report);
+    expect(report.entries).toEqual([]);
+    expect(report.failures.map((failure) => failure.path)).toEqual([
+      path.join(hooksDir, "tool-execute-before.sh"),
+      path.join(hooksDir, "tool-execute-before.ts"),
+    ]);
+    for (const failure of report.failures) {
+      expect(failure.error).toContain('hook name "tool-execute-before"');
+      expect(failure.error).toContain("exactly one format");
+    }
+
+    expect(() => digest(hooksDir, HookDigestMode.FailFast)).toThrow(
+      /exactly one format/,
+    );
+  });
+
+  test("should allow different hook names to use different formats", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-hooks-test-"));
+    const hooksDir = path.join(tempDir, ".owflow", "hooks");
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
+    fs.writeFileSync(path.join(hooksDir, "config.ps1"), "");
+
+    const report = digest(hooksDir, HookDigestMode.Report);
+    expect(report.failures).toEqual([]);
+    expect(
+      report.entries.map((entry) => path.basename(entry.path)).sort(),
+    ).toEqual(["config.ps1", "tool-execute-before.ts"]);
+  });
+});
 
 describe("buildRegistry", () => {
   test("should order entries by event and extension rank", () => {
@@ -459,7 +508,7 @@ describe("scanHooks", () => {
     const hooksDir = makeHooksDir();
     fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
 
-    const scan = scanHooks(hooksDir, { mode: "report", which: () => null });
+    const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report, which: () => null });
 
     expect(scan.failures).toEqual([]);
     expect(scan.registry.entries).toHaveLength(1);
@@ -470,7 +519,7 @@ describe("scanHooks", () => {
     const hooksDir = makeHooksDir();
     fs.writeFileSync(path.join(hooksDir, "readme.md"), "");
 
-    const scan = scanHooks(hooksDir, { mode: "report" });
+    const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report });
     expect(scan.failures).toHaveLength(1);
     expect(scan.registry.entries).toEqual([]);
     expect(() => scanHooks(hooksDir)).toThrow(/1 invalid entry/);

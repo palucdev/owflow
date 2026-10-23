@@ -36,7 +36,7 @@ Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown
 
 ### User Hooks (`project/user-hooks.md`)
 
-User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; supported extensions and interpreters (`.ts`/`.js` in-process, `.sh`/`.ps1` subprocess); the 13 gate / 3 observe event classes plus the excluded set; the `owflow-hooks/1` envelope schema and per-event mutation whitelist; strict-digest fail-fast (the hooks directory may contain only hook scripts) and the `OWFLOW_HOOKS_DISABLED=1` bypass; visibility surfaces (startup banner, `owflow-hooks` CLI, TUI command) with restart-to-reload semantics; the baseline trust model; and `.ps1`/TUI verification-pending notes.
+User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; supported extensions and interpreters (`.ts`/`.js` in-process, `.sh`/`.ps1` subprocess); the 13 gate / 3 observe event classes plus the excluded set; the `owflow-hooks/1` envelope schema and per-event mutation whitelist; strict-digest fail-fast (the hooks directory may contain only hook scripts) and the `OWFLOW_HOOKS_DISABLED=1` bypass; visibility surfaces (startup banner, `owflow-hooks` CLI, always-on TUI Active hooks sidebar panel) with restart-to-reload semantics; one-format-per-hook-name strict digest; and the baseline trust model.
 
 ---
 
