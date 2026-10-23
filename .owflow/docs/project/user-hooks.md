@@ -124,6 +124,81 @@ Result rules:
 - Mutations naming a field outside the event's whitelist are warned and ignored - they never silently alter output.
 - `experimental.session.compacting` is the one stateful mutation: `context` must be an array of strings and is **appended** after the built-in state re-read reminder; non-arrays and non-string entries are warned and dropped.
 
+## Example Scripts
+
+The same logging hook - it records the event, session, tool, and command from the envelope - in every supported format. Save **one** variant as `.owflow/hooks/tool-execute-before.<ext>`; a hook name may appear in exactly one format. All four examples return a complete `owflow-hooks/1` result, so they can be copied verbatim.
+
+In-process scripts log with `console.log` to OpenCode's process output. Subprocess scripts cannot log to stdout (that channel is reserved for the result envelope), so the Bash and PowerShell examples append to `.owflow/hook-events.log` instead; their working directory is the project root. Keep log files outside `.owflow/hooks/` - the strict digest allows only hook scripts there.
+
+### TypeScript (in-process)
+
+```ts
+type Envelope = {
+  event: string;
+  session?: { sessionID: string };
+  context: { tool?: string; args?: { command?: string } };
+};
+
+export default async (envelope: Envelope) => {
+  const { tool, args } = envelope.context;
+  const session = envelope.session?.sessionID ?? "unknown";
+  console.log(
+    `[example-hook] ${envelope.event} session=${session} tool=${tool ?? "?"} command=${args?.command ?? ""}`,
+  );
+  return { protocol: "owflow-hooks/1", status: "ok" };
+};
+```
+
+### JavaScript (in-process)
+
+```js
+export default async (envelope) => {
+  const { event, session, context } = envelope;
+  console.log(
+    `[example-hook] ${event} session=${session?.sessionID ?? "unknown"} tool=${context.tool ?? "?"} command=${context.args?.command ?? ""}`,
+  );
+  return { protocol: "owflow-hooks/1", status: "ok" };
+};
+```
+
+### Bash (subprocess)
+
+The wrapper invokes `bash` directly, so the script needs no execute bit. It reads the envelope from stdin, uses `jq` to extract fields, appends a line to `.owflow/hook-events.log`, and writes the result to stdout.
+
+```bash
+#!/usr/bin/env bash
+set -u
+
+envelope="$(cat)"
+event="$(jq -r '.event // "unknown"' <<<"$envelope")"
+session="$(jq -r '.session.sessionID // "unknown"' <<<"$envelope")"
+tool="$(jq -r '.context.tool // "?"' <<<"$envelope")"
+command="$(jq -r '.context.args.command // ""' <<<"$envelope")"
+
+printf '%s [example-hook] %s session=%s tool=%s command=%s\n' \
+  "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$event" "$session" "$tool" "$command" >> .owflow/hook-events.log
+
+printf '%s\n' '{"protocol":"owflow-hooks/1","status":"ok"}'
+```
+
+### PowerShell (subprocess)
+
+The wrapper invokes `pwsh` (falling back to `powershell.exe`) directly; the envelope arrives on stdin and the result must be JSON on stdout. `ConvertFrom-Json` reads the fields and `Add-Content` appends the line.
+
+```powershell
+$ErrorActionPreference = "Stop"
+
+$envelope = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$context = $envelope.context
+$session = if ($envelope.session.sessionID) { $envelope.session.sessionID } else { "unknown" }
+$stamp = Get-Date -Format o
+
+$line = "$stamp [example-hook] $($envelope.event) session=$session tool=$($context.tool) command=$($context.args.command)"
+Add-Content -Path .owflow/hook-events.log -Value $line
+
+@{ protocol = "owflow-hooks/1"; status = "ok" } | ConvertTo-Json -Compress
+```
+
 ## Ordering Rules
 
 1. **Guard first**: inside `tool.execute.before`, owflow's built-in destructive-command guard always runs before any user script, so a blocked destructive command never reaches hooks.

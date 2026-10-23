@@ -246,6 +246,77 @@ Each event is either a **gate** or an **observe** event. Gate hooks (13 events, 
 
 The wrapper and your scripts exchange one JSON envelope, `owflow-hooks/1`: the wrapper sends `{ protocol, event, class, session?, context }`; a script returns `{ protocol, status: "ok" | "blocked" | "failed", reason?, mutations? }`, where `mutations` may only touch the event's whitelisted fields (e.g. `args` for `tool.execute.before`). The full schema, event table, ordering rules, and mutation whitelist live in the [user hooks reference](.owflow/docs/project/user-hooks.md).
 
+### Example hook in every format
+
+The same logging hook - it records the event, session, tool, and command from the envelope - written in each supported format. Save **one** of these as `.owflow/hooks/tool-execute-before.<ext>`; the same hook name may not exist in two formats.
+
+In-process scripts log with `console.log` to OpenCode's process output. Subprocess scripts cannot log to stdout (that channel is reserved for the result envelope), so the Bash and PowerShell examples append to `.owflow/hook-events.log` instead; their working directory is the project root. Keep log files outside `.owflow/hooks/` - the strict digest allows only hook scripts there.
+
+**TypeScript** (`.owflow/hooks/tool-execute-before.ts`):
+
+```ts
+type Envelope = {
+  event: string;
+  session?: { sessionID: string };
+  context: { tool?: string; args?: { command?: string } };
+};
+
+export default async (envelope: Envelope) => {
+  const { tool, args } = envelope.context;
+  const session = envelope.session?.sessionID ?? "unknown";
+  console.log(
+    `[example-hook] ${envelope.event} session=${session} tool=${tool ?? "?"} command=${args?.command ?? ""}`,
+  );
+  return { protocol: "owflow-hooks/1", status: "ok" };
+};
+```
+
+**JavaScript** (`.owflow/hooks/tool-execute-before.js`):
+
+```js
+export default async (envelope) => {
+  const { event, session, context } = envelope;
+  console.log(
+    `[example-hook] ${event} session=${session?.sessionID ?? "unknown"} tool=${context.tool ?? "?"} command=${context.args?.command ?? ""}`,
+  );
+  return { protocol: "owflow-hooks/1", status: "ok" };
+};
+```
+
+**Bash** (`.owflow/hooks/tool-execute-before.sh`, uses `jq`):
+
+```bash
+#!/usr/bin/env bash
+set -u
+
+envelope="$(cat)"
+event="$(jq -r '.event // "unknown"' <<<"$envelope")"
+session="$(jq -r '.session.sessionID // "unknown"' <<<"$envelope")"
+tool="$(jq -r '.context.tool // "?"' <<<"$envelope")"
+command="$(jq -r '.context.args.command // ""' <<<"$envelope")"
+
+printf '%s [example-hook] %s session=%s tool=%s command=%s\n' \
+  "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$event" "$session" "$tool" "$command" >> .owflow/hook-events.log
+
+printf '%s\n' '{"protocol":"owflow-hooks/1","status":"ok"}'
+```
+
+**PowerShell** (`.owflow/hooks/tool-execute-before.ps1`):
+
+```powershell
+$ErrorActionPreference = "Stop"
+
+$envelope = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$context = $envelope.context
+$session = if ($envelope.session.sessionID) { $envelope.session.sessionID } else { "unknown" }
+$stamp = Get-Date -Format o
+
+$line = "$stamp [example-hook] $($envelope.event) session=$session tool=$($context.tool) command=$($context.args.command)"
+Add-Content -Path .owflow/hook-events.log -Value $line
+
+@{ protocol = "owflow-hooks/1"; status = "ok" } | ConvertTo-Json -Compress
+```
+
 > **Strict digest - important**: `.owflow/hooks/` may contain **only** hook scripts, and each hook name may appear in **exactly one** format (`.ts`, `.js`, `.sh`, or `.ps1` - never two files with the same stem). Any other entry - a directory, a `.md` readme, a dotfile - is a fatal registration error that drops the entire owflow plugin (including the destructive-command guard) until you fix or remove the file. Keep notes and fixtures elsewhere.
 
 Hooks are digested once at startup: **restart OpenCode to reload** after adding, editing, or removing a script (there is no watcher). Registration is fail-fast - a broken gate hook blocks the operation when it fires, it is never silently skipped; a `failed` gate also ends the current session. To start with user hooks disabled, set `OWFLOW_HOOKS_DISABLED=1`; the two built-in hooks (destructive-command guard and post-compaction reminder) remain active.

@@ -11,7 +11,6 @@ import { hooksDirectory } from "./utils/workflow-paths.js";
 const SIDEBAR_SLOT = "sidebar_content";
 const ACTIVE_HOOKS_TITLE = "Active hooks:";
 const EMPTY_HOOKS_NAME = "(none)";
-const SOLID_RUNTIME_MODULE = "@opentui/solid";
 
 /**
  * Minimal surface of the host-provided Solid runtime needed to build nodes
@@ -78,7 +77,7 @@ const materializeSidebar = (
 
 const loadSolidRuntime = async (): Promise<SolidRuntime | null> => {
   try {
-    const runtime = (await import(SOLID_RUNTIME_MODULE)) as Partial<SolidRuntime>;
+    const runtime = (await import("@opentui/solid")) as Partial<SolidRuntime>;
     if (
       typeof runtime.createElement !== "function" ||
       typeof runtime.insert !== "function" ||
@@ -87,7 +86,8 @@ const loadSolidRuntime = async (): Promise<SolidRuntime | null> => {
       return null;
     }
     return runtime as SolidRuntime;
-  } catch {
+  } catch (error) {
+    console.warn("[owflow] Failed to import @opentui/solid", error);
     return null;
   }
 };
