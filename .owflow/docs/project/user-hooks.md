@@ -220,26 +220,30 @@ All surfaces render the same row model - `path | event | class | interpreter | s
 | ------- | ------------- | --------- |
 | Startup snapshot | `[owflow] hooks: N loaded[, M invalid]` plus one line per row, inside the config banner | live registry at startup |
 | `owflow-hooks` CLI | table by default, `--json` for machine output; scans `./.owflow/hooks/` relative to the process CWD; exits 1 when any invalid entry is found; requires `bun` on PATH (same runtime as OpenCode) | would-load scan, always labeled `effective after next restart` |
-| TUI Active hooks panel | an always-on right-hand sidebar panel listing `Active hooks:` and one `- <name>` line per loaded hook; digests the current workspace at activation; no command invocation, session, message, or model turn | would-load scan, `effective after next restart` |
+| TUI Active hooks panel | an always-on right-hand sidebar panel listing `Active hooks:` and one `- <name>` line per loaded hook, with live runtime colors; digests the current workspace at activation; no command invocation, session, message, or model turn | would-load scan (`effective after next restart`) plus a 200 ms live status poll |
 
 Status vocabulary: `registered`, `will fail closed at fire`, `skipped (no interpreter)`, `invalid: <error>`, and `hooks bypassed (OWFLOW_HOOKS_DISABLED=1)`. The CLI and TUI re-derive with the same pure modules rather than reading the live in-process registry (separate process by construction), and report invalid entries instead of failing fast.
+
+The TUI additionally renders **runtime status** for user hooks using a colored orb (`•`, matching the MCP status style): grey (`theme.textMuted`) before a hook has run, yellow (`theme.warning`) while it is running, green (`theme.success`) after a successful run, and red (`theme.error`) after a failed, blocked, or unavailable-interpreter run. The hook name stays in the normal `theme.text` color, and the current state follows it in muted grey as `Idle`, `Running`, `Success`, or `Error`. The `Active hooks:` heading also uses `theme.text` like other sections. Status is recorded by owflow's dispatcher; scripts need no changes.
+
+The status transport is one overwritten JSON snapshot per workspace in OpenCode's tmp directory: `path.join(os.tmpdir(), "opencode", "owflow-hooks-<sha256(realpath(workspace))[0..16]>.json")`. Every update atomically replaces the previous content (one reused `.tmp` name), so no per-run or timestamped files accumulate. Multiple OpenCode instances on the same workspace share the file and last writer wins. The `pid` field is diagnostic only; the TUI does not require a PID match. `OWFLOW_HOOKS_STATUS_FILE` overrides the computed path for tests and manual debugging.
 
 The CLI and TUI scans are **structural only**: they validate naming, extension, event derivation, and duplicate names but never import `.ts`/`.js` scripts. A structurally valid in-process hook that throws on import (or lacks a default export) still renders as `registered` here while the live plugin would drop at startup - import validation runs exclusively at plugin startup (fail-fast), and only the startup banner reflects the import-validated set.
 
 ## Restart to Reload
 
-There is no file watcher and no persisted snapshot: the hook set is digested exactly once at plugin initialization. Scripts added, edited, or removed take effect only after the next OpenCode restart - which is why the CLI and TUI label every report `effective after next restart`.
+There is no file watcher for **hook-set discovery**, and the hook set is not persisted: it is digested exactly once at plugin initialization. Scripts added, edited, or removed take effect only after the next OpenCode restart - which is why the CLI and TUI label every report `effective after next restart`. Runtime *execution status* is different: it is live, and persisted only as the single temporary status snapshot described above (overwritten on every flush and cleared at startup).
 
 ## Bypass and Recovery
 
-- `OWFLOW_HOOKS_DISABLED=1` skips the digest, registry, and dispatch entirely; the startup banner reports `hooks bypassed (OWFLOW_HOOKS_DISABLED=1)`. The built-in hooks (destructive-command guard, post-compaction reminder) remain active, and invalid hook files cannot drop the plugin in this mode.
+- `OWFLOW_HOOKS_DISABLED=1` skips the digest, registry, dispatch, status store, and TUI status polling entirely; no status file is written. The startup banner reports `hooks bypassed (OWFLOW_HOOKS_DISABLED=1)`. The built-in hooks (destructive-command guard, post-compaction reminder) remain active, and invalid hook files cannot drop the plugin in this mode.
 - On a fail-fast registration error, fix or remove the offending file and restart OpenCode - or start with the bypass. The destructive guard drops with the plugin until one of the two is done, which is why the error is loud and names both options.
 - A `failed` gate ends the current session; after the abort, fix or remove the failing script and restart OpenCode before continuing.
 
 ## Support Declaration
 
 - **PowerShell (`.ps1`)**: supported. The interpreter is resolved at init (`pwsh`, falling back to `powershell.exe`), uses the same subprocess runner and `owflow-hooks/1` envelope as `.sh`, and was verified with a parity spike covering ok/blocked/failed/malformed/exit-code/empty-stdout cases.
-- **TUI Active hooks panel**: supported. It registers in the host's right-hand `sidebar_content` slot with the shared report data; registration and rendering are covered by the TUI test suite.
+- **TUI Active hooks panel**: supported. It registers in the host's right-hand `sidebar_content` slot with the shared report data and polls the runtime status snapshot for live colors; registration, color mapping, polling, pruning, and dispose are covered by the TUI test suite.
 - The CLI and startup banner remain the unconditional fallback visibility surfaces.
 
 ## Implementation Map
@@ -248,7 +252,8 @@ There is no file watcher and no persisted snapshot: the hook set is digested exa
 - `src/utils/workflow-paths.ts` - global `.owflow` directory constants and path helpers
 - `src/hooks-wrapper/registry.ts` - naming/extension tables, interpreter resolution (`Bun.which`), strict directory digest (including duplicate-name rejection), registry builder, and the unified `scanHooks` one-call scan
 - `src/hooks-wrapper/runners.ts` - `owflow-hooks/1` envelope build/parse, in-process and subprocess runners, and the combined `{ load, run }` execution core
-- `src/hooks-wrapper/dispatcher.ts` - per-event gate/observe translation, failed-gate session ending, and the mutation whitelist
+- `src/hooks-wrapper/dispatcher.ts` - per-event gate/observe translation, failed-gate session ending, the mutation whitelist, and best-effort runtime-status reports
+- `src/hooks-wrapper/status.ts` - per-workspace status-file path, atomic overwritten snapshot store (50 ms trailing flush), and the validating reader used by the TUI
 - `src/hooks-wrapper/report.ts` - shared row model and three renderers
 - `src/hooks-wrapper/shared.ts` - shared `Blocked:` prefix, JSON guards, and comparator
 - `src/hooks/plugin-hooks.ts` - server adapter (wrapper initialization, passthrough handlers, dispatch wiring)

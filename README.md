@@ -323,11 +323,11 @@ Hooks are digested once at startup: **restart OpenCode to reload** after adding,
 
 **Trust model**: scripts are the host project's own code, executed with the user's full privileges, with inherited environment, no name/path validation, no timeouts, no output caps, no audit trail — the git-hooks/husky convention; the bypass switch is the only control.
 
-**Visibility surfaces** (all are "effective after next restart"):
+**Visibility surfaces** (the loaded hook set is "effective after next restart"; TUI runtime colors are live):
 
 - Startup: the `[owflow]` banner logs every registered hook (`path -> event [class] interpreter - status`), invalid entries, and the bypass state
 - CLI: `owflow-hooks` prints a table (or `--json`), scanning `./.owflow/hooks/` relative to the current directory; it exits 1 when invalid entries are found. The CLI runs on `bun` (same runtime as OpenCode), so it needs `bun` on your PATH
-- TUI: an always-on **Active hooks** panel in the right-hand sidebar lists every loaded hook by name - no command, session, message, or model turn required
+- TUI: an always-on **Active hooks** panel in the right-hand sidebar lists every loaded hook by name - no command, session, message, or model turn required. Each row uses a colored status orb (like the MCP status in OpenCode): grey before the hook has run, yellow while it is running, green after a successful run, and red after a failed, blocked, or unavailable-interpreter run. The current state follows the hook name in muted grey as `Idle`, `Running`, `Success`, or `Error`. The dispatcher writes a single overwritten JSON snapshot to OpenCode's tmp directory (`owflow-hooks-<workspace-hash>.json` inside `os.tmpdir()/opencode/`) - one file per workspace, no per-run files, last writer wins. The file is a diagnostic bridge for the TUI; hook scripts and the `owflow-hooks/1` contract are unchanged. Set `OWFLOW_HOOKS_STATUS_FILE` only to override the path for tests or manual debugging.
 
 The CLI and TUI scans are **structural only** - they validate names, extensions, and event derivations but do not import `.ts`/`.js` scripts. A hook that is structurally valid but throws at import (or lacks a default export) still appears as `registered` there; import validation happens exclusively at plugin startup, where one bad file is fatal. The startup banner is the surface that reflects the import-validated set.
 

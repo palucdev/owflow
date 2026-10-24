@@ -18,6 +18,7 @@ import type {
   InterpreterAvailability,
   Outcome,
 } from "../../hooks-wrapper/registry.js";
+import type { HookStatusReport } from "../../types/hook-types.js";
 
 const entry = (
   overrides: Partial<HookRegistryEntry> = {},
@@ -361,6 +362,174 @@ describe("missing interpreter at fire", () => {
       expect(execution.calls).toHaveLength(0);
     } finally {
       warnSpy.mockRestore();
+    }
+  });
+});
+
+describe("runtime status observer", () => {
+  test("should report pending before the run and settled after a successful run", async () => {
+    const order: string[] = [];
+    const reports: HookStatusReport[] = [];
+    const dispatch = createDispatcher({
+      run: async () => {
+        order.push("run");
+        return { status: "ok" };
+      },
+      registry: registryOf([entry()]),
+      onStatus: (report) => {
+        order.push(report.phase);
+        reports.push(report);
+      },
+    });
+
+    await dispatch(
+      "tool.execute.before",
+      { tool: "bash" },
+      { args: { command: "ls" } },
+    );
+
+    expect(order).toEqual(["pending", "run", "settled"]);
+    expect(reports).toHaveLength(2);
+    expect(reports[0]?.runId).toMatch(/^tool\.execute\.before#\d+$/);
+    expect(reports[1]?.runId).toBe(reports[0]?.runId);
+    expect(reports[1]?.outcome).toEqual({ status: "ok" });
+  });
+
+  test("should report blocked and failed gates before rejecting or ending the session", async () => {
+    const blockedOrder: string[] = [];
+    const blockedDispatch = createDispatcher({
+      run: async () => ({ status: "blocked", reason: "policy says no" }),
+      registry: registryOf([entry()]),
+      onStatus: (report) => {
+        blockedOrder.push(
+          `${report.phase}:${report.outcome?.status ?? report.reason ?? ""}`,
+        );
+      },
+    });
+
+    await expect(
+      blockedDispatch("tool.execute.before", { tool: "bash" }),
+    ).rejects.toThrow("policy says no");
+    expect(blockedOrder).toEqual(["pending:", "settled:blocked"]);
+
+    const failedOrder: string[] = [];
+    const failedDispatch = createDispatcher({
+      run: async () => ({ status: "failed", reason: "gate broke" }),
+      registry: registryOf([entry()]),
+      endSession: () => {
+        failedOrder.push("end-session");
+      },
+      onStatus: (report) => {
+        failedOrder.push(`status:${report.phase}`);
+      },
+    });
+
+    await expect(
+      failedDispatch(
+        "tool.execute.before",
+        { tool: "bash", sessionID: "ses_failed" },
+        { args: {} },
+      ),
+    ).rejects.toThrow("gate broke");
+    expect(failedOrder).toEqual([
+      "status:pending",
+      "status:settled",
+      "end-session",
+    ]);
+  });
+
+  test("should report a missing gate interpreter as skipped and still fail closed", async () => {
+    const reports: HookStatusReport[] = [];
+    const ended: string[] = [];
+    const missing = entry({
+      path: "/project/.owflow/hooks/tool-execute-before.sh",
+      runnerClass: "subprocess",
+      interpreter: { expected: "bash", available: false },
+      status: "will-fail-closed",
+    });
+    const dispatch = createDispatcher({
+      run: async () => {
+        throw new Error("must not run");
+      },
+      registry: registryOf([missing]),
+      endSession: (sessionID) => {
+        ended.push(sessionID);
+      },
+      onStatus: (report) => reports.push(report),
+    });
+
+    const message = await rejectionMessage(
+      dispatch,
+      "tool.execute.before",
+      { tool: "bash", sessionID: "ses_missing" },
+      { args: {} },
+    );
+
+    expect(message.startsWith("Blocked:")).toBe(true);
+    expect(ended).toEqual(["ses_missing"]);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.phase).toBe("skipped");
+    expect(reports[0]?.reason).toContain("bash is not available");
+  });
+
+  test("should report a missing observe interpreter as skipped and continue", async () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const reports: HookStatusReport[] = [];
+      const missing = entry({
+        path: "/project/.owflow/hooks/config.sh",
+        event: "config",
+        class: "observe",
+        runnerClass: "subprocess",
+        interpreter: { expected: "bash", available: false },
+        status: "skipped-no-interpreter",
+      });
+      const dispatch = createDispatcher({
+        run: async () => {
+          throw new Error("must not run");
+        },
+        registry: registryOf([missing]),
+        onStatus: (report) => reports.push(report),
+      });
+
+      await expect(dispatch("config", {})).resolves.toBeUndefined();
+
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.phase).toBe("skipped");
+      expect(reports[0]?.reason).toContain("bash is not available");
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("should warn once and preserve semantics when the observer throws", async () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const ended: string[] = [];
+      const dispatch = createDispatcher({
+        run: async () => ({ status: "failed", reason: "gate broke" }),
+        registry: registryOf([entry()]),
+        endSession: (sessionID) => {
+          ended.push(sessionID);
+        },
+        onStatus: () => {
+          throw new Error("observer exploded");
+        },
+      });
+
+      await expect(
+        dispatch(
+          "tool.execute.before",
+          { tool: "bash", sessionID: "ses_failed" },
+          { args: {} },
+        ),
+      ).rejects.toThrow("gate broke");
+      expect(ended).toEqual(["ses_failed"]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("observer exploded");
+    } finally {
+      warn.mockRestore();
     }
   });
 });

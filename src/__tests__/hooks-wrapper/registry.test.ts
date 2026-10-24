@@ -12,8 +12,6 @@ import {
   DISPATCHABLE_EVENT_NAMES,
   DISPATCHABLE_EVENTS,
   EXCLUDED_EVENT_NAMES,
-  EXTENSION_RANK,
-  HOOK_EXTENSIONS,
   HookDigestMode,
   buildRegistry,
   deriveHook,
@@ -75,15 +73,11 @@ describe("toDottedEvent", () => {
 });
 
 describe("extension routing", () => {
-  test("should route each extension to its runner class at the pinned extension rank", () => {
+  test("should route each extension to its runner class", () => {
     expect(runnerClassForExtension(".ts")).toBe("in-process");
     expect(runnerClassForExtension(".js")).toBe("in-process");
     expect(runnerClassForExtension(".sh")).toBe("subprocess");
     expect(runnerClassForExtension(".ps1")).toBe("subprocess");
-
-    expect(
-      HOOK_EXTENSIONS.map((extension) => EXTENSION_RANK[extension]),
-    ).toEqual([0, 1, 2, 3]);
 
     expect(isHookExtension(".ts")).toBe(true);
     expect(isHookExtension(".ps1")).toBe(true);
@@ -378,7 +372,7 @@ describe("digest duplicate hook names", () => {
 });
 
 describe("buildRegistry", () => {
-  test("should order entries by event and extension rank", () => {
+  test("should order entries by event", () => {
     const registry = buildRegistry(
       [
         script({
@@ -394,19 +388,9 @@ describe("buildRegistry", () => {
           class: "observe",
         }),
         script({
-          path: "/hooks/tool-execute-before.js",
-          stem: "tool-execute-before",
-          extension: ".js",
-        }),
-        script({
           path: "/hooks/chat-message.ts",
           stem: "chat-message",
           event: "chat.message",
-        }),
-        script({
-          path: "/hooks/tool-execute-before.ts",
-          stem: "tool-execute-before",
-          extension: ".ts",
         }),
       ],
       AVAILABLE,
@@ -415,8 +399,6 @@ describe("buildRegistry", () => {
     expect(registry.entries.map((entry) => path.basename(entry.path))).toEqual([
       "chat-message.ts",
       "config.ts",
-      "tool-execute-before.ts",
-      "tool-execute-before.js",
       "tool-execute-before.sh",
     ]);
 
@@ -424,11 +406,7 @@ describe("buildRegistry", () => {
       registry.byEvent["tool.execute.before"].map((entry) =>
         path.basename(entry.path),
       ),
-    ).toEqual([
-      "tool-execute-before.ts",
-      "tool-execute-before.js",
-      "tool-execute-before.sh",
-    ]);
+    ).toEqual(["tool-execute-before.sh"]);
     expect(registry.byEvent["config"]).toHaveLength(1);
     expect(registry.byEvent["dispose"]).toHaveLength(0);
   });

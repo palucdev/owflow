@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Live hook runtime status in the TUI** — each Active hooks row uses a colored status orb (`•`, like the OpenCode MCP status) that starts grey, turns yellow while its script runs, green after success, and red after a failure, block, or unavailable interpreter, then returns to grey when idle; the state is repeated after the hook name in muted grey as `Idle`, `Running`, `Success`, or `Error`. The dispatcher writes one overwritten JSON snapshot per workspace to OpenCode's tmp directory (`owflow-hooks-<workspace-hash>.json`), reusing one `.tmp` name and flushing at most every 50 ms; hook scripts and the `owflow-hooks/1` contract are unchanged. `OWFLOW_HOOKS_STATUS_FILE` overrides the path for tests and debugging.
+
 ## [0.7.0] - 2026-10-12
 
 ### Added

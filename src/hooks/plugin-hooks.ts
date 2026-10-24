@@ -3,6 +3,10 @@ import type { Hooks } from "@opencode-ai/plugin";
 import { createDispatcher } from "../hooks-wrapper/dispatcher.js";
 import { scanHooks } from "../hooks-wrapper/registry.js";
 import { createExecutionCore } from "../hooks-wrapper/runners.js";
+import {
+  createHookStatusStore,
+  resolveHooksStatusFile,
+} from "../hooks-wrapper/status.js";
 import { HookEvent } from "../types/hook-types.js";
 import type {
   Dispatcher,
@@ -24,11 +28,17 @@ export const DROPPED_PLUGIN_HINT =
 export interface HooksWrapper {
   readonly dispatch: Dispatcher;
   readonly snapshot: HookReportInput;
+  dispose(): void;
+}
+
+export interface HooksWrapperOptions {
+  readonly statusFile?: string;
 }
 
 export const initializeHooksWrapper = async (
   directory: string,
   endSession?: (sessionID: string) => Promise<void> | void,
+  options: HooksWrapperOptions = {},
 ): Promise<HooksWrapper> => {
   const { registry } = scanHooks(hooksDirectory(directory));
   const core = createExecutionCore({ cwd: directory });
@@ -40,9 +50,21 @@ export const initializeHooksWrapper = async (
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`${detail}\n${DROPPED_PLUGIN_HINT}`);
   }
+  // Creation writes the initial empty snapshot, clearing stale statuses from a
+  // previous OpenCode run before the first hook fires.
+  const statusStore = createHookStatusStore({
+    file: options.statusFile ?? resolveHooksStatusFile(directory),
+    workspace: directory,
+  });
   return {
-    dispatch: createDispatcher({ run: core.run, registry, endSession }),
+    dispatch: createDispatcher({
+      run: core.run,
+      registry,
+      endSession,
+      onStatus: (report) => statusStore.observe(report),
+    }),
     snapshot: { entries: registry.entries },
+    dispose: () => statusStore.dispose(),
   };
 };
 

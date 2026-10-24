@@ -336,6 +336,20 @@ describe("OwflowPlugin index", () => {
       }
     };
 
+    const withStatusFile = async <T>(
+      file: string,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      const previous = process.env.OWFLOW_HOOKS_STATUS_FILE;
+      process.env.OWFLOW_HOOKS_STATUS_FILE = file;
+      try {
+        return await run();
+      } finally {
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_STATUS_FILE;
+        else process.env.OWFLOW_HOOKS_STATUS_FILE = previous;
+      }
+    };
+
     const writeHookFile = (fileName: string, contents: string): string => {
       const hooksDir = path.join(tmpDir, ".owflow", "hooks");
       fs.mkdirSync(hooksDir, { recursive: true });
@@ -658,6 +672,76 @@ describe("OwflowPlugin index", () => {
         if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
         else process.env.OWFLOW_HOOKS_DISABLED = previous;
       }
+    });
+
+    test("should write an empty runtime snapshot at initialization, clearing prior statuses", async () => {
+      const statusFile = path.join(tmpDir, "runtime-status.json");
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({
+          version: 1,
+          pid: 1,
+          workspace: tmpDir,
+          updatedAt: 1,
+          hooks: {
+            event: { status: "success", startedAt: 1, finishedAt: 2 },
+          },
+        }),
+        "utf8",
+      );
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          expect(typeof plugin.dispose).toBe("function");
+
+          const snapshot = JSON.parse(
+            fs.readFileSync(statusFile, "utf8"),
+          ) as { hooks: Record<string, unknown>; workspace: string };
+          expect(snapshot.hooks).toEqual({});
+          expect(snapshot.workspace).toBe(tmpDir);
+        });
+      });
+    });
+
+    test("should not write a status file when OWFLOW_HOOKS_DISABLED=1", async () => {
+      const previous = process.env.OWFLOW_HOOKS_DISABLED;
+      process.env.OWFLOW_HOOKS_DISABLED = "1";
+      const statusFile = path.join(tmpDir, "disabled-status.json");
+
+      try {
+        await withStatusFile(statusFile, async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          expect(fs.existsSync(statusFile)).toBe(false);
+          expect(plugin.dispose).toBeUndefined();
+        });
+      } finally {
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
+        else process.env.OWFLOW_HOOKS_DISABLED = previous;
+      }
+    });
+
+    test("should run the user dispose dispatch before flushing the status store", async () => {
+      const marker = path.join(tmpDir, "dispose-called.txt");
+      writeHookFile(
+        "dispose.sh",
+        `#!/bin/bash\ncat >/dev/null\nprintf 'called' >> "${marker}"\nprintf '%s' '{"protocol":"owflow-hooks/1","status":"ok"}'\n`,
+      );
+      const statusFile = path.join(tmpDir, "dispose-status.json");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+          await plugin.dispose?.();
+
+          expect(fs.readFileSync(marker, "utf8")).toBe("called");
+          const snapshot = JSON.parse(
+            fs.readFileSync(statusFile, "utf8"),
+          ) as { hooks: Record<string, { status: string }> };
+          expect(snapshot.hooks["dispose"]?.status).toBe("success");
+        });
+      });
     });
 
     test("should resolve with no-op wrapper handlers when the hooks directory is absent", async () => {

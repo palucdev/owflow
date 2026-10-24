@@ -8,6 +8,7 @@ import type {
   DispatcherOptions,
   EnvelopeContext,
   HookRegistryEntry,
+  HookStatusReport,
   Outcome,
 } from "../types/hook-types.js";
 import { interpreterName } from "./registry.js";
@@ -210,7 +211,23 @@ export const createDispatcher = ({
   run,
   registry,
   endSession,
+  onStatus,
 }: DispatcherOptions): Dispatcher => {
+  let runCounter = 0;
+  let statusObserverWarned = false;
+
+  const reportStatus = (report: HookStatusReport): void => {
+    if (onStatus === undefined) return;
+    try {
+      onStatus(report);
+    } catch (error) {
+      if (!statusObserverWarned) {
+        statusObserverWarned = true;
+        warn(`status observer failed: ${errorMessage(error)}`);
+      }
+    }
+  };
+
   return async (event, input, output) => {
     const eventEntries = registry.byEvent[event];
     if (eventEntries.length === 0) return;
@@ -225,6 +242,11 @@ export const createDispatcher = ({
 
     for (const entry of eventEntries) {
       if (!entry.interpreter.available) {
+        reportStatus({
+          entry,
+          phase: "skipped",
+          reason: `${interpreterName(entry.interpreter)} is not available`,
+        });
         if (isGate) {
           await endSessionForFailure(endSession, sessionID, entry);
           throw missingInterpreterRejection(entry);
@@ -235,7 +257,18 @@ export const createDispatcher = ({
         continue;
       }
 
+      runCounter += 1;
+      const runId = `${event}#${runCounter}`;
+      reportStatus({ entry, phase: "pending", runId });
+
       const outcome = await runOutcome(run, entry, envelope);
+      reportStatus({
+        entry,
+        phase: "settled",
+        runId,
+        outcome,
+        ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}),
+      });
 
       if (outcome.status !== "ok") {
         if (isGate) {

@@ -150,7 +150,16 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
   };
 
   if (wrapper === undefined) return hooks;
-  return { ...hooks, ...createDispatchHandlers(wrapper.dispatch) };
+  const dispatchHandlers = createDispatchHandlers(wrapper.dispatch);
+  const userDispose = dispatchHandlers.dispose;
+  return {
+    ...hooks,
+    ...dispatchHandlers,
+    dispose: async () => {
+      await userDispose?.();
+      wrapper.dispose();
+    },
+  };
 };
 
 export default OwflowPlugin;

@@ -81,14 +81,6 @@ export const HOOK_EXTENSIONS: readonly HookExtension[] = [
   ".ps1",
 ];
 
-/** Fixed rank keeps the report order deterministic (one format per hook name). */
-export const EXTENSION_RANK: Readonly<Record<HookExtension, number>> = {
-  ".ts": 0,
-  ".js": 1,
-  ".sh": 2,
-  ".ps1": 3,
-};
-
 export const isHookExtension = (value: string): value is HookExtension =>
   (HOOK_EXTENSIONS as readonly string[]).includes(value);
 
@@ -119,18 +111,6 @@ export const deriveHook = (stem: string): HookDerivation => {
     };
   }
   return { kind: "unknown", event };
-};
-
-/** `event` alone maps 1-to-1 onto a stem, so it fully determines entry order. */
-interface HookOrderKey {
-  readonly event: string;
-  readonly extension: HookExtension;
-}
-
-const compareHookEntries = (a: HookOrderKey, b: HookOrderKey): number => {
-  const byEvent = compareStrings(a.event, b.event);
-  if (byEvent !== 0) return byEvent;
-  return EXTENSION_RANK[a.extension] - EXTENSION_RANK[b.extension];
 };
 
 /* ── Interpreter resolution ───────────────────────────────────────────────── */
@@ -330,15 +310,15 @@ const statusFor = (
 
 /**
  * Builds the single source of truth for dispatch and every report surface.
- * Entries are ordered once by `(event, extension rank)` so all surfaces agree
- * by construction; nothing is persisted.
+ * Entries are ordered once by event (the digest guarantees at most one hook per
+ * event) so all surfaces agree by construction; nothing is persisted.
  */
 export const buildRegistry = (
   scripts: readonly HookScript[],
   availability: InterpreterAvailability,
 ): HookRegistry => {
   const entries: HookRegistryEntry[] = [...scripts]
-    .sort(compareHookEntries)
+    .sort((a, b) => compareStrings(a.event, b.event))
     .map((script) => {
       const interpreter = { ...availability[script.extension] };
       return {

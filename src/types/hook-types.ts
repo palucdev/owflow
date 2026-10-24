@@ -248,6 +248,39 @@ export interface ExecutionCore extends HookRunner {
 
 /* ── Dispatch ─────────────────────────────────────────────────────────────── */
 
+export type HookRunState = "pending" | "success" | "failure";
+
+/** One event's last-known runtime state in the live status snapshot. */
+export interface HookRuntimeEntry {
+  readonly status: HookRunState;
+  readonly startedAt: number;
+  readonly finishedAt?: number;
+  readonly durationMs?: number;
+  readonly reason?: string;
+}
+
+/** The single overwritten snapshot consumed by the TUI status poller. */
+export interface HookStatusSnapshot {
+  readonly version: 1;
+  readonly pid: number;
+  readonly workspace: string;
+  readonly updatedAt: number;
+  readonly hooks: Readonly<Record<string, HookRuntimeEntry>>;
+}
+
+/** A dispatcher transition reported to the best-effort status observer. */
+export interface HookStatusReport {
+  readonly entry: HookRegistryEntry;
+  readonly phase: "pending" | "settled" | "skipped";
+  readonly runId?: string;
+  readonly outcome?: Outcome;
+  readonly reason?: string;
+}
+
+export type HookStatusReadResult =
+  | { readonly kind: "missing" | "invalid" }
+  | { readonly kind: "ok"; readonly snapshot: HookStatusSnapshot };
+
 export interface DispatcherOptions {
   readonly run: HookRunner["run"];
   readonly registry: HookRegistry;
@@ -257,6 +290,11 @@ export interface DispatcherOptions {
    * adapter so the wrapper core stays platform-agnostic.
    */
   readonly endSession?: (sessionID: string) => Promise<void> | void;
+  /**
+   * Best-effort runtime-status observer. Failures are warned once and never
+   * affect gate/observe semantics.
+   */
+  readonly onStatus?: (report: HookStatusReport) => void;
 }
 
 export type Dispatcher = (
