@@ -1,43 +1,32 @@
 /**
- * Hook execution: the `owflow-hooks/1` envelope (build/parse), the in-process
- * and subprocess runners, and the combined `{ load, run }` execution core.
+ * Hook execution: the `owflow-hooks/1` envelope (build/parse) and the
+ * subprocess runner shared by every supported script format.
  */
 
-import { pathToFileURL } from "node:url";
-
-import { DISPATCHABLE_EVENTS } from "../types/hook-types.js";
+import { hookClassOf } from "../types/hook-types.js";
 import type {
-  DispatchableEvent,
   EnvelopeBuildInput,
   EnvelopeContext,
   EnvelopeResult,
-  ExecutionCore,
-  ExecutionCoreOptions,
-  HookHandler,
-  HookRegistryEntry,
+  HookCapture,
   HookRunner,
-  InProcessRunner,
-  ModuleImporter,
   Outcome,
   ParsedEnvelopeResult,
   SpawnProcess,
   SpawnProcessOptions,
   SpawnedProcess,
   SpawnedStream,
+  StreamReader,
   SubprocessRunnerDeps,
 } from "../types/hook-types.js";
-import { BLOCKED_PREFIX, errorMessage, isRecord } from "./shared.js";
+import { MAX_CAPTURE_BYTES } from "./hook-logs.js";
+import { errorMessage } from "./shared.js";
 
 export type {
   EnvelopeBuildInput,
   EnvelopeContext,
   EnvelopeResult,
-  ExecutionCore,
-  ExecutionCoreOptions,
-  HookHandler,
   HookRunner,
-  InProcessRunner,
-  ModuleImporter,
   Outcome,
   ParsedEnvelopeResult,
   SpawnProcess,
@@ -131,7 +120,7 @@ export const buildEnvelope = (input: EnvelopeBuildInput): EnvelopeContext => {
   return {
     protocol: PROTOCOL_VERSION,
     event: input.event,
-    class: DISPATCHABLE_EVENTS[input.event],
+    class: hookClassOf(input.event),
     ...(typeof sessionID === "string" && sessionID.length > 0
       ? { session: { sessionID } }
       : {}),
@@ -147,9 +136,9 @@ const describeType = (value: unknown): string => {
 
 
 /**
- * Parses a script result from either class: stdout JSON for subprocesses or a
- * returned object for in-process handlers. Never throws and never logs — every
- * malformed or mismatched result becomes a sentinel (R4.2).
+ * Parses a script result from subprocess stdout (object values remain
+ * tolerated). Never throws and never logs — every malformed or mismatched
+ * result becomes a sentinel (R4.2).
  */
 export const parseEnvelopeResult = (raw: unknown): ParsedEnvelopeResult => {
   let value = raw;
@@ -221,87 +210,87 @@ const toOutcome = (result: EnvelopeResult): Outcome => ({
   ...(result.mutations !== undefined ? { mutations: result.mutations } : {}),
 });
 
-const loadHandler = async (
-  importModule: ModuleImporter,
-  entry: HookRegistryEntry,
-): Promise<HookHandler> => {
-  let namespace: unknown;
-  try {
-    namespace = await importModule(pathToFileURL(entry.path).href);
-  } catch (error) {
-    // R1.3/R8.1: a failed import must name the offending file and keep the [owflow] prefix.
-    throw new Error(`[owflow] ${entry.path}: ${errorMessage(error)}`);
+interface StreamCapture {
+  readonly text: string;
+  readonly truncated: boolean;
+}
+
+const truncateBytes = (value: string, maxBytes: number): StreamCapture => {
+  if (Buffer.byteLength(value, "utf8") <= maxBytes) {
+    return { text: value, truncated: false };
   }
-  const handler = isRecord(namespace) ? namespace.default : undefined;
-  if (typeof handler !== "function") {
-    throw new Error(
-      `[owflow] ${entry.path} must default-export a handler function. ` +
-        "Hint: add `export default async (envelope) => result` to the hook script, then restart OpenCode.",
-    );
-  }
-  return handler as HookHandler;
+  return {
+    text: Buffer.from(value, "utf8")
+      .subarray(0, Math.max(0, maxBytes))
+      .toString("utf8"),
+    truncated: true,
+  };
 };
 
-export const createInProcessRunner = (
-  importModule: ModuleImporter = (specifier) => import(specifier),
-): InProcessRunner => {
-  const handlers = new Map<string, HookHandler>();
-
-  const importOnce = async (entry: HookRegistryEntry): Promise<HookHandler> => {
-    const cached = handlers.get(entry.path);
-    if (cached !== undefined) return cached;
-    const handler = await loadHandler(importModule, entry);
-    handlers.set(entry.path, handler);
-    return handler;
-  };
-
-  return {
-    load: async (entry) => {
-      await importOnce(entry);
-    },
-    run: async (entry, envelope) => {
-      let handler: HookHandler;
-      try {
-        handler = await importOnce(entry);
-      } catch (error) {
-        return { status: "failed", reason: errorMessage(error) };
-      }
-      try {
-        const returned = await handler(envelope);
-        // A side-effect-only script returns nothing — same meaning as absent stdout JSON.
-        if (returned === undefined) return { status: "ok" };
-        const parsed = parseEnvelopeResult(returned);
-        if (parsed.ok && parsed.data !== undefined)
-          return toOutcome(parsed.data);
-        return {
-          status: "failed",
-          reason: parsed.error ?? "malformed handler result",
-        };
-      } catch (error) {
-        const message = errorMessage(error);
-        if (message.startsWith(BLOCKED_PREFIX)) {
-          const reason = message.slice(BLOCKED_PREFIX.length).trim();
-          return {
-            status: "blocked",
-            reason: reason.length > 0 ? reason : message,
-          };
+const readWithReader = async (
+  reader: StreamReader,
+): Promise<StreamCapture> => {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  let truncated = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined) continue;
+      if (size + value.byteLength > MAX_CAPTURE_BYTES) {
+        const remaining = MAX_CAPTURE_BYTES - size;
+        if (remaining > 0) chunks.push(value.subarray(0, remaining));
+        truncated = true;
+        try {
+          await reader.cancel?.();
+        } catch {
+          // Cancelling only releases the cap; the partial read is enough.
         }
-        return { status: "failed", reason: message };
+        break;
       }
-    },
+      chunks.push(value);
+      size += value.byteLength;
+    }
+  } catch {
+    // Keep the chunks read so far; a failed read behaves like a short stream.
+  }
+  return {
+    text: Buffer.concat(chunks).toString("utf8"),
+    truncated,
   };
 };
 
 const readStream = async (
   stream: SpawnedStream | null | undefined,
-): Promise<string> => {
-  if (stream === null || stream === undefined) return "";
+): Promise<StreamCapture> => {
+  if (stream === null || stream === undefined) {
+    return { text: "", truncated: false };
+  }
   try {
-    return await stream.text();
+    if (typeof stream.getReader === "function") {
+      return await readWithReader(stream.getReader());
+    }
+    return truncateBytes(await stream.text(), MAX_CAPTURE_BYTES);
   } catch {
-    return "";
+    return { text: "", truncated: false };
   }
 };
+
+const withStreams = (
+  stdout: StreamCapture | undefined,
+  stderr: StreamCapture,
+  exitCode: number | null,
+  signal?: string | null,
+): HookCapture => ({
+  ...(stdout !== undefined ? { stdout: stdout.text } : {}),
+  ...(stderr.text.length > 0 ? { stderr: stderr.text } : {}),
+  exitCode,
+  ...(signal !== undefined && signal !== null ? { signal } : {}),
+  ...(stdout?.truncated === true || stderr.truncated
+    ? { truncated: true }
+    : {}),
+});
 
 const signalReason = (signalCode: string | null | undefined): string =>
   `process terminated by signal ${signalCode ?? "unknown"}`;
@@ -320,6 +309,7 @@ export const createSubprocessRunner = ({
         return {
           status: "failed",
           reason: `no interpreter resolved for ${entry.path}`,
+          capture: {},
         };
       }
 
@@ -330,70 +320,67 @@ export const createSubprocessRunner = ({
         stderr: "pipe",
       });
 
-      const [stdoutText, stderrText, awaitedExit] = await Promise.all([
+      const [stdoutStream, stderrStream, awaitedExit] = await Promise.all([
         readStream(proc.stdout),
         readStream(proc.stderr),
         proc.exited,
       ]);
       const exitCode =
         proc.exitCode === undefined ? awaitedExit : proc.exitCode;
+      let malformedStdout: StreamCapture | undefined;
 
       // A parsed JSON status is authoritative over the exit code (R3.3).
-      if (stdoutText.trim().length > 0) {
-        const parsed = parseEnvelopeResult(stdoutText);
-        if (parsed.ok && parsed.data !== undefined)
-          return toOutcome(parsed.data);
+      if (stdoutStream.text.trim().length > 0) {
+        const parsed = parseEnvelopeResult(stdoutStream.text);
+        if (parsed.ok && parsed.data !== undefined) {
+          return {
+            ...toOutcome(parsed.data),
+            capture: withStreams(undefined, stderrStream, exitCode ?? null),
+          };
+        }
+        malformedStdout = stdoutStream;
         // Non-empty stdout that is not a valid result is malformed; a zero exit
         // must never let it pass silently (R4.2, fail closed).
         if (exitCode === 0) {
           return {
             status: "failed",
             reason: parsed.error ?? "unparseable subprocess stdout",
+            capture: withStreams(
+              malformedStdout,
+              stderrStream,
+              exitCode,
+            ),
           };
         }
       }
       // `exitCode === null` is a signal kill or an absent code — never success.
       if (exitCode === null || exitCode === undefined) {
-        return { status: "failed", reason: signalReason(proc.signalCode) };
+        return {
+          status: "failed",
+          reason: signalReason(proc.signalCode),
+          capture: withStreams(
+            malformedStdout,
+            stderrStream,
+            exitCode ?? null,
+            proc.signalCode ?? null,
+          ),
+        };
       }
       if (exitCode !== 0) {
-        const diagnostics = stderrText.trim();
+        const diagnostics = stderrStream.text.trim();
         return {
           status: "failed",
           reason:
             diagnostics.length > 0
               ? diagnostics
               : `process exited with code ${exitCode}`,
+          capture: withStreams(malformedStdout, stderrStream, exitCode),
         };
       }
-      return { status: "ok" };
+      return {
+        status: "ok",
+        capture: withStreams(malformedStdout, stderrStream, exitCode),
+      };
     },
-  };
-};
-
-/* ── Execution core ───────────────────────────────────────────────────────── */
-
-/**
- * The v2 seam: `run(entry, envelope) → Outcome` over both runner classes
- * (R11.1). `load` is registration-time import validation, deliberately kept
- * off the `run` path so the seam signature stays exactly `(entry, envelope)`.
- */
-export const createExecutionCore = (
-  options: ExecutionCoreOptions,
-): ExecutionCore => {
-  const inProcess = options.inProcess ?? createInProcessRunner();
-  const subprocess =
-    options.subprocess ?? createSubprocessRunner({ cwd: options.cwd });
-
-  return {
-    load: async (entries) => {
-      for (const entry of entries) {
-        if (entry.runnerClass === "in-process") await inProcess.load(entry);
-      }
-    },
-    run: (entry: HookRegistryEntry, envelope: EnvelopeContext) =>
-      entry.runnerClass === "in-process"
-        ? inProcess.run(entry, envelope)
-        : subprocess.run(entry, envelope),
   };
 };

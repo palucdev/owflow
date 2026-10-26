@@ -12,13 +12,14 @@ import {
   DISPATCHABLE_EVENT_NAMES,
   DISPATCHABLE_EVENTS,
   EXCLUDED_EVENT_NAMES,
+  HOOK_EVENT_NAMES,
+  HOST_EVENT_NAMES,
   HookDigestMode,
   buildRegistry,
   deriveHook,
   digest,
   isHookExtension,
   resolveInterpreterAvailability,
-  runnerClassForExtension,
   scanHooks,
   toDottedEvent,
 } from "../../hooks-wrapper/registry.js";
@@ -41,24 +42,22 @@ describe("hooks-wrapper vocabulary", () => {
       context: {},
     } satisfies EnvelopeContext;
     const script = {
-      path: "/p/tool-execute-before.ts",
+      path: "/p/tool-execute-before.sh",
       stem: "tool-execute-before",
       event: "tool.execute.before",
       class: "gate",
-      runnerClass: "in-process",
-      extension: ".ts",
+      extension: ".sh",
     } satisfies HookScript;
     const entry = {
       path: script.path,
       event: script.event,
       class: script.class,
-      runnerClass: script.runnerClass,
       interpreter: { available: true },
       status: "registered",
     } satisfies HookRegistryEntry;
 
     expect([outcome.status, envelope.protocol, entry.status, script.extension])
-      .toEqual(["blocked", "owflow-hooks/1", "registered", ".ts"]);
+      .toEqual(["blocked", "owflow-hooks/1", "registered", ".sh"]);
   });
 });
 
@@ -73,16 +72,13 @@ describe("toDottedEvent", () => {
 });
 
 describe("extension routing", () => {
-  test("should route each extension to its runner class", () => {
-    expect(runnerClassForExtension(".ts")).toBe("in-process");
-    expect(runnerClassForExtension(".js")).toBe("in-process");
-    expect(runnerClassForExtension(".sh")).toBe("subprocess");
-    expect(runnerClassForExtension(".ps1")).toBe("subprocess");
-
-    expect(isHookExtension(".ts")).toBe(true);
+  test("should accept only the subprocess extensions", () => {
+    expect(isHookExtension(".sh")).toBe(true);
     expect(isHookExtension(".ps1")).toBe(true);
+    expect(isHookExtension(".ts")).toBe(false);
+    expect(isHookExtension(".js")).toBe(false);
     expect(isHookExtension(".md")).toBe(false);
-    expect(isHookExtension("ts")).toBe(false);
+    expect(isHookExtension("sh")).toBe(false);
   });
 });
 
@@ -153,6 +149,28 @@ describe("deriveHook", () => {
       event: "tool.execute.befor",
     });
   });
+
+  test("should classify v1 host events as observe-only event-named hooks", () => {
+    expect(new Set(HOOK_EVENT_NAMES)).toEqual(
+      new Set([...DISPATCHABLE_EVENT_NAMES, ...HOST_EVENT_NAMES]),
+    );
+    expect(HOST_EVENT_NAMES).toHaveLength(32);
+
+    expect(deriveHook("session-idle")).toEqual({
+      kind: "host-event",
+      event: "session.idle",
+      class: "observe",
+    });
+    expect(deriveHook("message-part-updated")).toEqual({
+      kind: "host-event",
+      event: "message.part.updated",
+      class: "observe",
+    });
+    expect(deriveHook("session-next-step-ended")).toEqual({
+      kind: "unknown",
+      event: "session.next.step.ended",
+    });
+  });
 });
 
 describe("interpreter resolution", () => {
@@ -176,11 +194,8 @@ describe("interpreter resolution", () => {
         resolved: "/usr/bin/pwsh",
         available: true,
       });
-      expect(availability[".ts"]).toEqual({ available: true });
-      expect(availability[".js"]).toEqual({ available: true });
 
-      // In-process extensions never consult the PATH lookup, and a pwsh hit
-      // means the Windows fallback candidate is never probed.
+      // A pwsh hit means the Windows fallback candidate is never probed.
       expect(whichSpy).toHaveBeenCalledTimes(2);
       expect(whichSpy).toHaveBeenCalledWith("bash");
       expect(whichSpy).toHaveBeenCalledWith("pwsh");
@@ -206,8 +221,6 @@ describe("interpreter resolution", () => {
       expected: "bash",
       available: false,
     });
-    expect(availability[".ts"]).toEqual({ available: true });
-    expect(availability[".js"]).toEqual({ available: true });
   });
 });
 
@@ -242,19 +255,19 @@ describe("digest", () => {
   test("should fail fast on every invalid entry and collect all violations without throwing in report mode", () => {
     const hooksDir = makeHooksDir();
 
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-befor.ts"), "");
-    fs.writeFileSync(path.join(hooksDir, "permission-ask.ts"), "");
-    fs.writeFileSync(path.join(hooksDir, "bad_stem.ts"), "");
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-befor.sh"), "");
+    fs.writeFileSync(path.join(hooksDir, "permission-ask.sh"), "");
+    fs.writeFileSync(path.join(hooksDir, "bad_stem.sh"), "");
     fs.writeFileSync(path.join(hooksDir, "readme.md"), "");
     fs.mkdirSync(path.join(hooksDir, "notes"));
 
     const failurePaths = [
-      path.join(hooksDir, "bad_stem.ts"),
+      path.join(hooksDir, "bad_stem.sh"),
       path.join(hooksDir, "notes"),
-      path.join(hooksDir, "permission-ask.ts"),
+      path.join(hooksDir, "permission-ask.sh"),
       path.join(hooksDir, "readme.md"),
-      path.join(hooksDir, "tool-execute-befor.ts"),
+      path.join(hooksDir, "tool-execute-befor.sh"),
     ];
 
     expect(() => digest(hooksDir, HookDigestMode.FailFast)).toThrow();
@@ -280,45 +293,91 @@ describe("digest", () => {
 
     const errorFor = (name: string): string =>
       report.failures.find((failure) => failure.path.endsWith(name))!.error;
-    expect(errorFor("bad_stem.ts")).toContain("kebab-case");
+    expect(errorFor("bad_stem.sh")).toContain("kebab-case");
     expect(errorFor("notes")).toContain("regular file");
-    expect(errorFor("permission-ask.ts")).toContain("excluded");
+    expect(errorFor("permission-ask.sh")).toContain("excluded");
     expect(errorFor("readme.md")).toContain("routable");
-    expect(errorFor("tool-execute-befor.ts")).toContain(
-      "not a dispatchable event",
+    expect(errorFor("tool-execute-befor.sh")).toContain(
+      "not a dispatchable hook or a known host event",
     );
-    expect(errorFor("tool-execute-befor.ts")).toContain("tool.execute.befor");
+    expect(errorFor("tool-execute-befor.sh")).toContain("tool.execute.befor");
 
     expect(report.entries).toHaveLength(1);
     expect(report.entries[0]!.path).toBe(
-      path.join(hooksDir, "tool-execute-before.ts"),
+      path.join(hooksDir, "tool-execute-before.sh"),
     );
     expect(report.entries[0]!.event).toBe("tool.execute.before");
     expect(report.entries[0]!.class).toBe("gate");
-    expect(report.entries[0]!.runnerClass).toBe("in-process");
+  });
+
+  test("should accept an event-named hook and expose its observe class", () => {
+    const hooksDir = makeHooksDir();
+    const idlePath = path.join(hooksDir, "session-idle.sh");
+    fs.writeFileSync(idlePath, "");
+
+    const report = digest(hooksDir, HookDigestMode.Report);
+    expect(report.failures).toEqual([]);
+    expect(report.entries).toHaveLength(1);
+    expect(report.entries[0]).toMatchObject({
+      path: idlePath,
+      stem: "session-idle",
+      event: "session.idle",
+      class: "observe",
+      extension: ".sh",
+    });
+  });
+
+  test("should reject legacy .ts and .js hooks as unroutable with the recovery hint", () => {
+    const hooksDir = makeHooksDir();
+    const tsPath = path.join(hooksDir, "tool-execute-before.ts");
+    const jsPath = path.join(hooksDir, "config.js");
+    fs.writeFileSync(tsPath, "");
+    fs.writeFileSync(jsPath, "");
+
+    const report = digest(hooksDir, HookDigestMode.Report);
+    expect(report.entries).toEqual([]);
+    expect(report.failures.map((failure) => failure.path)).toEqual([
+      jsPath,
+      tsPath,
+    ]);
+    for (const failure of report.failures) {
+      expect(failure.error).toContain(
+        "is not routable (expected .sh or .ps1)",
+      );
+    }
+
+    expect(() => digest(hooksDir, HookDigestMode.FailFast)).toThrow(
+      /is not routable \(expected \.sh or \.ps1\)/,
+    );
+    try {
+      digest(hooksDir, HookDigestMode.FailFast);
+      throw new Error("expected the digest to fail fast");
+    } catch (error) {
+      const message = (error as Error).message;
+      expect(message).toContain("Hint:");
+      expect(message).toContain("restart");
+      expect(message).toContain("OWFLOW_HOOKS_DISABLED=1");
+      expect(message).toContain(jsPath);
+      expect(message).toContain(tsPath);
+    }
   });
 });
 
 const script = (overrides: Partial<HookScript>): HookScript => ({
-  path: "/hooks/tool-execute-before.ts",
+  path: "/hooks/tool-execute-before.sh",
   stem: "tool-execute-before",
   event: "tool.execute.before",
   class: "gate",
-  runnerClass: "in-process",
-  extension: ".ts",
+  extension: ".sh",
   ...overrides,
 });
 
 const AVAILABLE: InterpreterAvailability = {
-  ".ts": { available: true },
-  ".js": { available: true },
   ".sh": { resolved: "bash", available: true },
   ".ps1": { resolved: "pwsh", available: true },
 };
 
 const UNAVAILABLE_SUBPROCESS: InterpreterAvailability = {
-  ".ts": { available: true },
-  ".js": { available: true },
   ".sh": { expected: "bash", available: false },
   ".ps1": { expected: "pwsh", available: false },
 };
@@ -337,14 +396,14 @@ describe("digest duplicate hook names", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-hooks-test-"));
     const hooksDir = path.join(tempDir, ".owflow", "hooks");
     fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
     fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ps1"), "");
 
     const report = digest(hooksDir, HookDigestMode.Report);
     expect(report.entries).toEqual([]);
     expect(report.failures.map((failure) => failure.path)).toEqual([
+      path.join(hooksDir, "tool-execute-before.ps1"),
       path.join(hooksDir, "tool-execute-before.sh"),
-      path.join(hooksDir, "tool-execute-before.ts"),
     ]);
     for (const failure of report.failures) {
       expect(failure.error).toContain('hook name "tool-execute-before"');
@@ -360,14 +419,14 @@ describe("digest duplicate hook names", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-hooks-test-"));
     const hooksDir = path.join(tempDir, ".owflow", "hooks");
     fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
     fs.writeFileSync(path.join(hooksDir, "config.ps1"), "");
 
     const report = digest(hooksDir, HookDigestMode.Report);
     expect(report.failures).toEqual([]);
     expect(
       report.entries.map((entry) => path.basename(entry.path)).sort(),
-    ).toEqual(["config.ps1", "tool-execute-before.ts"]);
+    ).toEqual(["config.ps1", "tool-execute-before.sh"]);
   });
 });
 
@@ -379,26 +438,27 @@ describe("buildRegistry", () => {
           path: "/hooks/tool-execute-before.sh",
           stem: "tool-execute-before",
           extension: ".sh",
-          runnerClass: "subprocess",
         }),
         script({
-          path: "/hooks/config.ts",
+          path: "/hooks/config.ps1",
           stem: "config",
           event: "config",
           class: "observe",
+          extension: ".ps1",
         }),
         script({
-          path: "/hooks/chat-message.ts",
+          path: "/hooks/chat-message.sh",
           stem: "chat-message",
           event: "chat.message",
+          extension: ".sh",
         }),
       ],
       AVAILABLE,
     );
 
     expect(registry.entries.map((entry) => path.basename(entry.path))).toEqual([
-      "chat-message.ts",
-      "config.ts",
+      "chat-message.sh",
+      "config.ps1",
       "tool-execute-before.sh",
     ]);
 
@@ -418,7 +478,6 @@ describe("buildRegistry", () => {
           path: "/hooks/tool-execute-before.ps1",
           stem: "tool-execute-before",
           extension: ".ps1",
-          runnerClass: "subprocess",
         }),
         script({
           path: "/hooks/config.ps1",
@@ -426,19 +485,19 @@ describe("buildRegistry", () => {
           event: "config",
           class: "observe",
           extension: ".ps1",
-          runnerClass: "subprocess",
         }),
         script({
           path: "/hooks/chat-message.sh",
           stem: "chat-message",
           event: "chat.message",
           extension: ".sh",
-          runnerClass: "subprocess",
         }),
         script({
-          path: "/hooks/tool-execute-before.ts",
-          stem: "tool-execute-before",
-          extension: ".ts",
+          path: "/hooks/session-idle.ps1",
+          stem: "session-idle",
+          event: "session.idle",
+          class: "observe",
+          extension: ".ps1",
         }),
       ],
       UNAVAILABLE_SUBPROCESS,
@@ -450,6 +509,7 @@ describe("buildRegistry", () => {
     const ps1Gate = byName.get("tool-execute-before.ps1")!;
     const ps1Observe = byName.get("config.ps1")!;
     const shGate = byName.get("chat-message.sh")!;
+    const hostEventObserve = byName.get("session-idle.ps1")!;
 
     expect(ps1Gate.status).toBe("will-fail-closed");
     expect(ps1Gate.interpreter).toEqual({
@@ -458,10 +518,29 @@ describe("buildRegistry", () => {
     });
     expect(ps1Observe.status).toBe("skipped-no-interpreter");
     expect(shGate.status).toBe("will-fail-closed");
+    expect(hostEventObserve.status).toBe("skipped-no-interpreter");
+    expect(hostEventObserve.class).toBe("observe");
+  });
 
-    const inProcess = byName.get("tool-execute-before.ts")!;
-    expect(inProcess.status).toBe("registered");
-    expect(inProcess.interpreter.available).toBe(true);
+  test("should index an event-named hook under its host event", () => {
+    const registry = buildRegistry(
+      [
+        script({
+          path: "/hooks/session-idle.sh",
+          stem: "session-idle",
+          event: "session.idle",
+          class: "observe",
+        }),
+      ],
+      AVAILABLE,
+    );
+
+    expect(
+      registry.byEvent["session.idle"].map((entry) =>
+        path.basename(entry.path),
+      ),
+    ).toEqual(["session-idle.sh"]);
+    expect(registry.byEvent["tool.execute.before"]).toEqual([]);
   });
 });
 
@@ -484,7 +563,7 @@ describe("scanHooks", () => {
 
   test("should digest, resolve interpreters, and build the registry in one call", () => {
     const hooksDir = makeHooksDir();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
 
     const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report, which: () => null });
 

@@ -13,9 +13,9 @@ export interface ShowHooksOptions {
 
 /**
  * Standalone would-load scan: a separate process can never read the live
- * in-process registry, so the CLI re-derives with the same pure modules and
- * reports invalid entries as rows instead of failing fast. The exit code
- * carries the set's validity: 0 clean, 1 invalid.
+ * registry, so the CLI re-derives with the same pure modules and reports
+ * invalid entries as rows instead of failing fast. The exit code carries the
+ * set's validity: 0 clean, 1 invalid.
  */
 export const runShowHooks = (options: ShowHooksOptions = {}): number => {
   const cwd = options.cwd ?? process.cwd();

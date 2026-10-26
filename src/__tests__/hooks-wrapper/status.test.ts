@@ -32,7 +32,6 @@ const entry = (
   path: `/project/.owflow/hooks/${event.replaceAll(".", "-")}.sh`,
   event,
   class: "gate",
-  runnerClass: "subprocess",
   interpreter: { resolved: "/usr/bin/bash", available: true },
   status: "registered",
 });
@@ -193,6 +192,133 @@ describe("status store", () => {
       reason: "boom",
     });
 
+    store.dispose();
+  });
+
+  test("should accept a settled observe fire without a pending phase", () => {
+    let current = 5_000;
+    const store = createHookStatusStore({
+      file: "/tmp/status.json",
+      now: () => current,
+      write: () => {},
+    });
+    const fire = (runId: string, startedAt: number): HookStatusReport => ({
+      entry: { ...entry("event"), class: "observe" },
+      phase: "settled",
+      runId,
+      outcome: { status: "ok" },
+      startedAt,
+    });
+
+    store.observe(fire("event#1", 4_900));
+    expect(store.snapshot().hooks["event"]).toEqual({
+      status: "success",
+      startedAt: 4_900,
+      finishedAt: 5_000,
+      durationMs: 100,
+    });
+
+    current = 6_000;
+    store.observe(fire("event#2", 5_950));
+    expect(store.snapshot().hooks["event"]).toEqual({
+      status: "success",
+      startedAt: 5_950,
+      finishedAt: 6_000,
+      durationMs: 50,
+    });
+
+    store.dispose();
+  });
+
+  test("should clear a silent observe run and restore the previous outcome", () => {
+    let current = 5_000;
+    const store = createHookStatusStore({
+      file: "/tmp/status.json",
+      now: () => current,
+      write: () => {},
+    });
+    const fire = (runId: string, startedAt: number): HookStatusReport => ({
+      entry: { ...entry("event"), class: "observe" },
+      phase: "settled",
+      runId,
+      outcome: { status: "ok" },
+      startedAt,
+    });
+    const silent = (runId: string): HookStatusReport => ({
+      entry: { ...entry("event"), class: "observe" },
+      phase: "settled",
+      runId,
+      startedAt: 5_100,
+      noop: true,
+    });
+
+    store.observe(fire("event#1", 4_900));
+    expect(store.snapshot().hooks["event"]?.status).toBe("success");
+
+    current = 5_100;
+    store.observe(pending("event", "event#2"));
+    expect(store.snapshot().hooks["event"]?.status).toBe("pending");
+
+    current = 5_101;
+    store.observe(silent("event#2"));
+    expect(store.snapshot().hooks["event"]).toEqual({
+      status: "success",
+      startedAt: 4_900,
+      finishedAt: 5_000,
+      durationMs: 100,
+    });
+
+    store.dispose();
+  });
+
+  test("should leave an event idle when its only run was silent", () => {
+    const store = createHookStatusStore({
+      file: "/tmp/status.json",
+      now: () => 1_000,
+      write: () => {},
+    });
+
+    store.observe(pending("event", "event#1"));
+    expect(store.snapshot().hooks["event"]?.status).toBe("pending");
+    store.observe({
+      entry: { ...entry("event"), class: "observe" },
+      phase: "settled",
+      runId: "event#1",
+      startedAt: 1_000,
+      noop: true,
+    });
+
+    expect(store.snapshot().hooks["event"]).toBeUndefined();
+    store.dispose();
+  });
+
+  test("should keep a real outcome when a concurrent silent run settles last", () => {
+    let current = 1_000;
+    const store = createHookStatusStore({
+      file: "/tmp/status.json",
+      now: () => current,
+      write: () => {},
+    });
+
+    store.observe(pending("event", "event#1"));
+    store.observe(pending("event", "event#2"));
+    current = 1_050;
+    store.observe(settled("event", "event#1", "ok"));
+    expect(store.snapshot().hooks["event"]?.status).toBe("pending");
+    store.observe({
+      entry: { ...entry("event"), class: "observe" },
+      phase: "settled",
+      runId: "event#2",
+      startedAt: 1_000,
+      noop: true,
+    });
+
+    expect(store.snapshot().hooks["event"]).toEqual({
+      status: "success",
+      startedAt: 1_000,
+      finishedAt: 1_050,
+      durationMs: 50,
+    });
     store.dispose();
   });
 

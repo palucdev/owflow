@@ -12,6 +12,10 @@ import * as sessionCompaction from "../hooks/session-compaction.js";
 import * as beforeTool from "../hooks/before-tool.js";
 import * as dispatcherModule from "../hooks-wrapper/dispatcher.js";
 import * as registryModule from "../hooks-wrapper/registry.js";
+import {
+  LOG_FILE_ENV,
+  readHookLogRecords,
+} from "../hooks-wrapper/hook-logs.js";
 import type { Dispatcher } from "../hooks-wrapper/dispatcher.js";
 import { verify_template } from "../tools/verify_template.js";
 import { fork_task } from "../tools/fork_task.js";
@@ -350,6 +354,20 @@ describe("OwflowPlugin index", () => {
       }
     };
 
+    const withLogFile = async <T>(
+      file: string,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      const previous = process.env[LOG_FILE_ENV];
+      process.env[LOG_FILE_ENV] = file;
+      try {
+        return await run();
+      } finally {
+        if (previous === undefined) delete process.env[LOG_FILE_ENV];
+        else process.env[LOG_FILE_ENV] = previous;
+      }
+    };
+
     const writeHookFile = (fileName: string, contents: string): string => {
       const hooksDir = path.join(tmpDir, ".owflow", "hooks");
       fs.mkdirSync(hooksDir, { recursive: true });
@@ -389,26 +407,6 @@ describe("OwflowPlugin index", () => {
         await expect(
           OwflowPlugin(mockPluginInput(tmpDir)),
         ).rejects.toThrow(/\[owflow\] 1 invalid entry/);
-      });
-    });
-
-    test("should reject with the failing file path and recovery hint when an in-process hook cannot be imported", async () => {
-      const hookPath = writeHookFile(
-        "tool-execute-before.js",
-        'throw new Error("top-level boom");\n',
-      );
-
-      await withHooksEnabled(async () => {
-        const failure = await OwflowPlugin(mockPluginInput(tmpDir)).then(
-          () => undefined,
-          (error: unknown) => error,
-        );
-
-        expect(failure).toBeInstanceOf(Error);
-        const message = (failure as Error).message;
-        expect(message).toContain(`[owflow] ${hookPath}: top-level boom`);
-        expect(message).toContain("The owflow plugin");
-        expect(message).toContain("OWFLOW_HOOKS_DISABLED=1");
       });
     });
 
@@ -704,16 +702,221 @@ describe("OwflowPlugin index", () => {
       });
     });
 
-    test("should not write a status file when OWFLOW_HOOKS_DISABLED=1", async () => {
+    test("should persist one JSONL record per settled user hook run", async () => {
+      writeHookFile(
+        "tool-execute-before.sh",
+        '#!/bin/bash\ncat >/dev/null\necho "hooked stderr" >&2\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"ok"}\'\n',
+      );
+      const statusFile = path.join(tmpDir, "logged-status.json");
+      const logFile = path.join(tmpDir, "hook-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin["tool.execute.before"]!(
+              {
+                tool: "bash",
+                sessionID: "ses_logged",
+                callID: "call-logged",
+              },
+              { args: { command: "ls" } },
+            );
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "tool.execute.before",
+                name: "tool-execute-before",
+                status: "success",
+                outcome: "ok",
+                sessionID: "ses_logged",
+                exitCode: 0,
+                stderr: "hooked stderr\n",
+              });
+            }
+          });
+        });
+      });
+    });
+
+    test("should keep a silent observe run out of the status snapshot and log", async () => {
+      writeHookFile(
+        "event.sh",
+        '#!/bin/bash\ncat >/dev/null\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"ok"}\'\n',
+      );
+      const statusFile = path.join(tmpDir, "silent-event-status.json");
+      const logFile = path.join(tmpDir, "silent-event-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({ event: { type: "session.updated" } });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, unknown> };
+            expect(snapshot.hooks).toEqual({});
+
+            // A no-op fire never creates the log file at all.
+            expect(readHookLogRecords(logFile)).toEqual({ kind: "missing" });
+          });
+        });
+      });
+    });
+
+    test("should report an observe run that logs even without a pending phase", async () => {
+      writeHookFile(
+        "event.sh",
+        '#!/bin/bash\nenvelope="$(cat)"\nif [[ "$envelope" == *\'"type":"session.idle"\'* ]]; then\n  echo "[event-hook] building" >&2\nfi\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"ok"}\'\n',
+      );
+      const statusFile = path.join(tmpDir, "fired-event-status.json");
+      const logFile = path.join(tmpDir, "fired-event-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({ event: { type: "session.updated" } });
+            await plugin.event!({ event: { type: "session.idle" } });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, { status: string }> };
+            expect(snapshot.hooks["event"]?.status).toBe("success");
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "event",
+                status: "success",
+                stderr: "[event-hook] building\n",
+              });
+            }
+          });
+        });
+      });
+    });
+
+    test("should fire an event-named hook only for its matching host event", async () => {
+      writeHookFile(
+        "session-idle.sh",
+        '#!/bin/bash\ncat >/dev/null\necho "idle fired" >&2\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"ok"}\'\n',
+      );
+      const statusFile = path.join(tmpDir, "session-idle-status.json");
+      const logFile = path.join(tmpDir, "session-idle-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({
+              event: { type: "session.updated", properties: {} },
+            });
+            expect(fs.existsSync(logFile)).toBe(false);
+
+            await plugin.event!({
+              event: {
+                type: "session.idle",
+                properties: { sessionID: "ses_idle" },
+              },
+            });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, { status: string }> };
+            expect(snapshot.hooks["session.idle"]?.status).toBe("success");
+            expect(snapshot.hooks["event"]).toBeUndefined();
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "session.idle",
+                name: "session-idle",
+                class: "observe",
+                sessionID: "ses_idle",
+                stderr: "idle fired\n",
+              });
+            }
+          });
+        });
+      });
+    });
+
+    test("should record a silent successful event-named hook without requiring output", async () => {
+      writeHookFile(
+        "session-idle.sh",
+        '#!/bin/bash\ncat >/dev/null\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"ok"}\'\n',
+      );
+      const statusFile = path.join(tmpDir, "silent-named-status.json");
+      const logFile = path.join(tmpDir, "silent-named-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({
+              event: {
+                type: "session.idle",
+                properties: { sessionID: "ses_silent" },
+              },
+            });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, { status: string }> };
+            expect(snapshot.hooks["session.idle"]?.status).toBe("success");
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "session.idle",
+                name: "session-idle",
+                class: "observe",
+                sessionID: "ses_silent",
+                status: "success",
+                outcome: "ok",
+              });
+              expect(read.records[0]?.stderr).toBeUndefined();
+              expect(read.records[0]?.stdout).toBeUndefined();
+            }
+          });
+        });
+      });
+    });
+
+    test("should not write a status or log file when OWFLOW_HOOKS_DISABLED=1", async () => {
       const previous = process.env.OWFLOW_HOOKS_DISABLED;
       process.env.OWFLOW_HOOKS_DISABLED = "1";
       const statusFile = path.join(tmpDir, "disabled-status.json");
+      const logFile = path.join(tmpDir, "disabled-logs.jsonl");
 
       try {
         await withStatusFile(statusFile, async () => {
-          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
-          expect(fs.existsSync(statusFile)).toBe(false);
-          expect(plugin.dispose).toBeUndefined();
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+            expect(fs.existsSync(statusFile)).toBe(false);
+            expect(fs.existsSync(logFile)).toBe(false);
+            expect(plugin.dispose).toBeUndefined();
+          });
         });
       } finally {
         if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
@@ -725,7 +928,7 @@ describe("OwflowPlugin index", () => {
       const marker = path.join(tmpDir, "dispose-called.txt");
       writeHookFile(
         "dispose.sh",
-        `#!/bin/bash\ncat >/dev/null\nprintf 'called' >> "${marker}"\nprintf '%s' '{"protocol":"owflow-hooks/1","status":"ok"}'\n`,
+        `#!/bin/bash\ncat >/dev/null\nprintf 'called' >> "${marker}"\necho "dispose ran" >&2\nprintf '%s' '{"protocol":"owflow-hooks/1","status":"ok"}'\n`,
       );
       const statusFile = path.join(tmpDir, "dispose-status.json");
 

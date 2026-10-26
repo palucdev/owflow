@@ -7,51 +7,52 @@ import {
 import type { Dispatcher } from "../../hooks-wrapper/dispatcher.js";
 import {
   DISPATCHABLE_EVENT_NAMES,
+  HOOK_EVENT_NAMES,
   buildRegistry,
 } from "../../hooks-wrapper/registry.js";
 import type {
   DispatchableEvent,
   EnvelopeContext,
+  HookEventName,
   HookRegistry,
   HookRegistryEntry,
   HookScript,
   InterpreterAvailability,
   Outcome,
 } from "../../hooks-wrapper/registry.js";
-import type { HookStatusReport } from "../../types/hook-types.js";
+import type {
+  HookRunLogReport,
+  HookStatusReport,
+} from "../../types/hook-types.js";
 
 const entry = (
   overrides: Partial<HookRegistryEntry> = {},
 ): HookRegistryEntry => ({
-  path: "/project/.owflow/hooks/tool-execute-before.ts",
+  path: "/project/.owflow/hooks/tool-execute-before.sh",
   event: "tool.execute.before",
   class: "gate",
-  runnerClass: "in-process",
-  interpreter: { available: true },
+  interpreter: { resolved: "/usr/bin/bash", available: true },
   status: "registered",
   ...overrides,
 });
 
 const script = (overrides: Partial<HookScript> = {}): HookScript => ({
-  path: "/project/.owflow/hooks/tool-execute-before.ts",
+  path: "/project/.owflow/hooks/tool-execute-before.sh",
   stem: "tool-execute-before",
   event: "tool.execute.before",
   class: "gate",
-  runnerClass: "in-process",
-  extension: ".ts",
+  extension: ".sh",
   ...overrides,
 });
 
 const AVAILABLE: InterpreterAvailability = {
-  ".ts": { available: true },
-  ".js": { available: true },
   ".sh": { resolved: "/usr/bin/bash", available: true },
   ".ps1": { resolved: "/usr/bin/pwsh", available: true },
 };
 
 const registryOf = (entries: readonly HookRegistryEntry[]): HookRegistry => {
-  const byEvent = {} as Record<DispatchableEvent, HookRegistryEntry[]>;
-  for (const event of DISPATCHABLE_EVENT_NAMES) byEvent[event] = [];
+  const byEvent = {} as Record<HookEventName, HookRegistryEntry[]>;
+  for (const event of HOOK_EVENT_NAMES) byEvent[event] = [];
   for (const hookEntry of entries) byEvent[hookEntry.event].push(hookEntry);
   return { entries, byEvent };
 };
@@ -151,7 +152,7 @@ describe("gate translation", () => {
       },
     });
 
-    // The in-process runner strips the prefix; the dispatcher re-prefixes once.
+    // A script may already prefix its reason; the dispatcher re-prefixes once.
     const prefixed = await rejectionMessage(
       execution.dispatch,
       "tool.execute.before",
@@ -191,9 +192,9 @@ describe("gate translation", () => {
     );
     expect(fallback.startsWith("Blocked:")).toBe(true);
     expect(fallback).toContain("Hint:");
-    expect(fallback).toContain("/project/.owflow/hooks/tool-execute-before.ts");
+    expect(fallback).toContain("/project/.owflow/hooks/tool-execute-before.sh");
 
-    // A raw throw from the execution core must still fail closed for the agent.
+    // A raw throw from the runner must still fail closed for the agent.
     const throwing = harness(
       registryOf([entry()]),
       [new Error("runner exploded")],
@@ -265,12 +266,12 @@ describe("observe translation", () => {
     const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
     try {
       const failedEntry = entry({
-        path: "/project/.owflow/hooks/event.ts",
+        path: "/project/.owflow/hooks/event.sh",
         event: "event",
         class: "observe",
       });
       const blockedEntry = entry({
-        path: "/project/.owflow/hooks/dispose.ts",
+        path: "/project/.owflow/hooks/dispose.sh",
         event: "dispose",
         class: "observe",
       });
@@ -321,13 +322,99 @@ describe("observe translation", () => {
   });
 });
 
+describe("host event translation", () => {
+  test("should dispatch an event-named hook as observe with the raw host event and nested session ID", async () => {
+    const execution = harness(
+      registryOf([
+        entry({
+          path: "/project/.owflow/hooks/session-idle.sh",
+          event: "session.idle",
+          class: "observe",
+        }),
+      ]),
+      [{ status: "ok", capture: { stderr: "built\n" } }],
+    );
+
+    const input = {
+      event: {
+        type: "session.idle",
+        properties: { sessionID: "ses_idle" },
+      },
+    };
+
+    await expect(
+      execution.dispatch("session.idle", input),
+    ).resolves.toBeUndefined();
+
+    expect(execution.calls).toHaveLength(1);
+    expect(execution.calls[0]!.envelope).toMatchObject({
+      protocol: "owflow-hooks/1",
+      event: "session.idle",
+      class: "observe",
+      session: { sessionID: "ses_idle" },
+      context: { event: input.event },
+    });
+  });
+
+  test("should extract session IDs from message events and never end a session on failure", async () => {
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const execution = harness(
+        registryOf([
+          entry({
+            path: "/project/.owflow/hooks/message-updated.sh",
+            event: "message.updated",
+            class: "observe",
+          }),
+          entry({
+            path: "/project/.owflow/hooks/message-part-updated.sh",
+            event: "message.part.updated",
+            class: "observe",
+          }),
+        ]),
+        [{ status: "failed", reason: "side effect failed" }, { status: "ok" }],
+      );
+
+      await expect(
+        execution.dispatch("message.updated", {
+          event: {
+            type: "message.updated",
+            properties: { info: { sessionID: "ses_message" } },
+          },
+        }),
+      ).resolves.toBeUndefined();
+
+      await expect(
+        execution.dispatch("message.part.updated", {
+          event: {
+            type: "message.part.updated",
+            properties: { part: { sessionID: "ses_part" } },
+          },
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(execution.calls[0]!.envelope.session).toEqual({
+        sessionID: "ses_message",
+      });
+      expect(execution.calls[1]!.envelope.session).toEqual({
+        sessionID: "ses_part",
+      });
+      expect(execution.endedSessions).toEqual([]);
+      expect(warningTexts(warnSpy.mock.calls)[0]).toContain(
+        "side effect failed",
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+});
+
 describe("missing interpreter at fire", () => {
   test("should fail closed when a gate entry's interpreter is missing and skip-log an observe entry", async () => {
     const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
     try {
       const gateEntry = entry({
         path: "/project/.owflow/hooks/tool-execute-before.sh",
-        runnerClass: "subprocess",
         interpreter: { expected: "bash", available: false },
         status: "will-fail-closed",
       });
@@ -335,7 +422,6 @@ describe("missing interpreter at fire", () => {
         path: "/project/.owflow/hooks/config.sh",
         event: "config",
         class: "observe",
-        runnerClass: "subprocess",
         interpreter: { expected: "bash", available: false },
         status: "skipped-no-interpreter",
       });
@@ -443,7 +529,6 @@ describe("runtime status observer", () => {
     const ended: string[] = [];
     const missing = entry({
       path: "/project/.owflow/hooks/tool-execute-before.sh",
-      runnerClass: "subprocess",
       interpreter: { expected: "bash", available: false },
       status: "will-fail-closed",
     });
@@ -480,7 +565,6 @@ describe("runtime status observer", () => {
         path: "/project/.owflow/hooks/config.sh",
         event: "config",
         class: "observe",
-        runnerClass: "subprocess",
         interpreter: { expected: "bash", available: false },
         status: "skipped-no-interpreter",
       });
@@ -534,6 +618,315 @@ describe("runtime status observer", () => {
   });
 });
 
+describe("runtime log observer", () => {
+  test("should emit one settled report with runId, session, timing, and capture", async () => {
+    let clock = 100;
+    const reports: HookRunLogReport[] = [];
+    const logEntry = entry();
+    const dispatch = createDispatcher({
+      run: async () => {
+        clock = 150;
+        return {
+          status: "ok",
+          capture: { stderr: "note\n", exitCode: 0 },
+        };
+      },
+      registry: registryOf([logEntry]),
+      now: () => clock,
+      onRunLog: (report) => reports.push(report),
+    });
+
+    await dispatch(
+      "tool.execute.before",
+      { tool: "bash", sessionID: "ses_log" },
+      { args: {} },
+    );
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({
+      entry: logEntry,
+      runId: "tool.execute.before#1",
+      phase: "settled",
+      sessionID: "ses_log",
+      startedAt: 100,
+      finishedAt: 150,
+      capture: { stderr: "note\n", exitCode: 0 },
+      outcome: {
+        status: "ok",
+        capture: { stderr: "note\n", exitCode: 0 },
+      },
+    });
+  });
+
+  test("should emit failure reports with reasons for blocked and failed gates", async () => {
+    const reports: HookRunLogReport[] = [];
+    const outcomes: Outcome[] = [
+      { status: "blocked", reason: "policy says no" },
+      { status: "failed", reason: "gate broke" },
+    ];
+    let index = 0;
+    const dispatch = createDispatcher({
+      run: async () => outcomes[index++]!,
+      registry: registryOf([entry()]),
+      onRunLog: (report) => reports.push(report),
+    });
+
+    await expect(
+      dispatch("tool.execute.before", { tool: "bash" }, { args: {} }),
+    ).rejects.toThrow("policy says no");
+    await expect(
+      dispatch("tool.execute.before", { tool: "bash" }, { args: {} }),
+    ).rejects.toThrow("gate broke");
+
+    expect(reports).toHaveLength(2);
+    expect(reports[0]).toMatchObject({
+      phase: "settled",
+      reason: "policy says no",
+      outcome: { status: "blocked" },
+    });
+    expect(reports[1]).toMatchObject({
+      phase: "settled",
+      reason: "gate broke",
+      outcome: { status: "failed" },
+    });
+  });
+
+  test("should emit a skipped failure report with the interpreter reason", async () => {
+    const reports: HookRunLogReport[] = [];
+    const missing = entry({
+      path: "/project/.owflow/hooks/tool-execute-before.sh",
+      interpreter: { expected: "bash", available: false },
+      status: "will-fail-closed",
+    });
+    const dispatch = createDispatcher({
+      run: async () => {
+        throw new Error("must not run");
+      },
+      registry: registryOf([missing]),
+      now: () => 5_000,
+      onRunLog: (report) => reports.push(report),
+    });
+
+    await expect(
+      dispatch(
+        "tool.execute.before",
+        { tool: "bash", sessionID: "ses_skip" },
+        { args: {} },
+      ),
+    ).rejects.toThrow("bash");
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({
+      runId: "tool.execute.before#1",
+      phase: "skipped",
+      reason: "bash is not available",
+      sessionID: "ses_skip",
+      startedAt: 5_000,
+      finishedAt: 5_000,
+    });
+    expect(reports[0]?.capture).toBeUndefined();
+    expect(reports[0]?.outcome).toBeUndefined();
+  });
+
+  test("should warn once and preserve gate semantics when the log observer throws", async () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const statusPhases: string[] = [];
+      const ended: string[] = [];
+      const dispatch = createDispatcher({
+        run: async () => ({ status: "failed", reason: "gate broke" }),
+        registry: registryOf([entry()]),
+        endSession: (sessionID) => {
+          ended.push(sessionID);
+        },
+        onStatus: (report) => statusPhases.push(report.phase),
+        onRunLog: () => {
+          throw new Error("log observer exploded");
+        },
+      });
+
+      await expect(
+        dispatch(
+          "tool.execute.before",
+          { tool: "bash", sessionID: "ses_failed" },
+          { args: {} },
+        ),
+      ).rejects.toThrow("gate broke");
+      await expect(
+        dispatch(
+          "tool.execute.before",
+          { tool: "bash", sessionID: "ses_failed" },
+          { args: {} },
+        ),
+      ).rejects.toThrow("gate broke");
+
+      expect(statusPhases).toEqual([
+        "pending",
+        "settled",
+        "pending",
+        "settled",
+      ]);
+      expect(ended).toEqual(["ses_failed", "ses_failed"]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain(
+        "log observer exploded",
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("silent catch-all event runs", () => {
+  const observeEntry = (): HookRegistryEntry =>
+    entry({
+      path: "/project/.owflow/hooks/event.sh",
+      event: "event",
+      class: "observe",
+    });
+
+  const observeDispatch = (
+    outcome: Outcome,
+    onStatus: (report: HookStatusReport) => void,
+    onRunLog: (report: HookRunLogReport) => void,
+    now: () => number,
+  ): Dispatcher =>
+    createDispatcher({
+      run: async () => outcome,
+      registry: registryOf([observeEntry()]),
+      now,
+      onStatus,
+      onRunLog,
+    });
+
+  test("should report pending and clear it for a successful catch-all run that captured no output", async () => {
+    const statuses: HookStatusReport[] = [];
+    const logs: HookRunLogReport[] = [];
+    const dispatch = observeDispatch(
+      { status: "ok", capture: { exitCode: 0 } },
+      (report) => statuses.push(report),
+      (report) => logs.push(report),
+      () => 1_000,
+    );
+
+    await expect(
+      dispatch("event", { type: "session.updated" }),
+    ).resolves.toBeUndefined();
+
+    expect(statuses).toHaveLength(2);
+    expect(statuses[0]).toMatchObject({ phase: "pending", runId: "event#1" });
+    expect(statuses[1]).toMatchObject({
+      phase: "settled",
+      runId: "event#1",
+      noop: true,
+    });
+    expect(statuses[1]?.outcome).toBeUndefined();
+    expect(logs).toEqual([]);
+  });
+
+  test("should record a silent successful event-named run as a normal outcome", async () => {
+    const statuses: HookStatusReport[] = [];
+    const logs: HookRunLogReport[] = [];
+    const dispatch = createDispatcher({
+      run: async () => ({ status: "ok", capture: { exitCode: 0 } }),
+      registry: registryOf([
+        entry({
+          path: "/project/.owflow/hooks/session-idle.sh",
+          event: "session.idle",
+          class: "observe",
+        }),
+      ]),
+      now: () => 1_000,
+      onStatus: (report) => statuses.push(report),
+      onRunLog: (report) => logs.push(report),
+    });
+
+    await expect(
+      dispatch("session.idle", { event: { type: "session.idle" } }),
+    ).resolves.toBeUndefined();
+
+    expect(statuses).toHaveLength(2);
+    expect(statuses[0]).toMatchObject({
+      phase: "pending",
+      runId: "session.idle#1",
+    });
+    expect(statuses[1]).toMatchObject({
+      phase: "settled",
+      runId: "session.idle#1",
+      outcome: { status: "ok" },
+    });
+    expect(statuses[1]?.noop).toBeUndefined();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      phase: "settled",
+      runId: "session.idle#1",
+      outcome: { status: "ok" },
+    });
+  });
+
+  test("should report an observe run that captured visible output", async () => {
+    const statuses: HookStatusReport[] = [];
+    const logs: HookRunLogReport[] = [];
+    let clock = 1_000;
+    const dispatch = observeDispatch(
+      { status: "ok", capture: { stdout: "[log] built\n" } },
+      (report) => statuses.push(report),
+      (report) => logs.push(report),
+      () => clock,
+    );
+
+    clock = 1_050;
+    await dispatch("event", { type: "session.idle" });
+
+    expect(statuses).toHaveLength(2);
+    expect(statuses[0]).toMatchObject({ phase: "pending", runId: "event#1" });
+    expect(statuses[1]).toMatchObject({
+      phase: "settled",
+      runId: "event#1",
+      outcome: { status: "ok" },
+      startedAt: 1_050,
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      phase: "settled",
+      runId: "event#1",
+      startedAt: 1_050,
+      finishedAt: 1_050,
+      capture: { stdout: "[log] built\n" },
+    });
+  });
+
+  test("should still report a silent observe failure", async () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const statuses: HookStatusReport[] = [];
+      const logs: HookRunLogReport[] = [];
+      const dispatch = observeDispatch(
+        { status: "failed", reason: "boom" },
+        (report) => statuses.push(report),
+        (report) => logs.push(report),
+        () => 2_000,
+      );
+
+      await expect(
+        dispatch("event", { type: "session.idle" }),
+      ).resolves.toBeUndefined();
+
+      expect(statuses).toHaveLength(2);
+      expect(statuses[0]).toMatchObject({ phase: "pending", runId: "event#1" });
+      expect(statuses[1]).toMatchObject({
+        phase: "settled",
+        outcome: { status: "failed", reason: "boom" },
+        reason: "boom",
+      });
+      expect(logs).toHaveLength(1);
+      expect(logs[0]?.outcome?.status).toBe("failed");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe("mutation whitelist", () => {
   test("should apply whitelisted mutations, warn-and-ignore the rest, and never mutate observe outputs", async () => {
     const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
@@ -576,7 +969,7 @@ describe("mutation whitelist", () => {
 
       // Rich-object events take no mutations at all.
       const chatEntry = entry({
-        path: "/project/.owflow/hooks/chat-message.ts",
+        path: "/project/.owflow/hooks/chat-message.sh",
         event: "chat.message",
         class: "gate",
       });
@@ -605,7 +998,7 @@ describe("mutation whitelist", () => {
 
       // `context` is append-only: the built-in reminder is never replaced.
       const compactEntry = entry({
-        path: "/project/.owflow/hooks/experimental-session-compacting.ts",
+        path: "/project/.owflow/hooks/experimental-session-compacting.sh",
         event: "experimental.session.compacting",
         class: "gate",
       });
@@ -630,7 +1023,7 @@ describe("mutation whitelist", () => {
 
       // Observe events apply no mutations at all.
       const observeEntry = entry({
-        path: "/project/.owflow/hooks/config.ts",
+        path: "/project/.owflow/hooks/config.sh",
         event: "config",
         class: "observe",
       });

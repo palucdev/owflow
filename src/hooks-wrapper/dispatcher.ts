@@ -1,13 +1,11 @@
-import {
-  DISPATCHABLE_EVENTS,
-  HookEvent,
-} from "../types/hook-types.js";
+import { HookEvent, hookClassOf } from "../types/hook-types.js";
 import type {
-  DispatchableEvent,
   Dispatcher,
   DispatcherOptions,
   EnvelopeContext,
+  HookEventName,
   HookRegistryEntry,
+  HookRunLogReport,
   HookStatusReport,
   Outcome,
 } from "../types/hook-types.js";
@@ -46,7 +44,7 @@ export type { Dispatcher, DispatcherOptions };
  * is warned and ignored.
  */
 export const MUTATION_FIELDS: Readonly<
-  Record<DispatchableEvent, readonly string[]>
+  Partial<Record<HookEventName, readonly string[]>>
 > = {
   [HookEvent.ToolExecuteBefore]: ["args"],
   [HookEvent.ToolExecuteAfter]: ["title", "output", "metadata"],
@@ -73,9 +71,9 @@ export const MUTATION_FIELDS: Readonly<
 };
 
 export const isWhitelistedMutation = (
-  event: DispatchableEvent,
+  event: HookEventName,
   field: string,
-): boolean => MUTATION_FIELDS[event].includes(field);
+): boolean => (MUTATION_FIELDS[event] ?? []).includes(field);
 
 const warn = (message: string): void => {
   console.warn(`[owflow] hooks: ${message}`);
@@ -96,12 +94,28 @@ const contextFrom = (
   return context;
 };
 
+const nonEmptyString = (value: unknown): string | undefined =>
+  typeof value === "string" && value.length > 0 ? value : undefined;
+
+/**
+ * Host event hooks receive the raw event as `{ event }`, so the session ID can
+ * sit on the event properties (or on `message.updated`'s `info`).
+ */
 const sessionIDFrom = (input: unknown): string | undefined => {
   if (!isRecord(input)) return undefined;
-  const sessionID = input.sessionID;
-  return typeof sessionID === "string" && sessionID.length > 0
-    ? sessionID
-    : undefined;
+  const direct = nonEmptyString(input.sessionID);
+  if (direct !== undefined) return direct;
+  const event = isRecord(input.event) ? input.event : undefined;
+  if (event === undefined) return undefined;
+  const properties = isRecord(event.properties) ? event.properties : undefined;
+  if (properties === undefined) return undefined;
+  const fromProperties = nonEmptyString(properties.sessionID);
+  if (fromProperties !== undefined) return fromProperties;
+  const part = isRecord(properties.part) ? properties.part : undefined;
+  const fromPart = part === undefined ? undefined : nonEmptyString(part.sessionID);
+  if (fromPart !== undefined) return fromPart;
+  const info = isRecord(properties.info) ? properties.info : undefined;
+  return info === undefined ? undefined : nonEmptyString(info.sessionID);
 };
 
 const gateRejection = (entry: HookRegistryEntry, outcome: Outcome): Error => {
@@ -153,7 +167,7 @@ const appendContextStrings = (
 };
 
 const applyMutations = (
-  event: DispatchableEvent,
+  event: HookEventName,
   entry: HookRegistryEntry,
   mutations: Record<string, unknown>,
   output: Record<string, unknown>,
@@ -192,6 +206,22 @@ const runOutcome = async (
   }
 };
 
+/**
+ * The catch-all `event` hook fires for every host event, so a successful run
+ * that emitted nothing is a no-op: it leaves the row idle and writes no log.
+ * Event-named hooks and the one-shot observe events are recorded like any
+ * other script, so a silent success still settles visibly.
+ */
+const isObserveNoop = (entry: HookRegistryEntry, outcome: Outcome): boolean => {
+  if (entry.event !== HookEvent.Event) return false;
+  if (outcome.status !== "ok") return false;
+  const capture = outcome.capture;
+  if (capture === undefined) return true;
+  return [capture.stdout, capture.stderr].every(
+    (text) => text === undefined || text.length === 0,
+  );
+};
+
 const endSessionForFailure = async (
   endSession: DispatcherOptions["endSession"],
   sessionID: string | undefined,
@@ -212,9 +242,12 @@ export const createDispatcher = ({
   registry,
   endSession,
   onStatus,
+  onRunLog,
+  now = Date.now,
 }: DispatcherOptions): Dispatcher => {
   let runCounter = 0;
   let statusObserverWarned = false;
+  let logObserverWarned = false;
 
   const reportStatus = (report: HookStatusReport): void => {
     if (onStatus === undefined) return;
@@ -224,6 +257,18 @@ export const createDispatcher = ({
       if (!statusObserverWarned) {
         statusObserverWarned = true;
         warn(`status observer failed: ${errorMessage(error)}`);
+      }
+    }
+  };
+
+  const reportRunLog = (report: HookRunLogReport): void => {
+    if (onRunLog === undefined) return;
+    try {
+      onRunLog(report);
+    } catch (error) {
+      if (!logObserverWarned) {
+        logObserverWarned = true;
+        warn(`log observer failed: ${errorMessage(error)}`);
       }
     }
   };
@@ -238,14 +283,23 @@ export const createDispatcher = ({
       context: contextFrom(input, output),
       sessionID,
     });
-    const isGate = DISPATCHABLE_EVENTS[event] === "gate";
+    const isGate = hookClassOf(event) === "gate";
 
     for (const entry of eventEntries) {
       if (!entry.interpreter.available) {
-        reportStatus({
+        const reason = `${interpreterName(entry.interpreter)} is not available`;
+        const timestamp = now();
+        runCounter += 1;
+        const runId = `${event}#${runCounter}`;
+        reportStatus({ entry, phase: "skipped", reason });
+        reportRunLog({
           entry,
+          runId,
           phase: "skipped",
-          reason: `${interpreterName(entry.interpreter)} is not available`,
+          reason,
+          ...(sessionID !== undefined ? { sessionID } : {}),
+          startedAt: timestamp,
+          finishedAt: timestamp,
         });
         if (isGate) {
           await endSessionForFailure(endSession, sessionID, entry);
@@ -259,16 +313,53 @@ export const createDispatcher = ({
 
       runCounter += 1;
       const runId = `${event}#${runCounter}`;
+      // Every run is observable while its code executes. Only a silent
+      // successful catch-all `event` run settles with `noop`, so a
+      // high-frequency hook does not leave a visible trace; every other run
+      // records its real outcome.
       reportStatus({ entry, phase: "pending", runId });
 
+      const startedAt = now();
       const outcome = await runOutcome(run, entry, envelope);
-      reportStatus({
-        entry,
-        phase: "settled",
-        runId,
-        outcome,
-        ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}),
-      });
+      const finishedAt = now();
+      const noop = !isGate && isObserveNoop(entry, outcome);
+
+      const reportSettledLog = (
+        settledAt: number,
+        capture: Outcome["capture"],
+      ): void => {
+        reportRunLog({
+          entry,
+          runId,
+          phase: "settled",
+          outcome: capture === undefined ? outcome : { ...outcome, capture },
+          ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}),
+          ...(sessionID !== undefined ? { sessionID } : {}),
+          startedAt,
+          finishedAt: settledAt,
+          ...(capture !== undefined ? { capture } : {}),
+        });
+      };
+
+      if (noop) {
+        reportStatus({
+          entry,
+          phase: "settled",
+          runId,
+          startedAt,
+          noop: true,
+        });
+      } else {
+        reportStatus({
+          entry,
+          phase: "settled",
+          runId,
+          outcome,
+          startedAt,
+          ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}),
+        });
+        reportSettledLog(finishedAt, outcome.capture);
+      }
 
       if (outcome.status !== "ok") {
         if (isGate) {

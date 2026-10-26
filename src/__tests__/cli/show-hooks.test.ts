@@ -104,13 +104,15 @@ describe("owflow-hooks CLI", () => {
     expect(invalidRows.map((row) => row.path)).toEqual([
       path.join(hooksDir, "BadName.sh"),
       path.join(hooksDir, "readme.md"),
+      path.join(hooksDir, "tool-execute-before.ts"),
     ]);
   });
 
   test("should carry the restart label and match the shared renderers for the same fixture", () => {
     const { root, hooksDir } = makeFixture();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.ts"), "");
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
     fs.writeFileSync(path.join(hooksDir, "config.sh"), "");
+    fs.writeFileSync(path.join(hooksDir, "session-idle.sh"), "");
 
     const { lines, log } = capture();
     const tableCode = runShowHooks({ cwd: root, argv: [], log });
@@ -130,6 +132,7 @@ describe("owflow-hooks CLI", () => {
     expect(tableCode).toBe(0);
     expect(jsonCode).toBe(0);
     expect(lines.join("\n")).toBe(renderTable(input));
+    expect(lines.join("\n")).toContain("session.idle");
     expect(lines.join("\n")).toContain(EFFECTIVE_AFTER_RESTART);
     expect(jsonLines.join("\n")).toBe(renderJson(input));
     expect(jsonLines.join("\n")).toContain(EFFECTIVE_AFTER_RESTART);

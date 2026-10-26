@@ -18,26 +18,21 @@ import {
 } from "../../hooks-wrapper/report.js";
 
 const AVAILABLE: InterpreterAvailability = {
-  ".ts": { available: true },
-  ".js": { available: true },
   ".sh": { resolved: "bash", available: true },
   ".ps1": { resolved: "pwsh", available: true },
 };
 
 const PS1_UNAVAILABLE: InterpreterAvailability = {
-  ".ts": { available: true },
-  ".js": { available: true },
   ".sh": { resolved: "bash", available: true },
   ".ps1": { expected: "pwsh", available: false },
 };
 
 const script = (overrides: Partial<HookScript>): HookScript => ({
-  path: "/hooks/tool-execute-before.ts",
+  path: "/hooks/tool-execute-before.sh",
   stem: "tool-execute-before",
   event: "tool.execute.before",
   class: "gate",
-  runnerClass: "in-process",
-  extension: ".ts",
+  extension: ".sh",
   ...overrides,
 });
 
@@ -54,7 +49,7 @@ describe("report formatting", () => {
     const registry = buildRegistry(
       [
         script({
-          path: "/hooks/chat-message.ts",
+          path: "/hooks/chat-message.sh",
           stem: "chat-message",
           event: "chat.message",
         }),
@@ -64,7 +59,6 @@ describe("report formatting", () => {
           event: "config",
           class: "observe",
           extension: ".sh",
-          runnerClass: "subprocess",
         }),
       ],
       AVAILABLE,
@@ -88,7 +82,7 @@ describe("report formatting", () => {
     };
 
     expect(rows.map((row) => row.path)).toEqual([
-      "/hooks/chat-message.ts",
+      "/hooks/chat-message.sh",
       "/hooks/config.sh",
       "/hooks/bad_stem.ts",
     ]);
@@ -123,7 +117,6 @@ describe("report formatting", () => {
         script({
           path: "/hooks/tool-execute-before.ps1",
           extension: ".ps1",
-          runnerClass: "subprocess",
         }),
       ],
       PS1_UNAVAILABLE,

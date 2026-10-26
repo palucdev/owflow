@@ -166,6 +166,8 @@ interface EventRuntime {
   finishedAt?: number;
   durationMs?: number;
   reason?: string;
+  /** The last visible outcome, restored when a silent run clears its pending. */
+  lastSettled?: HookRuntimeEntry;
   readonly active: Set<string>;
   readonly starts: Map<string, number>;
 }
@@ -256,17 +258,61 @@ export const createHookStatusStore = ({
     }, flushMs);
   };
 
-  const runtimeFor = (event: string): EventRuntime => {
+  const runtimeFor = (event: string, startedAt = now()): EventRuntime => {
     const existing = events.get(event);
     if (existing !== undefined) return existing;
     const created: EventRuntime = {
       status: "pending",
-      startedAt: now(),
+      startedAt,
       active: new Set(),
       starts: new Map(),
     };
     events.set(event, created);
     return created;
+  };
+
+  const rememberSettled = (runtime: EventRuntime): void => {
+    runtime.lastSettled = copyRuntime(runtime);
+  };
+
+  /**
+   * A silent catch-all `event` run leaves no visible trace: once its pending
+   * state is cleared, the row shows the outcome that preceded it, or goes idle
+   * when the event has never settled in this snapshot.
+   */
+  const restoreLastSettled = (
+    event: string,
+    runtime: EventRuntime,
+  ): void => {
+    const previous = runtime.lastSettled;
+    if (previous === undefined) {
+      events.delete(event);
+      return;
+    }
+    runtime.status = previous.status;
+    runtime.startedAt = previous.startedAt;
+    if (previous.finishedAt === undefined) delete runtime.finishedAt;
+    else runtime.finishedAt = previous.finishedAt;
+    if (previous.durationMs === undefined) delete runtime.durationMs;
+    else runtime.durationMs = previous.durationMs;
+    if (previous.reason === undefined) delete runtime.reason;
+    else runtime.reason = previous.reason;
+  };
+
+  const clearRun = (
+    runtime: EventRuntime,
+    runId: string | undefined,
+  ): void => {
+    if (runId !== undefined) {
+      runtime.active.delete(runId);
+      runtime.starts.delete(runId);
+      return;
+    }
+    const [firstRun] = runtime.active;
+    if (firstRun !== undefined) {
+      runtime.active.delete(firstRun);
+      runtime.starts.delete(firstRun);
+    }
   };
 
   const observe = (report: HookStatusReport): void => {
@@ -282,6 +328,7 @@ export const createHookStatusStore = ({
       runtime.finishedAt = timestamp;
       runtime.durationMs = 0;
       runtime.reason = report.reason ?? "hook cannot run";
+      rememberSettled(runtime);
       updatedAt = timestamp;
       scheduleFlush();
       return;
@@ -289,6 +336,10 @@ export const createHookStatusStore = ({
 
     if (report.phase === "pending") {
       const runId = report.runId ?? `${event}#anonymous`;
+      const existing = events.get(event);
+      if (existing !== undefined && existing.status !== "pending") {
+        rememberSettled(existing);
+      }
       const runtime = runtimeFor(event);
       runtime.active.add(runId);
       runtime.starts.set(runId, timestamp);
@@ -303,19 +354,40 @@ export const createHookStatusStore = ({
     }
 
     const runId = report.runId;
-    const runtime = events.get(event);
-    if (runtime === undefined) return;
-
-    if (runId !== undefined) {
-      runtime.active.delete(runId);
-      runtime.starts.delete(runId);
-    } else {
-      const [firstRun] = runtime.active;
-      if (firstRun !== undefined) {
-        runtime.active.delete(firstRun);
-        runtime.starts.delete(firstRun);
-      }
+    // A settled report can arrive without a prior pending (a late capture from
+    // an earlier fire); it carries the real start time and replaces the
+    // previous fire's bookkeeping.
+    const runtime = runtimeFor(event, report.startedAt ?? timestamp);
+    if (runtime.active.size === 0) {
+      runtime.startedAt = report.startedAt ?? runtime.startedAt;
     }
+
+    clearRun(runtime, runId);
+
+    if (report.noop === true) {
+      if (runtime.active.size > 0) {
+        runtime.status = "pending";
+      } else {
+        restoreLastSettled(event, runtime);
+      }
+      updatedAt = timestamp;
+      scheduleFlush();
+      return;
+    }
+
+    const outcome = report.outcome;
+    const success = outcome?.status === "ok";
+    const reason = report.reason ?? outcome?.reason;
+    const terminal: HookRuntimeEntry = {
+      status: success ? "success" : "failure",
+      startedAt: runtime.startedAt,
+      finishedAt: timestamp,
+      durationMs: Math.max(0, timestamp - runtime.startedAt),
+      ...(success || reason === undefined ? {} : { reason }),
+    };
+    // A real outcome stays the row's result even when a sibling run of the
+    // same event is still pending, or when a later silent run clears itself.
+    runtime.lastSettled = terminal;
 
     if (runtime.active.size > 0) {
       runtime.status = "pending";
@@ -324,14 +396,12 @@ export const createHookStatusStore = ({
       return;
     }
 
-    const outcome = report.outcome;
-    const success = outcome?.status === "ok";
-    runtime.status = success ? "success" : "failure";
-    runtime.finishedAt = timestamp;
-    runtime.durationMs = Math.max(0, timestamp - runtime.startedAt);
-    const reason = report.reason ?? outcome?.reason;
-    if (success || reason === undefined) delete runtime.reason;
-    else runtime.reason = reason;
+    runtime.status = terminal.status;
+    runtime.startedAt = terminal.startedAt;
+    runtime.finishedAt = terminal.finishedAt;
+    runtime.durationMs = terminal.durationMs;
+    if (terminal.reason === undefined) delete runtime.reason;
+    else runtime.reason = terminal.reason;
     updatedAt = timestamp;
     scheduleFlush();
   };

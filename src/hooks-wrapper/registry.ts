@@ -13,7 +13,10 @@ import {
   DISPATCHABLE_EVENTS,
   DISPATCHABLE_EVENT_NAMES,
   EXCLUDED_EVENT_NAMES,
+  HOOK_EVENT_NAMES,
+  HOST_EVENT_NAMES,
   HookDigestMode,
+  isHostEventName,
 } from "../types/hook-types.js";
 import type {
   DispatchableEvent,
@@ -23,6 +26,7 @@ import type {
   HookDerivation,
   HookDigest,
   HookEntryStatus,
+  HookEventName,
   HookExtension,
   HookRegistry,
   HookRegistryEntry,
@@ -30,11 +34,11 @@ import type {
   HookScanOptions,
   HookScript,
   HookValidationFailure,
+  HostEventName,
   InterpreterAvailability,
   InterpreterResolution,
   Outcome,
   OutcomeStatus,
-  RunnerClass,
   WhichInterpreter,
 } from "../types/hook-types.js";
 import { hooksLocationLabel } from "../utils/workflow-paths.js";
@@ -44,7 +48,10 @@ export {
   DISPATCHABLE_EVENTS,
   DISPATCHABLE_EVENT_NAMES,
   EXCLUDED_EVENT_NAMES,
+  HOOK_EVENT_NAMES,
+  HOST_EVENT_NAMES,
   HookDigestMode,
+  isHostEventName,
 };
 export type {
   DispatchableEvent,
@@ -54,6 +61,7 @@ export type {
   HookDerivation,
   HookDigest,
   HookEntryStatus,
+  HookEventName,
   HookExtension,
   HookRegistry,
   HookRegistryEntry,
@@ -61,11 +69,11 @@ export type {
   HookScanOptions,
   HookScript,
   HookValidationFailure,
+  HostEventName,
   InterpreterAvailability,
   InterpreterResolution,
   Outcome,
   OutcomeStatus,
-  RunnerClass,
   WhichInterpreter,
 };
 
@@ -74,20 +82,10 @@ export type {
 /** Stems accepted by the digest: `[a-z0-9]+(-[a-z0-9]+)*`. */
 export const HOOK_STEM_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export const HOOK_EXTENSIONS: readonly HookExtension[] = [
-  ".ts",
-  ".js",
-  ".sh",
-  ".ps1",
-];
+export const HOOK_EXTENSIONS: readonly HookExtension[] = [".sh", ".ps1"];
 
 export const isHookExtension = (value: string): value is HookExtension =>
   (HOOK_EXTENSIONS as readonly string[]).includes(value);
-
-export const runnerClassForExtension = (
-  extension: HookExtension,
-): RunnerClass =>
-  extension === ".sh" || extension === ".ps1" ? "subprocess" : "in-process";
 
 export const toDottedEvent = (stem: string): string =>
   stem.split("-").join(".");
@@ -109,6 +107,9 @@ export const deriveHook = (stem: string): HookDerivation => {
       event: dispatchable,
       class: DISPATCHABLE_EVENTS[dispatchable],
     };
+  }
+  if (isHostEventName(event)) {
+    return { kind: "host-event", event, class: "observe" };
   }
   return { kind: "unknown", event };
 };
@@ -138,9 +139,8 @@ const firstAvailable = (
 
 /**
  * Resolves interpreters once at init. A missing executable is only an
- * availability flag — never a registration error. `.ts`/`.js` run in-process,
- * `.sh` needs `bash`, and `.ps1` probes `pwsh` first, then the Windows
- * PowerShell fallback.
+ * availability flag — never a registration error. `.sh` needs `bash`, and
+ * `.ps1` probes `pwsh` first, then the Windows PowerShell fallback.
  */
 export const resolveInterpreterAvailability = (
   which: WhichInterpreter = Bun.which,
@@ -148,8 +148,6 @@ export const resolveInterpreterAvailability = (
   const sh = firstAvailable(which, ["bash"]);
   const ps1 = firstAvailable(which, ["pwsh", "powershell.exe"]);
   return {
-    ".ts": { available: true },
-    ".js": { available: true },
     ".sh":
       sh === undefined
         ? { expected: "bash", available: false }
@@ -163,7 +161,7 @@ export const resolveInterpreterAvailability = (
 
 /* ── Strict digest ────────────────────────────────────────────────────────── */
 
-const EXPECTED_EXTENSIONS = ".ts, .js, .sh, or .ps1";
+const EXPECTED_EXTENSIONS = ".sh or .ps1";
 
 const RECOVERY_HINT =
   "Hint: fix or remove the invalid file(s) and restart OpenCode. The owflow plugin — including the destructive-command guard — has been dropped until the hooks directory validates. To start without user hooks, set OWFLOW_HOOKS_DISABLED=1.";
@@ -203,7 +201,7 @@ const validateEntry = (
   if (derivation.kind === "unknown") {
     return {
       path: entryPath,
-      error: `stem "${stem}" derives to "${derivation.event}", which is not a dispatchable event`,
+      error: `stem "${stem}" derives to "${derivation.event}", which is not a dispatchable hook or a known host event`,
     };
   }
   return {
@@ -211,7 +209,6 @@ const validateEntry = (
     stem,
     event: derivation.event,
     class: derivation.class,
-    runnerClass: runnerClassForExtension(extension),
     extension,
   };
 };
@@ -325,14 +322,13 @@ export const buildRegistry = (
         path: script.path,
         event: script.event,
         class: script.class,
-        runnerClass: script.runnerClass,
         interpreter,
         status: statusFor(script, interpreter),
       };
     });
 
-  const byEvent = {} as Record<DispatchableEvent, HookRegistryEntry[]>;
-  for (const event of DISPATCHABLE_EVENT_NAMES) byEvent[event] = [];
+  const byEvent = {} as Record<HookEventName, HookRegistryEntry[]>;
+  for (const event of HOOK_EVENT_NAMES) byEvent[event] = [];
   for (const entry of entries) byEvent[entry.event].push(entry);
 
   return { entries, byEvent };

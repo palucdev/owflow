@@ -32,9 +32,7 @@ export type DispatchableEvent = `${HookEvent}`;
 
 export type HookClass = "gate" | "observe";
 
-export type RunnerClass = "in-process" | "subprocess";
-
-export type HookExtension = ".ts" | ".js" | ".sh" | ".ps1";
+export type HookExtension = ".sh" | ".ps1";
 
 export type HookEntryStatus =
   | "registered"
@@ -66,6 +64,69 @@ export const DISPATCHABLE_EVENTS: Readonly<
 export const DISPATCHABLE_EVENT_NAMES: readonly DispatchableEvent[] =
   Object.keys(DISPATCHABLE_EVENTS) as DispatchableEvent[];
 
+/**
+ * OpenCode v1 host events that may be used as hook names. All of them arrive
+ * through the single `event` hook, so an event-named script fires only when the
+ * host emits its matching `event.type`. They are observe-only: the host event
+ * stream has no writable output.
+ */
+export const HOST_EVENT_NAMES = [
+  "command.executed",
+  "file.edited",
+  "file.watcher.updated",
+  "installation.update-available",
+  "installation.updated",
+  "lsp.client.diagnostics",
+  "lsp.updated",
+  "message.part.removed",
+  "message.part.updated",
+  "message.removed",
+  "message.updated",
+  "permission.replied",
+  "permission.updated",
+  "pty.created",
+  "pty.deleted",
+  "pty.exited",
+  "pty.updated",
+  "server.connected",
+  "server.instance.disposed",
+  "session.compacted",
+  "session.created",
+  "session.deleted",
+  "session.diff",
+  "session.error",
+  "session.idle",
+  "session.status",
+  "session.updated",
+  "todo.updated",
+  "tui.command.execute",
+  "tui.prompt.append",
+  "tui.toast.show",
+  "vcs.branch.updated",
+] as const;
+
+export type HostEventName = (typeof HOST_EVENT_NAMES)[number];
+
+/** Every name a hook file may derive to: host hook events and host bus events. */
+export type HookEventName = DispatchableEvent | HostEventName;
+
+export const isHostEventName = (value: string): value is HostEventName =>
+  (HOST_EVENT_NAMES as readonly string[]).includes(value);
+
+export const isHookEventName = (value: string): value is HookEventName =>
+  Object.hasOwn(DISPATCHABLE_EVENTS, value) || isHostEventName(value);
+
+export const HOOK_EVENT_NAMES: readonly HookEventName[] = [
+  ...DISPATCHABLE_EVENT_NAMES,
+  ...HOST_EVENT_NAMES,
+];
+
+/** Host bus events are observe-only; hook events carry their table class. */
+export const hookClassOf = (event: HookEventName): HookClass =>
+  Object.hasOwn(DISPATCHABLE_EVENTS, event)
+    ? DISPATCHABLE_EVENTS[event as DispatchableEvent]
+    : "observe";
+
 /** Names that must never derive to a dispatchable event. */
 export const EXCLUDED_EVENT_NAMES: readonly string[] = [
   "permission.ask",
@@ -81,6 +142,11 @@ export type HookDerivation =
       readonly event: DispatchableEvent;
       readonly class: HookClass;
     }
+  | {
+      readonly kind: "host-event";
+      readonly event: HostEventName;
+      readonly class: "observe";
+    }
   | { readonly kind: "excluded" }
   | { readonly kind: "unknown"; readonly event: string };
 
@@ -93,15 +159,14 @@ export interface InterpreterResolution {
 }
 
 export type InterpreterAvailability = Readonly<
-  Record<HookExtension, InterpreterResolution>
+  Record<".sh" | ".ps1", InterpreterResolution>
 >;
 
 export interface HookScript {
   readonly path: string;
   readonly stem: string;
-  readonly event: DispatchableEvent;
+  readonly event: HookEventName;
   readonly class: HookClass;
-  readonly runnerClass: RunnerClass;
   readonly extension: HookExtension;
 }
 
@@ -123,9 +188,8 @@ export interface HookDigest {
 
 export interface HookRegistryEntry {
   readonly path: string;
-  readonly event: DispatchableEvent;
+  readonly event: HookEventName;
   readonly class: HookClass;
-  readonly runnerClass: RunnerClass;
   readonly interpreter: InterpreterResolution;
   readonly status: HookEntryStatus;
 }
@@ -133,7 +197,7 @@ export interface HookRegistryEntry {
 export interface HookRegistry {
   readonly entries: readonly HookRegistryEntry[];
   readonly byEvent: Readonly<
-    Record<DispatchableEvent, readonly HookRegistryEntry[]>
+    Record<HookEventName, readonly HookRegistryEntry[]>
   >;
 }
 
@@ -154,15 +218,28 @@ export interface HookScan {
 
 export type OutcomeStatus = "ok" | "blocked" | "failed";
 
+/** Free-form output captured from one hook run; never contains the envelope. */
+export interface HookCapture {
+  /** Raw stdout only when it was malformed; valid envelopes are not duplicated. */
+  readonly stdout?: string;
+  /** Free-form diagnostics channel (stderr). */
+  readonly stderr?: string;
+  readonly exitCode?: number | null;
+  readonly signal?: string | null;
+  /** True when any captured stream hit its cap. */
+  readonly truncated?: boolean;
+}
+
 export interface Outcome {
   readonly status: OutcomeStatus;
   readonly reason?: string;
   readonly mutations?: Record<string, unknown>;
+  readonly capture?: HookCapture;
 }
 
 export interface EnvelopeContext {
   readonly protocol: "owflow-hooks/1";
-  readonly event: DispatchableEvent;
+  readonly event: HookEventName;
   readonly class: HookClass;
   readonly session?: { readonly sessionID: string };
   readonly context: Record<string, unknown>;
@@ -176,7 +253,7 @@ export interface EnvelopeResult {
 }
 
 export interface EnvelopeBuildInput {
-  readonly event: DispatchableEvent;
+  readonly event: HookEventName;
   readonly context: Record<string, unknown>;
   readonly sessionID?: string | undefined;
 }
@@ -189,21 +266,12 @@ export interface ParsedEnvelopeResult {
 
 /* ── Runners ──────────────────────────────────────────────────────────────── */
 
-/** One execution interface for every script class — the v2 seam unit. */
+/** One execution interface for every script — the v2 seam unit. */
 export interface HookRunner {
   readonly run: (
     entry: HookRegistryEntry,
     envelope: EnvelopeContext,
   ) => Promise<Outcome>;
-}
-
-export type HookHandler = (envelope: EnvelopeContext) => unknown;
-
-/** Injectable dynamic-import seam; the default is the real `import()`. */
-export type ModuleImporter = (specifier: string) => Promise<unknown>;
-
-export interface InProcessRunner extends HookRunner {
-  readonly load: (entry: HookRegistryEntry) => Promise<void>;
 }
 
 export interface SpawnProcessOptions {
@@ -213,8 +281,14 @@ export interface SpawnProcessOptions {
   readonly stderr: "pipe";
 }
 
+export interface StreamReader {
+  read(): Promise<{ readonly done: boolean; readonly value?: Uint8Array }>;
+  cancel?(): Promise<void> | void;
+}
+
 export interface SpawnedStream {
   text(): Promise<string>;
+  getReader?(): StreamReader;
 }
 
 export interface SpawnedProcess {
@@ -234,16 +308,6 @@ export type SpawnProcess = (
 export interface SubprocessRunnerDeps {
   readonly cwd: string;
   readonly spawn?: SpawnProcess;
-}
-
-export interface ExecutionCoreOptions {
-  readonly cwd: string;
-  readonly inProcess?: InProcessRunner;
-  readonly subprocess?: HookRunner;
-}
-
-export interface ExecutionCore extends HookRunner {
-  readonly load: (entries: readonly HookRegistryEntry[]) => Promise<void>;
 }
 
 /* ── Dispatch ─────────────────────────────────────────────────────────────── */
@@ -275,11 +339,67 @@ export interface HookStatusReport {
   readonly runId?: string;
   readonly outcome?: Outcome;
   readonly reason?: string;
+  /**
+   * Wall-clock run start. A settled report without a prior pending uses this
+   * start.
+   */
+  readonly startedAt?: number;
+  /**
+   * A silent successful catch-all `event` run. The store clears its pending
+   * state and restores the previous outcome instead of recording a new one;
+   * event-named and one-shot observe runs always record their outcome.
+   */
+  readonly noop?: boolean;
 }
 
 export type HookStatusReadResult =
   | { readonly kind: "missing" | "invalid" }
   | { readonly kind: "ok"; readonly snapshot: HookStatusSnapshot };
+
+/** One settled (or skipped) hook run reported to the append-only log observer. */
+export interface HookRunLogReport {
+  readonly entry: HookRegistryEntry;
+  readonly runId: string;
+  readonly phase: "settled" | "skipped";
+  readonly outcome?: Outcome;
+  readonly reason?: string;
+  readonly sessionID?: string;
+  readonly startedAt: number;
+  readonly finishedAt: number;
+  readonly capture?: HookCapture;
+}
+
+/** One line of the append-only per-workspace JSONL log file. */
+export interface HookRunLogRecord {
+  readonly version: 1;
+  readonly runId: string;
+  readonly pid: number;
+  readonly workspace: string;
+  readonly event: HookEventName;
+  readonly hook: string;
+  readonly name: string;
+  readonly class: HookClass;
+  readonly sessionID?: string;
+  readonly startedAt: number;
+  readonly finishedAt: number;
+  readonly durationMs: number;
+  readonly status: "success" | "failure";
+  readonly outcome: OutcomeStatus;
+  readonly reason?: string;
+  readonly exitCode?: number | null;
+  readonly signal?: string | null;
+  readonly stdout?: string;
+  readonly stderr?: string;
+  readonly truncated?: boolean;
+}
+
+export type HookLogReadResult =
+  | { readonly kind: "missing" | "invalid" }
+  | {
+      readonly kind: "ok";
+      readonly records: readonly HookRunLogRecord[];
+      readonly truncated: boolean;
+    };
 
 export interface DispatcherOptions {
   readonly run: HookRunner["run"];
@@ -295,10 +415,17 @@ export interface DispatcherOptions {
    * affect gate/observe semantics.
    */
   readonly onStatus?: (report: HookStatusReport) => void;
+  /**
+   * Best-effort per-run log observer. Independent of the status observer:
+   * failures are warned once and never affect gate/observe semantics.
+   */
+  readonly onRunLog?: (report: HookRunLogReport) => void;
+  /** Injectable clock for deterministic duration assertions. */
+  readonly now?: () => number;
 }
 
 export type Dispatcher = (
-  event: DispatchableEvent,
+  event: HookEventName,
   input?: unknown,
   output?: Record<string, unknown>,
 ) => Promise<void>;

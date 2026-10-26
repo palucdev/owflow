@@ -1,32 +1,15 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   buildEnvelope,
-  createExecutionCore,
-  createInProcessRunner,
   createSubprocessRunner,
   parseEnvelopeResult,
 } from "../../hooks-wrapper/runners.js";
 import type {
-  HookRunner,
-  InProcessRunner,
-  ModuleImporter,
   SpawnProcess,
   SpawnProcessOptions,
   SpawnedProcess,
 } from "../../hooks-wrapper/runners.js";
-import {
-  buildRegistry,
-  resolveInterpreterAvailability,
-} from "../../hooks-wrapper/registry.js";
-import type {
-  EnvelopeContext,
-  HookRegistryEntry,
-  HookScript,
-  Outcome,
-} from "../../hooks-wrapper/registry.js";
+import type { HookRegistryEntry } from "../../hooks-wrapper/registry.js";
 
 describe("buildEnvelope", () => {
   class FakeModel {
@@ -114,6 +97,13 @@ describe("buildEnvelope", () => {
     const observeEnvelope = buildEnvelope({ event: "config", context: {} });
     expect(observeEnvelope.class).toBe("observe");
     expect(observeEnvelope.session).toBeUndefined();
+
+    const hostEventEnvelope = buildEnvelope({
+      event: "session.idle",
+      context: {},
+    });
+    expect(hostEventEnvelope.event).toBe("session.idle");
+    expect(hostEventEnvelope.class).toBe("observe");
 
     const emptySession = buildEnvelope({
       event: "config",
@@ -230,25 +220,12 @@ describe("parseEnvelopeResult", () => {
   });
 });
 
-const inProcessEntry = (
-  overrides: Partial<HookRegistryEntry> = {},
-): HookRegistryEntry => ({
-  path: "/project/.owflow/hooks/tool-execute-before.ts",
-  event: "tool.execute.before",
-  class: "gate",
-  runnerClass: "in-process",
-  interpreter: { available: true },
-  status: "registered",
-  ...overrides,
-});
-
 const subprocessEntry = (
   overrides: Partial<HookRegistryEntry> = {},
 ): HookRegistryEntry => ({
   path: "/project/.owflow/hooks/tool-execute-before.sh",
   event: "tool.execute.before",
   class: "gate",
-  runnerClass: "subprocess",
   interpreter: { resolved: "/usr/bin/bash", available: true },
   status: "registered",
   ...overrides,
@@ -259,12 +236,6 @@ const envelope = buildEnvelope({
   sessionID: "ses_abc",
   context: { tool: "bash", args: { command: "rm -rf build" } },
 });
-
-const commandEnvelope = (command: string): EnvelopeContext =>
-  buildEnvelope({
-    event: "tool.execute.before",
-    context: { tool: "bash", args: { command } },
-  });
 
 const resultJson = (result: Record<string, unknown>): string =>
   JSON.stringify({ protocol: "owflow-hooks/1", ...result });
@@ -287,79 +258,6 @@ const fakeProcess = ({
   signalCode,
   stdout: { text: async () => stdout },
   stderr: { text: async () => stderr },
-});
-
-describe("createInProcessRunner", () => {
-  test("should normalize undefined returns to ok, Blocked throws to blocked, and import each module exactly once", async () => {
-    let importCalls = 0;
-    const importModule: ModuleImporter = async (specifier) => {
-      importCalls += 1;
-      expect(specifier.startsWith("file://")).toBe(true);
-      expect(specifier.endsWith("/tool-execute-before.ts")).toBe(true);
-      return {
-        default: async (input: EnvelopeContext): Promise<unknown> => {
-          const args = input.context.args as { command?: unknown };
-          if (args.command === "blocked")
-            throw new Error("Blocked: rm -rf is not allowed for this agent");
-          if (args.command === "boom") throw new Error("script exploded");
-          if (args.command === "malformed") return { not: "a result" };
-          if (args.command === "mutate")
-            return {
-              protocol: "owflow-hooks/1",
-              status: "ok",
-              mutations: { args: { command: "ls -la" } },
-            };
-          return undefined;
-        },
-      };
-    };
-
-    const runner = createInProcessRunner(importModule);
-    await runner.load(inProcessEntry());
-
-    const ok: Outcome = await runner.run(inProcessEntry(), envelope);
-    expect(ok).toEqual({ status: "ok" });
-
-    const blocked = await runner.run(
-      inProcessEntry(),
-      commandEnvelope("blocked"),
-    );
-    // The `Blocked:` prefix is stripped so the dispatcher can re-prefix once.
-    expect(blocked).toEqual({
-      status: "blocked",
-      reason: "rm -rf is not allowed for this agent",
-    });
-
-    const failed = await runner.run(inProcessEntry(), commandEnvelope("boom"));
-    expect(failed).toEqual({ status: "failed", reason: "script exploded" });
-
-    const malformed = await runner.run(
-      inProcessEntry(),
-      commandEnvelope("malformed"),
-    );
-    expect(malformed.status).toBe("failed");
-    expect(malformed.reason ?? "").toContain("missing protocol");
-
-    const mutated = await runner.run(
-      inProcessEntry(),
-      commandEnvelope("mutate"),
-    );
-    expect(mutated).toEqual({
-      status: "ok",
-      mutations: { args: { command: "ls -la" } },
-    });
-
-    expect(importCalls).toBe(1);
-
-    const broken = createInProcessRunner(async () => ({ default: undefined }));
-    await expect(broken.load(inProcessEntry())).rejects.toThrow(
-      /default-export a handler function/,
-    );
-    // A broken module degrades to a failed outcome when fired, never a throw.
-    const brokenRun = await broken.run(inProcessEntry(), envelope);
-    expect(brokenRun.status).toBe("failed");
-    expect(brokenRun.reason ?? "").toContain("default-export");
-  });
 });
 
 describe("createSubprocessRunner", () => {
@@ -406,39 +304,101 @@ describe("createSubprocessRunner", () => {
     // Absent stdout on exit 0 has the same meaning as an absent result object.
     expect(await runner.run(subprocessEntry(), envelope)).toEqual({
       status: "ok",
+      capture: { exitCode: 0 },
     });
 
     // A script may exit 0 and still declare a blocking status.
     expect(await runner.run(subprocessEntry(), envelope)).toEqual({
       status: "blocked",
       reason: "policy",
+      capture: { exitCode: 0 },
     });
 
     const exited = await runner.run(subprocessEntry(), envelope);
     expect(exited.status).toBe("failed");
     expect(exited.reason).toContain("boom");
+    expect(exited.capture).toEqual({ stderr: "boom: line 1\n", exitCode: 3 });
 
     // A script may exit non-zero and declare its own status; JSON wins.
     expect(await runner.run(subprocessEntry(), envelope)).toEqual({
       status: "failed",
       reason: "missing jq",
+      capture: { exitCode: 1 },
     });
 
     expect(await runner.run(subprocessEntry(), envelope)).toEqual({
       status: "ok",
       mutations: { args: { command: "ls -la" } },
+      capture: { exitCode: 0 },
     });
 
     // `exitCode === null` is never conflated with success.
     const signalled = await runner.run(subprocessEntry(), envelope);
     expect(signalled.status).toBe("failed");
     expect(signalled.reason).toContain("SIGKILL");
+    expect(signalled.capture).toEqual({
+      exitCode: null,
+      signal: "SIGKILL",
+    });
 
     // Unreadable streams degrade to empty output; the exit code still decides.
     expect(await runner.run(subprocessEntry(), envelope)).toEqual({
       status: "ok",
+      capture: { exitCode: 0 },
     });
     expect(index).toBe(7);
+  });
+
+  test("should capture successful stderr and cap chunked streams", async () => {
+    const note = fakeProcess({ exitCode: 0, stderr: "note\n" });
+    const readerProcess = (chunks: readonly string[]): SpawnedProcess => {
+      let index = 0;
+      return {
+        exited: Promise.resolve(0),
+        exitCode: 0,
+        signalCode: null,
+        stdout: { text: async () => "" },
+        stderr: {
+          text: async () => "",
+          getReader: () => ({
+            read: async () =>
+              index < chunks.length
+                ? {
+                    done: false,
+                    value: new TextEncoder().encode(chunks[index++]!),
+                  }
+                : { done: true },
+            cancel: () => {},
+          }),
+        },
+      };
+    };
+    const processes: SpawnedProcess[] = [
+      note,
+      readerProcess([
+        "a".repeat(10 * 1024),
+        "b".repeat(10 * 1024),
+        "c".repeat(10 * 1024),
+      ]),
+    ];
+    let index = 0;
+    const runner = createSubprocessRunner({
+      cwd: "/project",
+      spawn: () => processes[index++]!,
+    });
+
+    const successful = await runner.run(subprocessEntry(), envelope);
+    expect(successful).toEqual({
+      status: "ok",
+      capture: { stderr: "note\n", exitCode: 0 },
+    });
+
+    const capped = await runner.run(subprocessEntry(), envelope);
+    expect(capped.status).toBe("ok");
+    expect(Buffer.byteLength(capped.capture?.stderr ?? "", "utf8")).toBeLessThanOrEqual(
+      16 * 1024,
+    );
+    expect(capped.capture?.truncated).toBe(true);
   });
 
   test("should fail closed on unparseable stdout even with a zero exit code", async () => {
@@ -462,16 +422,26 @@ describe("createSubprocessRunner", () => {
     const garbage = await runner.run(subprocessEntry(), envelope);
     expect(garbage.status).toBe("failed");
     expect(garbage.reason ?? "").toContain("unparseable JSON");
+    expect(garbage.capture).toEqual({
+      stdout: "not json at all",
+      exitCode: 0,
+    });
 
     // JSON missing the protocol is malformed too, whatever status it claims.
     const missingProtocol = await runner.run(subprocessEntry(), envelope);
     expect(missingProtocol.status).toBe("failed");
     expect(missingProtocol.reason ?? "").toContain("missing protocol");
+    expect(missingProtocol.capture?.stdout).toContain("blocked");
 
     // A non-zero exit keeps its stderr diagnostics over the stdout parse error.
     const nonZero = await runner.run(subprocessEntry(), envelope);
     expect(nonZero.status).toBe("failed");
     expect(nonZero.reason).toContain("script died");
+    expect(nonZero.capture).toEqual({
+      stdout: "not json at all",
+      stderr: "script died\n",
+      exitCode: 7,
+    });
     expect(index).toBe(3);
   });
 
@@ -516,178 +486,7 @@ describe("createSubprocessRunner", () => {
     );
     expect(missing.status).toBe("failed");
     expect(missing.reason).toContain("no interpreter resolved");
+    expect(missing.capture).toEqual({});
     expect(calls).toHaveLength(1);
   });
-});
-
-const entryFor = (
-  runnerClass: HookRegistryEntry["runnerClass"],
-  path: string,
-): HookRegistryEntry => ({
-  path,
-  event: "tool.execute.before",
-  class: "gate",
-  runnerClass,
-  interpreter:
-    runnerClass === "in-process"
-      ? { available: true }
-      : { resolved: "/usr/bin/bash", available: true },
-  status: "registered",
-});
-
-const coreEnvelope = buildEnvelope({
-  event: "tool.execute.before",
-  context: { tool: "bash", args: { command: "rm -rf build" } },
-});
-
-const OUTCOME_KEYS = ["mutations", "reason", "status"];
-
-describe("createExecutionCore", () => {
-  test("should load only in-process entries and delegate an in-process run to the in-process runner", async () => {
-    const tsEntry = entryFor("in-process", "/project/hooks/a.ts");
-    const shEntry = entryFor("subprocess", "/project/hooks/a.sh");
-    const loaded: HookRegistryEntry[] = [];
-    const inProcessRuns: Array<{ entry: HookRegistryEntry; envelope: EnvelopeContext }> =
-      [];
-    const subprocessRuns: HookRegistryEntry[] = [];
-
-    const inProcess: InProcessRunner = {
-      load: async (entry) => {
-        loaded.push(entry);
-      },
-      run: async (entry, input) => {
-        inProcessRuns.push({ entry, envelope: input });
-        return { status: "ok", mutations: { args: { command: "ls -la" } } };
-      },
-    };
-    const subprocess: HookRunner = {
-      run: async (entry) => {
-        subprocessRuns.push(entry);
-        return { status: "failed", reason: "subprocess unsupported" };
-      },
-    };
-
-    const core = createExecutionCore({
-      cwd: "/project",
-      inProcess,
-      subprocess,
-    });
-
-    expect(core.run.length).toBe(2);
-
-    await core.load([tsEntry, shEntry]);
-    expect(loaded).toEqual([tsEntry]);
-
-    const outcome = await core.run(tsEntry, coreEnvelope);
-    expect(outcome).toEqual({
-      status: "ok",
-      mutations: { args: { command: "ls -la" } },
-    });
-    expect(inProcessRuns).toEqual([{ entry: tsEntry, envelope: coreEnvelope }]);
-    expect(subprocessRuns).toHaveLength(0);
-    expect(Object.keys(outcome).every((key) => OUTCOME_KEYS.includes(key))).toBe(
-      true,
-    );
-  });
-
-  test("should delegate a subprocess run to the subprocess runner and never touch the in-process runner", async () => {
-    const tsEntry = entryFor("in-process", "/project/hooks/a.ts");
-    const shEntry = entryFor("subprocess", "/project/hooks/a.sh");
-    const inProcessRuns: HookRegistryEntry[] = [];
-    const subprocessRuns: Array<{ entry: HookRegistryEntry; envelope: EnvelopeContext }> =
-      [];
-
-    const inProcess: InProcessRunner = {
-      load: async () => {},
-      run: async (entry) => {
-        inProcessRuns.push(entry);
-        return { status: "ok" };
-      },
-    };
-    const subprocess: HookRunner = {
-      run: async (entry, input) => {
-        subprocessRuns.push({ entry, envelope: input });
-        return { status: "blocked", reason: "policy" };
-      },
-    };
-
-    const core = createExecutionCore({
-      cwd: "/project",
-      inProcess,
-      subprocess,
-    });
-
-    const outcome: Outcome = await core.run(shEntry, coreEnvelope);
-    expect(outcome).toEqual({ status: "blocked", reason: "policy" });
-    expect(subprocessRuns).toEqual([{ entry: shEntry, envelope: coreEnvelope }]);
-    expect(inProcessRuns).toHaveLength(0);
-    expect(tsEntry.runnerClass).toBe("in-process");
-    expect(Object.keys(outcome).every((key) => OUTCOME_KEYS.includes(key))).toBe(
-      true,
-    );
-  });
-});
-
-describe("createExecutionCore with real runners", () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-hooks-real-test-"));
-  });
-
-  afterEach(() => {
-    if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  const realEntry = (
-    fileName: string,
-    extension: ".ts" | ".sh",
-  ): HookRegistryEntry => {
-    const script: HookScript = {
-      path: path.join(tempDir, fileName),
-      stem: "tool-execute-before",
-      event: "tool.execute.before",
-      class: "gate",
-      runnerClass: extension === ".ts" ? "in-process" : "subprocess",
-      extension,
-    };
-    return buildRegistry([script], resolveInterpreterAvailability()).entries[0]!;
-  };
-
-  test("should import, load, and run a real in-process .ts hook", async () => {
-    fs.writeFileSync(
-      path.join(tempDir, "tool-execute-before.ts"),
-      'export default async () => ({\n  protocol: "owflow-hooks/1",\n  status: "ok",\n  mutations: { args: { command: "ls -la" } },\n});\n',
-      "utf8",
-    );
-    const entry = realEntry("tool-execute-before.ts", ".ts");
-    const core = createExecutionCore({ cwd: tempDir });
-
-    await core.load([entry]);
-    const outcome = await core.run(entry, envelope);
-
-    expect(outcome).toEqual({
-      status: "ok",
-      mutations: { args: { command: "ls -la" } },
-    });
-  });
-
-  test.skipIf(Bun.which("bash") === null)(
-    "should spawn a real bash hook and trust its stdout status over the exit code",
-    async () => {
-      fs.writeFileSync(
-        path.join(tempDir, "tool-execute-before.sh"),
-        '#!/bin/bash\nread -r _envelope\nprintf \'%s\' \'{"protocol":"owflow-hooks/1","status":"blocked","reason":"nope"}\'\nexit 1\n',
-        "utf8",
-      );
-      const entry = realEntry("tool-execute-before.sh", ".sh");
-      const core = createExecutionCore({ cwd: tempDir });
-
-      const outcome = await core.run(entry, envelope);
-
-      expect(outcome).toEqual({ status: "blocked", reason: "nope" });
-    },
-  );
 });

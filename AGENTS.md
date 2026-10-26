@@ -72,7 +72,8 @@ Fires after context compaction. Injects a reminder to re-read `orchestrator-stat
 
 Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. The platform-agnostic core lives in `src/hooks-wrapper/`; `src/hooks/plugin-hooks.ts` (server wiring) and `src/tui.ts` (TUI) hold the host-specific surfaces.
 
-- Scripts are named `kebab-event.ext` (`tool-execute-before.sh` → `tool.execute.before`); `.ts`/`.js` run in-process, `.sh`/`.ps1` as subprocesses.
+- Scripts are named `kebab-event.ext` (`tool-execute-before.sh` → `tool.execute.before`) and run as subprocesses; supported extensions are `.sh` and `.ps1`.
+- A stem may also name a v1 host event (`session-idle.sh` → `session.idle`). These are observe-only, fire only for their matching `event.type` via the single `event` hook, and accept the pinned `HOST_EVENT_NAMES` set (32 events); v2-only `session.next.*` names are rejected.
 - 13 gate events fail closed on a non-`ok` outcome (`Blocked:` + `Hint:`); a `failed` gate also ends the current session, while `blocked` only rejects the operation. 3 observe events (`config`, `event`, `dispose`) log and continue.
 - The wrapper ↔ script contract is the `owflow-hooks/1` JSON envelope; mutations are restricted to a per-event whitelist.
 - Visibility: startup `[owflow]` banner snapshot, `owflow-hooks` CLI, and the always-on TUI **Active hooks** right-sidebar panel — all "effective after next restart". Hooks load once, so restart OpenCode to reload.
