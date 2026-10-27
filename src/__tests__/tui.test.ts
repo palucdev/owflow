@@ -33,12 +33,6 @@ interface FakeSlotRegistration {
   readonly slots: Record<string, (ctx: unknown, props: unknown) => unknown>;
 }
 
-interface FakeAlert {
-  readonly title: string;
-  readonly message: string;
-  readonly onConfirm?: () => void;
-}
-
 interface FakeDialogProps {
   readonly size?: string;
   readonly onClose?: () => void;
@@ -117,6 +111,8 @@ const makeFakeApi = (directory: string): FakeApi => {
     },
     state: { path: { directory } },
     renderer: {
+      width: 120,
+      height: 40,
       requestRender: (): void => {
         renders += 1;
       },
@@ -130,7 +126,6 @@ const makeFakeApi = (directory: string): FakeApi => {
     },
     ui: {
       Dialog: (props: FakeDialogProps): FakeDialogProps => props,
-      DialogAlert: (props: FakeAlert): FakeAlert => props,
       dialog: {
         replace: (render: () => unknown, onClose?: () => void): void => {
           dialogCalls.push({ render, onClose });
@@ -577,6 +572,7 @@ describe("owflow TUI plugin", () => {
     expect(detailText).toContain("123 ms");
     expect(detailText).toContain("policy says no");
     expect(detailText).toContain("Exit:   2");
+    expect(detailText).toContain(`Log file: ${logFile}`);
     expect(detailText).not.toContain("captured stderr");
 
     const button = findClickableByContent(detail, "View logs");
@@ -595,12 +591,29 @@ describe("owflow TUI plugin", () => {
     (button!.props.onMouseUp as () => void)();
 
     expect(dialogCalls).toHaveLength(2);
-    const logs = dialogCalls[1]!.render() as FakeAlert;
-    expect(logs.title).toBe("Hook logs: tool-execute-before");
-    expect(logs.message).toContain("captured stderr");
-    expect(logs.message).not.toContain("policy says no");
+    expect(dialogSizes).toEqual(["large", "large"]);
+    const logs = dialogCalls[1]!.render() as FakeNode;
+    expect(logs.tag).toBe("box");
+    const logsText = collectText(logs);
+    expect(logsText).toContain("Hook logs: tool-execute-before");
+    expect(logsText).toContain("captured stderr");
+    expect(logsText).not.toContain("policy says no");
 
-    logs.onConfirm?.();
+    const scrollbox = logs.children.find(
+      (child): child is FakeNode =>
+        typeof child === "object" && child.tag === "scrollbox",
+    );
+    expect(scrollbox).toBeDefined();
+    expect(scrollbox!.props.flexGrow).toBe(1);
+    expect(scrollbox!.props.width).toBe("100%");
+    expect(scrollbox!.props.maxHeight).toBe(22);
+    expect(scrollbox!.props.focused).toBe(true);
+    expect(collectText(scrollbox!)).toContain("--- stderr ---");
+    expect(collectText(scrollbox!)).toContain("captured stderr");
+
+    const esc = findClickableByContent(logs, "esc");
+    expect(esc).toBeDefined();
+    (esc!.props.onMouseUp as () => void)();
     expect(dialogClears()).toBe(1);
   });
 
@@ -708,7 +721,7 @@ describe("owflow TUI plugin", () => {
     expect(toasts).toHaveLength(1);
   });
 
-  test("should truncate run details and logs to their character budgets", () => {
+  test("should truncate run details and explicitly budgeted logs", () => {
     const record = logRecord({
       status: "failure",
       outcome: "failed",
@@ -728,6 +741,10 @@ describe("owflow TUI plugin", () => {
     expect(logs.length).toBeLessThanOrEqual(200);
     expect(logs).toContain("--- stderr ---");
     expect(logs.endsWith("[message truncated]")).toBe(true);
+
+    const scrollable = formatHookLogsMessage(record);
+    expect(scrollable).toContain("x".repeat(10_000));
+    expect(scrollable.endsWith("[message truncated]")).toBe(false);
   });
 
   test("should report when a run captured no output", () => {

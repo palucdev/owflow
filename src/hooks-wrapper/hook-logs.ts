@@ -1,5 +1,7 @@
 /**
- * Append-only per-workspace hook logs: one JSONL record per settled run.
+ * Append-only per-workspace hook logs: one JSONL record per distinct settled
+ * run. Consecutive runs with identical content are coalesced into the first
+ * record so a persistent failure cannot flood the file.
  *
  * The status snapshot is intentionally separate: it is overwritten and
  * bounded, while this file accumulates history for the TUI popup and external
@@ -176,6 +178,28 @@ const buildRecord = (
   };
 };
 
+/**
+ * Identity of a record's meaningful content. Volatile fields (run id, timing,
+ * pid) are excluded so a hook that keeps failing the same way - or keeps
+ * producing the same output - appends one line instead of flooding the file.
+ * A new session or any changed outcome/reason/capture starts a new line.
+ */
+const coalesceKey = (record: MutableLogRecord): string =>
+  JSON.stringify([
+    record.event,
+    record.hook,
+    record.class,
+    record.sessionID ?? null,
+    record.status,
+    record.outcome,
+    record.reason ?? null,
+    record.exitCode === undefined ? "absent" : record.exitCode,
+    record.signal === undefined ? "absent" : record.signal,
+    record.stdout ?? null,
+    record.stderr ?? null,
+    record.truncated === true,
+  ]);
+
 const fitRecord = (record: MutableLogRecord): MutableLogRecord => {
   const recordSize = (): number =>
     Buffer.byteLength(JSON.stringify(record), "utf8");
@@ -264,13 +288,17 @@ export const createHookLogStore = ({
   maxFileBytes = MAX_LOG_FILE_BYTES,
 }: HookLogStoreOptions): HookLogStore => {
   let writeFailureWarned = false;
+  let lastCoalesceKey: string | undefined;
 
   const record = (report: HookRunLogReport): void => {
     try {
       const built = fitRecord(buildRecord(report, workspace, pid));
+      const key = coalesceKey(built);
+      if (key === lastCoalesceKey) return;
       const line = `${JSON.stringify(built)}\n`;
       if (append !== undefined) append(file, line);
       else defaultAppend(file, line, maxFileBytes);
+      lastCoalesceKey = key;
     } catch (error) {
       if (!writeFailureWarned) {
         writeFailureWarned = true;

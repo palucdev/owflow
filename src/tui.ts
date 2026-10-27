@@ -27,7 +27,8 @@ const OPEN_HINT = "›";
 const SHOW_LOGS_LABEL = "View logs";
 const DETAIL_DIALOG_SIZE = "large";
 const RUN_SUMMARY_MAX_CHARS = 4_000;
-const LOGS_MESSAGE_MAX_CHARS = 8_000;
+const LOGS_SCROLL_FALLBACK_HEIGHT = 24;
+const LOGS_SCROLL_MIN_HEIGHT = 4;
 const DEFAULT_STATUS_POLL_MS = 200;
 
 /**
@@ -189,12 +190,13 @@ export const formatHookRunSummary = (
 };
 
 /**
- * Plain-text logs popup body. Bounded by a character budget because the host
- * alert does not scroll; captured streams are already byte-capped by the store.
+ * Plain-text logs popup body. Rendered inside a scrollbox, so no default
+ * character budget applies; captured streams are already byte-capped by the
+ * store. Callers may still pass a budget for one-shot textual summaries.
  */
 export const formatHookLogsMessage = (
   record: HookRunLogRecord,
-  maxChars = LOGS_MESSAGE_MAX_CHARS,
+  maxChars = Number.POSITIVE_INFINITY,
 ): string => {
   const sections: string[] = [];
   const section = (title: string, text: string): void => {
@@ -242,8 +244,68 @@ const staticText = (
   return node;
 };
 
+const logsScrollMaxHeight = (terminalHeight: number | undefined): number => {
+  const height =
+    typeof terminalHeight === "number" &&
+    Number.isFinite(terminalHeight) &&
+    terminalHeight > 0
+      ? terminalHeight
+      : LOGS_SCROLL_FALLBACK_HEIGHT;
+  return Math.max(LOGS_SCROLL_MIN_HEIGHT, Math.floor((height * 3) / 4) - 8);
+};
+
+const buildHookLogsBody = (
+  record: HookRunLogRecord,
+  theme: SidebarTheme,
+  solid: SolidRuntime,
+  onClose: () => void,
+  maxHeight: number,
+): unknown => {
+  const root = solid.createElement("box");
+  solid.setProp(root, "flexDirection", "column");
+  solid.setProp(root, "width", "100%");
+  solid.setProp(root, "paddingLeft", 2);
+  solid.setProp(root, "paddingRight", 2);
+  solid.setProp(root, "paddingTop", 1);
+  solid.setProp(root, "paddingBottom", 1);
+  solid.setProp(root, "gap", 1);
+
+  const header = solid.createElement("box");
+  solid.setProp(header, "flexDirection", "row");
+  solid.setProp(header, "alignItems", "center");
+  solid.setProp(header, "justifyContent", "space-between");
+  solid.setProp(header, "width", "100%");
+  solid.setProp(header, "gap", 1);
+  const title = staticText(solid, `Hook logs: ${record.name}`, theme.text);
+  solid.setProp(title, "flexGrow", 1);
+  solid.setProp(title, "textAlign", "center");
+  solid.insert(header, title);
+  const closeHint = staticText(solid, "esc", theme.textMuted);
+  solid.setProp(closeHint, "flexShrink", 0);
+  solid.setProp(closeHint, "onMouseUp", onClose);
+  solid.insert(header, closeHint);
+  solid.insert(root, header);
+
+  const scrollbox = solid.createElement("scrollbox");
+  solid.setProp(scrollbox, "flexGrow", 1);
+  solid.setProp(scrollbox, "width", "100%");
+  solid.setProp(scrollbox, "maxHeight", maxHeight);
+  try {
+    solid.setProp(scrollbox, "focused", true);
+  } catch {
+    // Keyboard scrolling is an enhancement; mouse-wheel scrolling still works.
+  }
+  const body = staticText(solid, formatHookLogsMessage(record), theme.text);
+  solid.setProp(body, "width", "100%");
+  solid.insert(scrollbox, body);
+  solid.insert(root, scrollbox);
+
+  return root;
+};
+
 const buildHookRunDetailBody = (
   record: HookRunLogRecord,
+  logFile: string,
   theme: SidebarTheme,
   solid: SolidRuntime,
   onShowLogs: () => void,
@@ -283,6 +345,11 @@ const buildHookRunDetailBody = (
   solid.setProp(summary, "width", "100%");
   solid.setProp(summary, "textAlign", "center");
   solid.insert(root, summary);
+
+  const logPath = staticText(solid, `Log file: ${logFile}`, theme.textMuted);
+  solid.setProp(logPath, "width", "100%");
+  solid.setProp(logPath, "textAlign", "center");
+  solid.insert(root, logPath);
 
   const buttonRow = solid.createElement("box");
   solid.setProp(buttonRow, "flexDirection", "row");
@@ -529,13 +596,16 @@ export const registerActiveHooksSidebar = async (
         try {
           api.ui.dialog.replace(
             () =>
-              api.ui.DialogAlert({
-                title: `Hook logs: ${row.name}`,
-                message: formatHookLogsMessage(record),
-                onConfirm: () => api.ui.dialog.clear(),
-              }),
+              buildHookLogsBody(
+                record,
+                theme,
+                solid,
+                onClose,
+                logsScrollMaxHeight(api.renderer.height),
+              ) as SolidElement,
             () => {},
           );
+          api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
         } catch {
           // Keep the detail popup usable if the logs popup cannot open.
         }
@@ -544,6 +614,7 @@ export const registerActiveHooksSidebar = async (
         () =>
           buildHookRunDetailBody(
             record,
+            logFile,
             theme,
             solid,
             showLogs,

@@ -4,6 +4,7 @@ import {
   createSubprocessRunner,
   parseEnvelopeResult,
 } from "../../hooks-wrapper/runners.js";
+import { MAX_CAPTURE_BYTES } from "../../hooks-wrapper/hook-logs.js";
 import type {
   SpawnProcess,
   SpawnProcessOptions,
@@ -401,12 +402,209 @@ describe("createSubprocessRunner", () => {
     expect(capped.capture?.truncated).toBe(true);
   });
 
-  test("should fail closed on unparseable stdout even with a zero exit code", async () => {
+  test("should capture stdout logs and parse a trailing result envelope", async () => {
+    const stdout = [
+      "building project...",
+      "warning: slow step",
+      resultJson({ status: "blocked", reason: "policy" }),
+      "",
+    ].join("\n");
+    const proc = fakeProcess({
+      exitCode: 0,
+      stdout,
+      stderr: "note\n",
+    });
+    const runner = createSubprocessRunner({
+      cwd: "/project",
+      spawn: () => proc,
+    });
+
+    expect(await runner.run(subprocessEntry(), envelope)).toEqual({
+      status: "blocked",
+      reason: "policy",
+      capture: {
+        stdout: "building project...\nwarning: slow step\n",
+        stderr: "note\n",
+        exitCode: 0,
+      },
+    });
+  });
+
+  test("should read stdout chunks and keep the result envelope out of the capture", async () => {
+    const chunks = [
+      "first line\n",
+      "second line\n",
+      `${resultJson({ status: "ok" })}\n`,
+    ];
+    let chunkIndex = 0;
+    const proc: SpawnedProcess = {
+      exited: Promise.resolve(0),
+      exitCode: 0,
+      signalCode: null,
+      stdout: {
+        text: async () => "",
+        getReader: () => ({
+          read: async () =>
+            chunkIndex < chunks.length
+              ? {
+                  done: false,
+                  value: new TextEncoder().encode(chunks[chunkIndex++]!),
+                }
+              : { done: true },
+        }),
+      },
+      stderr: { text: async () => "" },
+    };
+    const runner = createSubprocessRunner({
+      cwd: "/project",
+      spawn: () => proc,
+    });
+
+    expect(await runner.run(subprocessEntry(), envelope)).toEqual({
+      status: "ok",
+      capture: {
+        stdout: "first line\nsecond line\n",
+        exitCode: 0,
+      },
+    });
+  });
+
+  test("should keep hook output out of the host console", async () => {
+    const spies = [
+      spyOn(console, "log").mockImplementation(() => {}),
+      spyOn(console, "info").mockImplementation(() => {}),
+      spyOn(console, "debug").mockImplementation(() => {}),
+      spyOn(console, "warn").mockImplementation(() => {}),
+      spyOn(console, "error").mockImplementation(() => {}),
+    ];
+    try {
+      const runner = createSubprocessRunner({
+        cwd: "/project",
+        spawn: () =>
+          fakeProcess({
+            exitCode: 0,
+            stdout: "visible stdout\n",
+            stderr: "visible stderr\n",
+          }),
+      });
+
+      const outcome = await runner.run(subprocessEntry(), envelope);
+      expect(outcome.capture).toEqual({
+        stdout: "visible stdout\n",
+        stderr: "visible stderr\n",
+        exitCode: 0,
+      });
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
+  test("should capture plain stdout and fall back to the exit code without a result", async () => {
     const processes: SpawnedProcess[] = [
-      fakeProcess({ exitCode: 0, stdout: "not json at all" }),
+      fakeProcess({
+        exitCode: 0,
+        stdout: "building project...\n",
+        stderr: "note\n",
+      }),
+      fakeProcess({
+        exitCode: 2,
+        stdout: "building project...\n",
+        stderr: "compile failed\n",
+      }),
+    ];
+    let index = 0;
+    const spawn: SpawnProcess = () => processes[index++]!;
+    const runner = createSubprocessRunner({ cwd: "/project", spawn });
+
+    expect(await runner.run(subprocessEntry(), envelope)).toEqual({
+      status: "ok",
+      capture: {
+        stdout: "building project...\n",
+        stderr: "note\n",
+        exitCode: 0,
+      },
+    });
+
+    expect(await runner.run(subprocessEntry(), envelope)).toEqual({
+      status: "failed",
+      reason: "compile failed",
+      capture: {
+        stdout: "building project...\n",
+        stderr: "compile failed\n",
+        exitCode: 2,
+      },
+    });
+  });
+
+  test("should find a trailing result envelope when stdout exceeds the capture cap", async () => {
+    const logs = `${"x".repeat(MAX_CAPTURE_BYTES + 100)}\n`;
+    const proc = fakeProcess({
+      exitCode: 0,
+      stdout: `${logs}${resultJson({ status: "failed", reason: "boom" })}\n`,
+    });
+    const runner = createSubprocessRunner({
+      cwd: "/project",
+      spawn: () => proc,
+    });
+
+    const outcome = await runner.run(subprocessEntry(), envelope);
+    expect(outcome.status).toBe("failed");
+    expect(outcome.reason).toBe("boom");
+    expect(outcome.capture?.stdout).toBe(
+      "x".repeat(MAX_CAPTURE_BYTES),
+    );
+    expect(outcome.capture?.truncated).toBe(true);
+  });
+
+  test("should scan the stdout tail for a result after the capture cap", async () => {
+    const chunks = [
+      "y".repeat(MAX_CAPTURE_BYTES),
+      "z".repeat(1_000),
+      "\n",
+      `${resultJson({ status: "ok" })}\n`,
+    ];
+    let chunkIndex = 0;
+    const proc: SpawnedProcess = {
+      exited: Promise.resolve(0),
+      exitCode: 0,
+      signalCode: null,
+      stdout: {
+        text: async () => "",
+        getReader: () => ({
+          read: async () =>
+            chunkIndex < chunks.length
+              ? {
+                  done: false,
+                  value: new TextEncoder().encode(chunks[chunkIndex++]!),
+                }
+              : { done: true },
+        }),
+      },
+      stderr: { text: async () => "" },
+    };
+    const runner = createSubprocessRunner({
+      cwd: "/project",
+      spawn: () => proc,
+    });
+
+    const outcome = await runner.run(subprocessEntry(), envelope);
+    expect(outcome.status).toBe("ok");
+    expect(outcome.capture?.stdout).toBe("y".repeat(MAX_CAPTURE_BYTES));
+    expect(outcome.capture?.truncated).toBe(true);
+  });
+
+  test("should fail closed on malformed result-looking stdout even with a zero exit code", async () => {
+    const processes: SpawnedProcess[] = [
       fakeProcess({
         exitCode: 0,
         stdout: JSON.stringify({ status: "blocked", reason: "policy" }),
+      }),
+      fakeProcess({
+        exitCode: 0,
+        stdout: '{"protocol":',
       }),
       fakeProcess({
         exitCode: 7,
@@ -418,22 +616,19 @@ describe("createSubprocessRunner", () => {
     const spawn: SpawnProcess = () => processes[index++]!;
     const runner = createSubprocessRunner({ cwd: "/project", spawn });
 
-    // Garbage on stdout is a malformed result — a zero exit must not pass a gate.
-    const garbage = await runner.run(subprocessEntry(), envelope);
-    expect(garbage.status).toBe("failed");
-    expect(garbage.reason ?? "").toContain("unparseable JSON");
-    expect(garbage.capture).toEqual({
-      stdout: "not json at all",
-      exitCode: 0,
-    });
-
-    // JSON missing the protocol is malformed too, whatever status it claims.
+    // JSON missing the protocol is malformed, whatever status it claims.
     const missingProtocol = await runner.run(subprocessEntry(), envelope);
     expect(missingProtocol.status).toBe("failed");
     expect(missingProtocol.reason ?? "").toContain("missing protocol");
     expect(missingProtocol.capture?.stdout).toContain("blocked");
 
-    // A non-zero exit keeps its stderr diagnostics over the stdout parse error.
+    // A truncated result line is a malformed result, not plain log output.
+    const truncatedResult = await runner.run(subprocessEntry(), envelope);
+    expect(truncatedResult.status).toBe("failed");
+    expect(truncatedResult.reason ?? "").toContain("unparseable JSON");
+    expect(truncatedResult.capture?.stdout).toContain('"protocol"');
+
+    // A non-zero exit keeps its stderr diagnostics over any stdout parse issue.
     const nonZero = await runner.run(subprocessEntry(), envelope);
     expect(nonZero.status).toBe("failed");
     expect(nonZero.reason).toContain("script died");

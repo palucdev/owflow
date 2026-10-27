@@ -197,6 +197,40 @@ describe("log writer", () => {
     expect(record).not.toHaveProperty("truncated");
   });
 
+  test("should coalesce consecutive identical runs and log again after a change", () => {
+    const directory = makeTempDir();
+    const file = path.join(directory, "logs.jsonl");
+    const store = createHookLogStore({ file, workspace: "/project", pid: 1 });
+    const failure = report({
+      runId: "run#1",
+      startedAt: 1,
+      finishedAt: 2,
+      outcome: { status: "failed", reason: "missing script" },
+      reason: "missing script",
+      capture: { stderr: "missing script\n", exitCode: 127 },
+    });
+
+    store.record(failure);
+    store.record({ ...failure, runId: "run#2", startedAt: 3, finishedAt: 4 });
+    store.record({
+      ...failure,
+      runId: "run#3",
+      startedAt: 5,
+      finishedAt: 6,
+      sessionID: "ses_other",
+    });
+    store.record(report({ runId: "run#4", startedAt: 7, finishedAt: 8 }));
+
+    const records = rawLines(file).map(parseLine);
+    expect(records.map((record) => record.runId)).toEqual([
+      "run#1",
+      "run#3",
+      "run#4",
+    ]);
+    expect(records[0]?.startedAt).toBe(1);
+    expect(records[0]?.finishedAt).toBe(2);
+  });
+
   test("should cap a captured stream and mark the record truncated", () => {
     const directory = makeTempDir();
     const file = path.join(directory, "logs.jsonl");
@@ -255,9 +289,15 @@ describe("log writer", () => {
       maxFileBytes: 10,
     });
 
-    store.record(report({ runId: "run#1", startedAt: 1, finishedAt: 1 }));
-    store.record(report({ runId: "run#2", startedAt: 2, finishedAt: 2 }));
-    store.record(report({ runId: "run#3", startedAt: 3, finishedAt: 3 }));
+    store.record(
+      report({ runId: "run#1", startedAt: 1, finishedAt: 1, reason: "run 1" }),
+    );
+    store.record(
+      report({ runId: "run#2", startedAt: 2, finishedAt: 2, reason: "run 2" }),
+    );
+    store.record(
+      report({ runId: "run#3", startedAt: 3, finishedAt: 3, reason: "run 3" }),
+    );
 
     expect(fs.existsSync(`${file}.1`)).toBe(true);
     expect(fs.readdirSync(directory).sort()).toEqual([

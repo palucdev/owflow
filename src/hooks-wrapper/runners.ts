@@ -277,6 +277,168 @@ const readStream = async (
   }
 };
 
+/**
+ * Stdout keeps a small tail beyond the capture cap so a result envelope at the
+ * end of a verbose script is still found even when the log prefix is truncated.
+ */
+const MAX_STDOUT_TAIL_BYTES = 64 * 1024;
+
+interface StdoutRead {
+  readonly text: string;
+  readonly tail: string;
+  readonly truncated: boolean;
+}
+
+interface ParsedStdout {
+  readonly result?: EnvelopeResult;
+  readonly logs?: string;
+  readonly error?: string;
+}
+
+const readStdoutWithReader = async (
+  reader: StreamReader,
+): Promise<StdoutRead> => {
+  const head: Uint8Array[] = [];
+  let headSize = 0;
+  const tail: Uint8Array[] = [];
+  let tailSize = 0;
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined || value.byteLength === 0) continue;
+      total += value.byteLength;
+      if (headSize < MAX_CAPTURE_BYTES) {
+        const remaining = MAX_CAPTURE_BYTES - headSize;
+        const piece =
+          value.byteLength <= remaining ? value : value.subarray(0, remaining);
+        if (piece.byteLength > 0) {
+          head.push(piece);
+          headSize += piece.byteLength;
+        }
+      }
+      if (value.byteLength >= MAX_STDOUT_TAIL_BYTES) {
+        tail.length = 0;
+        tail.push(value.subarray(value.byteLength - MAX_STDOUT_TAIL_BYTES));
+        tailSize = MAX_STDOUT_TAIL_BYTES;
+      } else {
+        tail.push(value);
+        tailSize += value.byteLength;
+        if (tailSize > MAX_STDOUT_TAIL_BYTES * 2) {
+          const recent = Buffer.concat(tail).subarray(-MAX_STDOUT_TAIL_BYTES);
+          tail.length = 0;
+          tail.push(new Uint8Array(recent));
+          tailSize = recent.byteLength;
+        }
+      }
+    }
+  } catch {
+    // Keep what was read; a failed read behaves like a short stream.
+  }
+  const tailBytes = Buffer.concat(tail);
+  return {
+    text: Buffer.concat(head).toString("utf8"),
+    tail: tailBytes
+      .subarray(Math.max(0, tailBytes.byteLength - MAX_STDOUT_TAIL_BYTES))
+      .toString("utf8"),
+    truncated: total > MAX_CAPTURE_BYTES,
+  };
+};
+
+const readStdout = async (
+  stream: SpawnedStream | null | undefined,
+): Promise<StdoutRead> => {
+  if (stream === null || stream === undefined) {
+    return { text: "", tail: "", truncated: false };
+  }
+  try {
+    if (typeof stream.getReader === "function") {
+      return await readStdoutWithReader(stream.getReader());
+    }
+    const bytes = Buffer.from(await stream.text(), "utf8");
+    return {
+      text: bytes.subarray(0, MAX_CAPTURE_BYTES).toString("utf8"),
+      tail: bytes
+        .subarray(Math.max(0, bytes.byteLength - MAX_STDOUT_TAIL_BYTES))
+        .toString("utf8"),
+      truncated: bytes.byteLength > MAX_CAPTURE_BYTES,
+    };
+  } catch {
+    return { text: "", tail: "", truncated: false };
+  }
+};
+
+const isResultObject = (value: unknown): boolean =>
+  isJsonObject(value) && ("protocol" in value || "status" in value);
+
+/**
+ * The result envelope is either the whole stdout (legacy scripts) or the last
+ * object-shaped result line. Any other stdout text is captured as hook output.
+ * A line that looks like a result but does not parse still fails closed.
+ */
+const parseStdout = (stdout: StdoutRead): ParsedStdout => {
+  const source = stdout.tail;
+  const trimmed = source.trim();
+  if (trimmed.length === 0) return {};
+
+  if (!stdout.truncated) {
+    const whole = parseEnvelopeResult(trimmed);
+    if (whole.ok && whole.data !== undefined) return { result: whole.data };
+  }
+
+  const lines = source.split("\n");
+  let seenNonEmpty = false;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]!.trim();
+    if (line.length === 0) continue;
+    const isLast = !seenNonEmpty;
+    seenNonEmpty = true;
+
+    const parsed = parseEnvelopeResult(line);
+    if (parsed.ok && parsed.data !== undefined) {
+      return {
+        result: parsed.data,
+        logs: stdout.truncated
+          ? stdout.text
+          : lines
+              .filter((_, lineIndex) => lineIndex !== index)
+              .join("\n"),
+      };
+    }
+
+    let resultLike = false;
+    try {
+      resultLike = isResultObject(JSON.parse(line));
+    } catch {
+      resultLike =
+        isLast &&
+        line.startsWith("{") &&
+        (line.includes('"protocol"') || line.includes('"status"'));
+    }
+    if (resultLike) {
+      return {
+        error: parsed.error ?? "unparseable subprocess stdout",
+      };
+    }
+  }
+
+  if (!stdout.truncated) {
+    try {
+      if (isResultObject(JSON.parse(trimmed))) {
+        const whole = parseEnvelopeResult(trimmed);
+        return {
+          error: whole.error ?? "unparseable subprocess stdout",
+        };
+      }
+    } catch {
+      // Plain text (including a broken JSON preamble) is treated as logs.
+    }
+  }
+
+  return { logs: stdout.truncated ? stdout.text : source };
+};
+
 const withStreams = (
   stdout: StreamCapture | undefined,
   stderr: StreamCapture,
@@ -313,6 +475,8 @@ export const createSubprocessRunner = ({
         };
       }
 
+      // Both streams stay piped: script output is captured into the runtime
+      // log and TUI popup, never inherited by the OpenCode process.
       const proc = spawnProcess([interpreter, entry.path], {
         cwd,
         stdin: Buffer.from(JSON.stringify(envelope)),
@@ -320,46 +484,51 @@ export const createSubprocessRunner = ({
         stderr: "pipe",
       });
 
-      const [stdoutStream, stderrStream, awaitedExit] = await Promise.all([
-        readStream(proc.stdout),
+      const [stdout, stderrStream, awaitedExit] = await Promise.all([
+        readStdout(proc.stdout),
         readStream(proc.stderr),
         proc.exited,
       ]);
       const exitCode =
         proc.exitCode === undefined ? awaitedExit : proc.exitCode;
-      let malformedStdout: StreamCapture | undefined;
+      const parsedStdout = parseStdout(stdout);
+      const capturedStdout = (
+        text: string | undefined,
+      ): StreamCapture | undefined =>
+        text !== undefined && text.trim().length > 0
+          ? { text, truncated: stdout.truncated }
+          : undefined;
+      const logs = capturedStdout(
+        parsedStdout.result !== undefined
+          ? parsedStdout.logs
+          : (parsedStdout.logs ?? stdout.text),
+      );
 
       // A parsed JSON status is authoritative over the exit code (R3.3).
-      if (stdoutStream.text.trim().length > 0) {
-        const parsed = parseEnvelopeResult(stdoutStream.text);
-        if (parsed.ok && parsed.data !== undefined) {
-          return {
-            ...toOutcome(parsed.data),
-            capture: withStreams(undefined, stderrStream, exitCode ?? null),
-          };
-        }
-        malformedStdout = stdoutStream;
-        // Non-empty stdout that is not a valid result is malformed; a zero exit
-        // must never let it pass silently (R4.2, fail closed).
-        if (exitCode === 0) {
-          return {
-            status: "failed",
-            reason: parsed.error ?? "unparseable subprocess stdout",
-            capture: withStreams(
-              malformedStdout,
-              stderrStream,
-              exitCode,
-            ),
-          };
-        }
+      if (parsedStdout.result !== undefined) {
+        return {
+          ...toOutcome(parsedStdout.result),
+          capture: withStreams(logs, stderrStream, exitCode ?? null),
+        };
       }
+
+      // A result-looking stdout line that does not parse is malformed; a zero
+      // exit must never let it pass silently (R4.2, fail closed).
+      if (parsedStdout.error !== undefined && exitCode === 0) {
+        return {
+          status: "failed",
+          reason: parsedStdout.error,
+          capture: withStreams(logs, stderrStream, exitCode),
+        };
+      }
+
       // `exitCode === null` is a signal kill or an absent code — never success.
       if (exitCode === null || exitCode === undefined) {
         return {
           status: "failed",
           reason: signalReason(proc.signalCode),
           capture: withStreams(
-            malformedStdout,
+            logs,
             stderrStream,
             exitCode ?? null,
             proc.signalCode ?? null,
@@ -374,12 +543,12 @@ export const createSubprocessRunner = ({
             diagnostics.length > 0
               ? diagnostics
               : `process exited with code ${exitCode}`,
-          capture: withStreams(malformedStdout, stderrStream, exitCode),
+          capture: withStreams(logs, stderrStream, exitCode),
         };
       }
       return {
         status: "ok",
-        capture: withStreams(malformedStdout, stderrStream, exitCode),
+        capture: withStreams(logs, stderrStream, exitCode),
       };
     },
   };
