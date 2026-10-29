@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-29
+
+### Changed
+
+- **Universal gate hooks (breaking change)** — Simplified user hooks subsystem to universal gate hooks. Removed the `observe` class, `HookClass` type, and `skipped-no-interpreter` status. All 16 lifecycle events and 32 host events now fail closed on non-`ok` (`blocked` / `failed`) outcomes and when interpreters are missing.
+- **Fail-closed `config` hook** — `config` hook failures and gate rejections now propagate and reject plugin initialization instead of being swallowed with warnings.
+- **Fail-closed host event hooks** — Host event hooks (`session.idle`, etc.) and the catch-all `event` hook fail closed, aborting active sessions on `failed` outcomes.
+- **Four-column table reports** — CLI tables and startup banners use 4 columns (`path`, `event`, `interpreter`, `status`), removing the redundant `class` column.
+- **Wire stability** — The `owflow-hooks/1` envelope format retains `"class": "gate"` for backward compatibility with existing scripts.
+
 ## [0.7.0] - 2026-10-29
 
 ### Added

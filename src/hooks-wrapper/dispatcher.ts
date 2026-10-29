@@ -1,4 +1,4 @@
-import { HookEvent, hookClassOf } from "../types/hook-types.js";
+import { HookEvent } from "../types/hook-types.js";
 import type {
   Dispatcher,
   DispatcherOptions,
@@ -18,9 +18,9 @@ export type { Dispatcher, DispatcherOptions };
 
 /**
  * Per-event dispatch: the one place where a normalized `Outcome` becomes
- * platform behavior (R5). Gate outcomes throw `Blocked:`-prefixed errors with
- * an actionable `Hint:`; observe outcomes log `[owflow]` and resolve. Failures
- * outside this path keep the documented fail-open posture (R5.4).
+ * platform behavior. Non-ok outcomes throw `Blocked:`-prefixed errors with
+ * an actionable `Hint:`; failed outcomes also terminate the session. Failures
+ * outside this path keep the documented fail-open posture.
  */
 
 /**
@@ -36,7 +36,7 @@ export type { Dispatcher, DispatcherOptions };
  * - `chat.params` output is `{ temperature, topP, topK, maxOutputTokens, options }`;
  * - `experimental.session.compacting` output is `{ context, prompt? }`, where
  *   only `context` is exposed (append-only strings);
- * - `config`, `event`, and `dispose` are observe events, so they accept none.
+ * - `config`, `event`, and `dispose` accept none.
  *
  * Events whose output contains rich host objects (`message`, `parts`,
  * `messages`, …) expose no JSON-representable fields and therefore have an
@@ -209,10 +209,9 @@ const runOutcome = async (
 /**
  * The catch-all `event` hook fires for every host event, so a successful run
  * that emitted nothing is a no-op: it leaves the row idle and writes no log.
- * Event-named hooks and the one-shot observe events are recorded like any
- * other script, so a silent success still settles visibly.
+ * Any failure or non-ok outcome always records and fails closed.
  */
-const isObserveNoop = (entry: HookRegistryEntry, outcome: Outcome): boolean => {
+const isEventNoop = (entry: HookRegistryEntry, outcome: Outcome): boolean => {
   if (entry.event !== HookEvent.Event) return false;
   if (outcome.status !== "ok") return false;
   const capture = outcome.capture;
@@ -283,7 +282,6 @@ export const createDispatcher = ({
       context: contextFrom(input, output),
       sessionID,
     });
-    const isGate = hookClassOf(event) === "gate";
 
     for (const entry of eventEntries) {
       if (!entry.interpreter.available) {
@@ -301,14 +299,8 @@ export const createDispatcher = ({
           startedAt: timestamp,
           finishedAt: timestamp,
         });
-        if (isGate) {
-          await endSessionForFailure(endSession, sessionID, entry);
-          throw missingInterpreterRejection(entry);
-        }
-        warn(
-          `skipping ${entry.path}: the ${interpreterName(entry.interpreter)} interpreter is unavailable`,
-        );
-        continue;
+        await endSessionForFailure(endSession, sessionID, entry);
+        throw missingInterpreterRejection(entry);
       }
 
       runCounter += 1;
@@ -322,7 +314,7 @@ export const createDispatcher = ({
       const startedAt = now();
       const outcome = await runOutcome(run, entry, envelope);
       const finishedAt = now();
-      const noop = !isGate && isObserveNoop(entry, outcome);
+      const noop = isEventNoop(entry, outcome);
 
       const reportSettledLog = (
         settledAt: number,
@@ -362,18 +354,10 @@ export const createDispatcher = ({
       }
 
       if (outcome.status !== "ok") {
-        if (isGate) {
-          // A blocked gate only rejects the operation; a failed gate is a
-          // broken gate, so the current session must stop as well.
-          if (outcome.status === "failed") {
-            await endSessionForFailure(endSession, sessionID, entry);
-          }
-          throw gateRejection(entry, outcome);
+        if (outcome.status === "failed") {
+          await endSessionForFailure(endSession, sessionID, entry);
         }
-        warn(
-          `${entry.path} ${outcome.status}: ${outcome.reason ?? "no reason given"}`,
-        );
-        continue;
+        throw gateRejection(entry, outcome);
       }
 
       if (output !== undefined && outcome.mutations !== undefined) {

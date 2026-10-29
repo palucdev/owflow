@@ -22,7 +22,6 @@ import type {
   DispatchableEvent,
   EnvelopeContext,
   EnvelopeResult,
-  HookClass,
   HookDerivation,
   HookDigest,
   HookEntryStatus,
@@ -57,7 +56,6 @@ export type {
   DispatchableEvent,
   EnvelopeContext,
   EnvelopeResult,
-  HookClass,
   HookDerivation,
   HookDigest,
   HookEntryStatus,
@@ -100,16 +98,15 @@ export const isExcludedEvent = (event: string): boolean =>
 export const deriveHook = (stem: string): HookDerivation => {
   const event = toDottedEvent(stem);
   if (isExcludedEvent(event)) return { kind: "excluded" };
-  if (Object.hasOwn(DISPATCHABLE_EVENTS, event)) {
+  if ((DISPATCHABLE_EVENTS as readonly string[]).includes(event)) {
     const dispatchable = event as DispatchableEvent;
     return {
       kind: "dispatchable",
       event: dispatchable,
-      class: DISPATCHABLE_EVENTS[dispatchable],
     };
   }
   if (isHostEventName(event)) {
-    return { kind: "host-event", event, class: "observe" };
+    return { kind: "host-event", event };
   }
   return { kind: "unknown", event };
 };
@@ -208,7 +205,6 @@ const validateEntry = (
     path: entryPath,
     stem,
     event: derivation.event,
-    class: derivation.class,
     extension,
   };
 };
@@ -296,14 +292,9 @@ export const digest = (
 /* ── Registry builder and unified scan ────────────────────────────────────── */
 
 const statusFor = (
-  script: HookScript,
+  _script: HookScript,
   interpreter: InterpreterResolution,
-): HookEntryStatus => {
-  if (interpreter.available) return "registered";
-  return script.class === "gate"
-    ? "will-fail-closed"
-    : "skipped-no-interpreter";
-};
+): HookEntryStatus => (interpreter.available ? "registered" : "will-fail-closed");
 
 /**
  * Builds the single source of truth for dispatch and every report surface.
@@ -321,7 +312,6 @@ export const buildRegistry = (
       return {
         path: script.path,
         event: script.event,
-        class: script.class,
         interpreter,
         status: statusFor(script, interpreter),
       };

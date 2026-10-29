@@ -3,7 +3,6 @@
  * subprocess runner shared by every supported script format.
  */
 
-import { hookClassOf } from "../types/hook-types.js";
 import type {
   EnvelopeBuildInput,
   EnvelopeContext,
@@ -110,9 +109,8 @@ const projectValue = (value: unknown): unknown => {
 };
 
 /**
- * Builds the wrapper → script envelope. The class is derived from the shared
- * event table so envelope and registry can never disagree (R6.1); the context
- * is projected to plain JSON data (R4.3).
+ * Builds the wrapper → script envelope. The class is universally "gate"
+ * for protocol backward-compatibility; the context is projected to plain JSON data.
  */
 export const buildEnvelope = (input: EnvelopeBuildInput): EnvelopeContext => {
   const sessionID = input.sessionID;
@@ -120,7 +118,7 @@ export const buildEnvelope = (input: EnvelopeBuildInput): EnvelopeContext => {
   return {
     protocol: PROTOCOL_VERSION,
     event: input.event,
-    class: hookClassOf(input.event),
+    class: "gate",
     ...(typeof sessionID === "string" && sessionID.length > 0
       ? { session: { sessionID } }
       : {}),

@@ -22,37 +22,31 @@ export enum HookEvent {
 }
 
 export type DispatchableEvent = `${HookEvent}`;
-export type HookClass = "gate" | "observe";
 export type HookExtension = ".sh" | ".ps1";
-export type HookEntryStatus =
-  | "registered"
-  | "will-fail-closed"
-  | "skipped-no-interpreter";
+export type HookEntryStatus = "registered" | "will-fail-closed";
 
-/** Single event table: every surface derives classes from here. */
-export const DISPATCHABLE_EVENTS: Readonly<
-  Record<DispatchableEvent, HookClass>
-> = {
-  [HookEvent.ToolExecuteBefore]: "gate",
-  [HookEvent.ToolExecuteAfter]: "gate",
-  [HookEvent.ToolDefinition]: "gate",
-  [HookEvent.ChatMessage]: "gate",
-  [HookEvent.ChatParams]: "gate",
-  [HookEvent.ChatHeaders]: "gate",
-  [HookEvent.CommandExecuteBefore]: "gate",
-  [HookEvent.ShellEnv]: "gate",
-  [HookEvent.ExperimentalChatMessagesTransform]: "gate",
-  [HookEvent.ExperimentalChatSystemTransform]: "gate",
-  [HookEvent.ExperimentalSessionCompacting]: "gate",
-  [HookEvent.ExperimentalCompactionAutocontinue]: "gate",
-  [HookEvent.ExperimentalTextComplete]: "gate",
-  [HookEvent.Config]: "observe",
-  [HookEvent.Event]: "observe",
-  [HookEvent.Dispose]: "observe",
-};
+/** All dispatchable events; fail-closed gate semantics apply to every hook. */
+export const DISPATCHABLE_EVENTS: readonly DispatchableEvent[] = [
+  HookEvent.ToolExecuteBefore,
+  HookEvent.ToolExecuteAfter,
+  HookEvent.ToolDefinition,
+  HookEvent.ChatMessage,
+  HookEvent.ChatParams,
+  HookEvent.ChatHeaders,
+  HookEvent.CommandExecuteBefore,
+  HookEvent.ShellEnv,
+  HookEvent.ExperimentalChatMessagesTransform,
+  HookEvent.ExperimentalChatSystemTransform,
+  HookEvent.ExperimentalSessionCompacting,
+  HookEvent.ExperimentalCompactionAutocontinue,
+  HookEvent.ExperimentalTextComplete,
+  HookEvent.Config,
+  HookEvent.Event,
+  HookEvent.Dispose,
+];
 
 export const DISPATCHABLE_EVENT_NAMES: readonly DispatchableEvent[] =
-  Object.keys(DISPATCHABLE_EVENTS) as DispatchableEvent[];
+  DISPATCHABLE_EVENTS;
 
 /** Host bus events; observe-only because the bus has no writable output. */
 export const HOST_EVENT_NAMES = [
@@ -78,17 +72,13 @@ export const isHostEventName = (value: string): value is HostEventName =>
   (HOST_EVENT_NAMES as readonly string[]).includes(value);
 
 export const isHookEventName = (value: string): value is HookEventName =>
-  Object.hasOwn(DISPATCHABLE_EVENTS, value) || isHostEventName(value);
+  (DISPATCHABLE_EVENTS as readonly string[]).includes(value) ||
+  isHostEventName(value);
 
 export const HOOK_EVENT_NAMES: readonly HookEventName[] = [
   ...DISPATCHABLE_EVENT_NAMES,
   ...HOST_EVENT_NAMES,
 ];
-
-export const hookClassOf = (event: HookEventName): HookClass =>
-  Object.hasOwn(DISPATCHABLE_EVENTS, event)
-    ? DISPATCHABLE_EVENTS[event as DispatchableEvent]
-    : "observe";
 
 export const EXCLUDED_EVENT_NAMES: readonly string[] = [
   "permission.ask",
@@ -99,8 +89,8 @@ export const EXCLUDED_EVENT_NAMES: readonly string[] = [
 ];
 
 export type HookDerivation =
-  | Readonly<{ kind: "dispatchable"; event: DispatchableEvent; class: HookClass }>
-  | Readonly<{ kind: "host-event"; event: HostEventName; class: "observe" }>
+  | Readonly<{ kind: "dispatchable"; event: DispatchableEvent }>
+  | Readonly<{ kind: "host-event"; event: HostEventName }>
   | Readonly<{ kind: "excluded" }>
   | Readonly<{ kind: "unknown"; event: string }>;
 
@@ -118,7 +108,6 @@ export type InterpreterAvailability = Readonly<
 type HookBase = Readonly<{
   path: string;
   event: HookEventName;
-  class: HookClass;
 }>;
 export type HookScript = HookBase & Readonly<{
   stem: string;
@@ -177,7 +166,7 @@ export type Outcome = OutcomePayload & Readonly<{ capture?: HookCapture }>;
 export type EnvelopeContext = Readonly<{
   protocol: "owflow-hooks/1";
   event: HookEventName;
-  class: HookClass;
+  class: "gate";
   session?: Readonly<{ sessionID: string }>;
   context: Record<string, unknown>;
 }>;
@@ -288,7 +277,7 @@ export type HookRunLogRecord = HookCapture & Readonly<{
   event: HookEventName;
   hook: string;
   name: string;
-  class: HookClass;
+  class?: "gate" | "observe";
   sessionID?: string;
   startedAt: number;
   finishedAt: number;
@@ -318,7 +307,7 @@ export type Dispatcher = (
 /* ── Reporting ────────────────────────────────────────────────────────────── */
 
 export type HookReportRow = Readonly<
-  Record<"path" | "event" | "class" | "interpreter" | "status", string>
+  Record<"path" | "event" | "interpreter" | "status", string>
 >;
 export type HookReportInput = Readonly<{
   entries: readonly HookRegistryEntry[];

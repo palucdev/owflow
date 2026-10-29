@@ -95,16 +95,16 @@ describe("buildEnvelope", () => {
     expect(serialized).not.toContain("hello");
     expect(JSON.parse(serialized)).toEqual(envelope);
 
-    const observeEnvelope = buildEnvelope({ event: "config", context: {} });
-    expect(observeEnvelope.class).toBe("observe");
-    expect(observeEnvelope.session).toBeUndefined();
+    const configEnvelope = buildEnvelope({ event: "config", context: {} });
+    expect(configEnvelope.class).toBe("gate");
+    expect(configEnvelope.session).toBeUndefined();
 
     const hostEventEnvelope = buildEnvelope({
       event: "session.idle",
       context: {},
     });
     expect(hostEventEnvelope.event).toBe("session.idle");
-    expect(hostEventEnvelope.class).toBe("observe");
+    expect(hostEventEnvelope.class).toBe("gate");
 
     const emptySession = buildEnvelope({
       event: "config",
@@ -226,7 +226,6 @@ const subprocessEntry = (
 ): HookRegistryEntry => ({
   path: "/project/.owflow/hooks/tool-execute-before.sh",
   event: "tool.execute.before",
-  class: "gate",
   interpreter: { resolved: "/usr/bin/bash", available: true },
   status: "registered",
   ...overrides,

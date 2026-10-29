@@ -45,13 +45,11 @@ describe("hooks-wrapper vocabulary", () => {
       path: "/p/tool-execute-before.sh",
       stem: "tool-execute-before",
       event: "tool.execute.before",
-      class: "gate",
       extension: ".sh",
     } satisfies HookScript;
     const entry = {
       path: script.path,
       event: script.event,
-      class: script.class,
       interpreter: { available: true },
       status: "registered",
     } satisfies HookRegistryEntry;
@@ -105,21 +103,15 @@ describe("deriveHook", () => {
       ]),
     );
 
-    const classes = Object.values(DISPATCHABLE_EVENTS);
-    expect(classes.filter((hookClass) => hookClass === "gate")).toHaveLength(13);
-    expect(classes.filter((hookClass) => hookClass === "observe")).toHaveLength(
-      3,
-    );
+    expect(DISPATCHABLE_EVENTS).toHaveLength(16);
 
     expect(deriveHook("tool-execute-before")).toEqual({
       kind: "dispatchable",
       event: "tool.execute.before",
-      class: "gate",
     });
     expect(deriveHook("config")).toEqual({
       kind: "dispatchable",
       event: "config",
-      class: "observe",
     });
 
     expect(new Set(EXCLUDED_EVENT_NAMES)).toEqual(
@@ -132,7 +124,7 @@ describe("deriveHook", () => {
       ]),
     );
     for (const excludedEvent of EXCLUDED_EVENT_NAMES) {
-      expect(Object.hasOwn(DISPATCHABLE_EVENTS, excludedEvent)).toBe(false);
+      expect((DISPATCHABLE_EVENTS as readonly string[]).includes(excludedEvent)).toBe(false);
     }
 
     for (const excluded of ["permission-ask", "tool", "auth", "provider"]) {
@@ -150,7 +142,7 @@ describe("deriveHook", () => {
     });
   });
 
-  test("should classify v1 host events as observe-only event-named hooks", () => {
+  test("should classify v1 host events as event-named hooks", () => {
     expect(new Set(HOOK_EVENT_NAMES)).toEqual(
       new Set([...DISPATCHABLE_EVENT_NAMES, ...HOST_EVENT_NAMES]),
     );
@@ -159,12 +151,10 @@ describe("deriveHook", () => {
     expect(deriveHook("session-idle")).toEqual({
       kind: "host-event",
       event: "session.idle",
-      class: "observe",
     });
     expect(deriveHook("message-part-updated")).toEqual({
       kind: "host-event",
       event: "message.part.updated",
-      class: "observe",
     });
     expect(deriveHook("session-next-step-ended")).toEqual({
       kind: "unknown",
@@ -307,10 +297,9 @@ describe("digest", () => {
       path.join(hooksDir, "tool-execute-before.sh"),
     );
     expect(report.entries[0]!.event).toBe("tool.execute.before");
-    expect(report.entries[0]!.class).toBe("gate");
   });
 
-  test("should accept an event-named hook and expose its observe class", () => {
+  test("should accept an event-named hook", () => {
     const hooksDir = makeHooksDir();
     const idlePath = path.join(hooksDir, "session-idle.sh");
     fs.writeFileSync(idlePath, "");
@@ -322,7 +311,6 @@ describe("digest", () => {
       path: idlePath,
       stem: "session-idle",
       event: "session.idle",
-      class: "observe",
       extension: ".sh",
     });
   });
@@ -367,7 +355,6 @@ const script = (overrides: Partial<HookScript>): HookScript => ({
   path: "/hooks/tool-execute-before.sh",
   stem: "tool-execute-before",
   event: "tool.execute.before",
-  class: "gate",
   extension: ".sh",
   ...overrides,
 });
@@ -471,7 +458,7 @@ describe("buildRegistry", () => {
     expect(registry.byEvent["dispose"]).toHaveLength(0);
   });
 
-  test("should mark an unavailable interpreter as will-fail-closed on gate events and skipped-no-interpreter on observe events", () => {
+  test("should mark an unavailable interpreter as will-fail-closed on all events", () => {
     const registry = buildRegistry(
       [
         script({
@@ -483,7 +470,6 @@ describe("buildRegistry", () => {
           path: "/hooks/config.ps1",
           stem: "config",
           event: "config",
-          class: "observe",
           extension: ".ps1",
         }),
         script({
@@ -496,7 +482,6 @@ describe("buildRegistry", () => {
           path: "/hooks/session-idle.ps1",
           stem: "session-idle",
           event: "session.idle",
-          class: "observe",
           extension: ".ps1",
         }),
       ],
@@ -516,10 +501,9 @@ describe("buildRegistry", () => {
       expected: "pwsh",
       available: false,
     });
-    expect(ps1Observe.status).toBe("skipped-no-interpreter");
+    expect(ps1Observe.status).toBe("will-fail-closed");
     expect(shGate.status).toBe("will-fail-closed");
-    expect(hostEventObserve.status).toBe("skipped-no-interpreter");
-    expect(hostEventObserve.class).toBe("observe");
+    expect(hostEventObserve.status).toBe("will-fail-closed");
   });
 
   test("should index an event-named hook under its host event", () => {
@@ -529,7 +513,6 @@ describe("buildRegistry", () => {
           path: "/hooks/session-idle.sh",
           stem: "session-idle",
           event: "session.idle",
-          class: "observe",
         }),
       ],
       AVAILABLE,

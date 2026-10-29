@@ -73,7 +73,9 @@ const isLogRecord = (value: unknown): value is HookRunLogRecord => {
   if (!isEvent(value.event)) return false;
   if (typeof value.hook !== "string") return false;
   if (typeof value.name !== "string") return false;
-  if (value.class !== "gate" && value.class !== "observe") return false;
+  if (value.class !== undefined && value.class !== "gate" && value.class !== "observe") {
+    return false;
+  }
   if (value.sessionID !== undefined && typeof value.sessionID !== "string") {
     return false;
   }
@@ -118,7 +120,7 @@ interface MutableLogRecord {
   event: HookEventName;
   hook: string;
   name: string;
-  class: "gate" | "observe";
+  class?: "gate" | "observe";
   sessionID?: string;
   startedAt: number;
   finishedAt: number;
@@ -163,7 +165,6 @@ const buildRecord = (
       report.entry.path,
       path.extname(report.entry.path),
     ),
-    class: report.entry.class,
     ...(report.sessionID !== undefined
       ? { sessionID: report.sessionID }
       : {}),
@@ -193,7 +194,6 @@ const coalesceKey = (record: MutableLogRecord): string =>
   JSON.stringify([
     record.event,
     record.hook,
-    record.class,
     record.sessionID ?? null,
     record.status,
     record.outcome,

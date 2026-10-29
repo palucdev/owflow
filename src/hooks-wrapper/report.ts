@@ -17,11 +17,10 @@ export type { HookReportInput, HookReportRow };
 /** Standing freshness label for the would-load surfaces (A8, R7.2/R7.3). */
 export const EFFECTIVE_AFTER_RESTART = "effective after next restart";
 
-/** Header order of the table; the snapshot renders the same five cells. */
+/** Header order of the table; the snapshot renders the same four cells. */
 export const TABLE_COLUMNS = [
   "path",
   "event",
-  "class",
   "interpreter",
   "status",
 ] as const;
@@ -29,7 +28,6 @@ export const TABLE_COLUMNS = [
 const STATUS_LABELS: Readonly<Record<HookRegistryEntry["status"], string>> = {
   registered: "registered",
   "will-fail-closed": "will fail closed at fire",
-  "skipped-no-interpreter": "skipped (no interpreter)",
 };
 
 export const buildReportRows = (
@@ -40,7 +38,6 @@ export const buildReportRows = (
     rows.push({
       path: "(all hooks)",
       event: "-",
-      class: "-",
       interpreter: "-",
       status: "hooks bypassed (OWFLOW_HOOKS_DISABLED=1)",
     });
@@ -49,7 +46,6 @@ export const buildReportRows = (
     rows.push({
       path: entry.path,
       event: entry.event,
-      class: entry.class,
       interpreter: interpreterLabel(entry.interpreter),
       status: STATUS_LABELS[entry.status],
     });
@@ -58,7 +54,6 @@ export const buildReportRows = (
     rows.push({
       path: failure.path,
       event: "-",
-      class: "-",
       interpreter: "-",
       status: `invalid: ${failure.error}`,
     });
@@ -72,7 +67,6 @@ export const renderTable = (input: HookReportInput): string => {
     ...buildReportRows(input).map((row) => [
       row.path,
       row.event,
-      row.class,
       row.interpreter,
       row.status,
     ]),
@@ -100,7 +94,7 @@ export const renderSnapshot = (input: HookReportInput): readonly string[] => {
   const lines = [`[owflow] ${snapshotHeading(input)}`];
   for (const row of buildReportRows(input)) {
     lines.push(
-      `[owflow]   ${row.path} -> ${row.event} [${row.class}] ${row.interpreter} - ${row.status}`,
+      `[owflow]   ${row.path} -> ${row.event} ${row.interpreter} - ${row.status}`,
     );
   }
   return lines;

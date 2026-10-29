@@ -612,9 +612,9 @@ describe("OwflowPlugin index", () => {
       }
     });
 
-    test("should configure first and swallow config dispatch errors with a log", async () => {
+    test("should configure first and propagate config dispatch errors to fail closed", async () => {
       const order: string[] = [];
-      const calls: DispatchRecord[] = [];
+      const calls: StubCall[] = [];
       const skillsSpy = spyOn(
         skillsConfig,
         "configureSkills",
@@ -643,7 +643,6 @@ describe("OwflowPlugin index", () => {
           throw new Error("config script exploded");
         }),
       );
-      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
       const consoleLogSpy = spyOn(console, "log").mockImplementation(
         () => {},
       );
@@ -653,7 +652,9 @@ describe("OwflowPlugin index", () => {
           const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
           const inputConfig = { small_model: "test-haiku" };
 
-          await plugin.config!(inputConfig as any);
+          await expect(
+            plugin.config!(inputConfig as any),
+          ).rejects.toThrow("config script exploded");
 
           expect(order).toEqual([
             "skills",
@@ -662,16 +663,12 @@ describe("OwflowPlugin index", () => {
             "dispatch:config",
           ]);
           expect(calls[0]?.input).toBe(inputConfig);
-          expect(warnSpy).toHaveBeenCalledWith(
-            expect.stringContaining("[owflow]"),
-          );
         });
       } finally {
         skillsSpy.mockRestore();
         commandsSpy.mockRestore();
         agentsSpy.mockRestore();
         dispatcherSpy.mockRestore();
-        warnSpy.mockRestore();
         consoleLogSpy.mockRestore();
       }
     });
@@ -888,7 +885,6 @@ describe("OwflowPlugin index", () => {
               expect(read.records[0]).toMatchObject({
                 event: "session.idle",
                 name: "session-idle",
-                class: "observe",
                 sessionID: "ses_idle",
                 stderr: "idle fired\n",
               });
@@ -931,7 +927,6 @@ describe("OwflowPlugin index", () => {
               expect(read.records[0]).toMatchObject({
                 event: "session.idle",
                 name: "session-idle",
-                class: "observe",
                 sessionID: "ses_silent",
                 status: "success",
                 outcome: "ok",

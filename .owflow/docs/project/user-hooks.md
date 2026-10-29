@@ -18,7 +18,7 @@ Concretely: the digest checks file shape, not file content; scripts inherit the 
 
 - One directory level only: `.owflow/hooks/` (no recursion). A missing or empty directory is a valid no-op.
 - The filename stem must be lowercase kebab-case (`[a-z0-9]+(-[a-z0-9]+)*`) and maps mechanically to a dotted event name: `tool-execute-before.sh` → `tool.execute.before`, `experimental-session-compacting.sh` → `experimental.session.compacting`.
-- A stem may also name a v1 **host event**. Those scripts are observe-only and fire only when the single `event` hook receives that type: `session-idle.sh` → `session.idle`, `message-part-updated.sh` → `message.part.updated`. The accepted names are the OpenCode v1 `Event` union pinned in `HOST_EVENT_NAMES`; v2-only names such as `session.next.step.ended` are rejected by the digest.
+- A stem may also name a v1 **host event**. Those scripts fire when the single `event` hook receives that type: `session-idle.sh` → `session.idle`, `message-part-updated.sh` → `message.part.updated`. The accepted names are the OpenCode v1 `Event` union pinned in `HOST_EVENT_NAMES`; v2-only names such as `session.next.step.ended` are rejected by the digest.
 - Each hook name may appear **exactly once**, in one format. Two files with the same stem (for example `check.sh` and `check.ps1`) are a fatal digest error. Different hooks may freely use different formats.
 - The extension selects the interpreter:
 
@@ -42,11 +42,11 @@ A single invalid entry throws before any hook registers and drops the entire owf
 
 **Consequence**: `.owflow/hooks/` may contain only hook scripts, one file per hook name. Keep readmes, fixtures, and scratch files elsewhere.
 
-## Event Classes
+## Universal Gate Semantics
 
-16 events are dispatchable: 13 gates and 3 observe. Gate hooks govern whether the operation proceeds and fail closed; observe hooks are advisory and can never break a session. The canonical names and classes are defined once in `HookEvent` / `DISPATCHABLE_EVENTS` (`src/types/hook-types.ts`) and referenced through that enum by every module.
+All 16 lifecycle events and 32 host events are gate events governed by universal fail-closed semantics. Every registered hook script in `.owflow/hooks/` fails closed: `blocked` rejects the operation with `Blocked: <reason>.` + actionable `Hint:`; `failed` rejects the operation and terminates the active session. The canonical event names are defined in `HookEvent` / `DISPATCHABLE_EVENTS` and `HOST_EVENT_NAMES` (`src/types/hook-types.ts`).
 
-### Gate events (13)
+### Dispatchable Lifecycle Events (16)
 
 | Event | Mutation whitelist |
 | ----- | ------------------ |
@@ -63,18 +63,13 @@ A single invalid entry throws before any hook registers and drops the entire owf
 | `experimental.session.compacting` | `context` (append-only strings) |
 | `experimental.compaction.autocontinue` | `enabled` |
 | `experimental.text.complete` | `text` |
-
-### Observe events (3)
-
-| Event | Mutation whitelist |
-| ----- | ------------------ |
 | `config` | - |
 | `event` | - |
 | `dispose` | - |
 
-### Host event hooks (32, observe-only)
+### Host Event Hooks (32)
 
-A filename may also derive to one of the OpenCode v1 host event types. owflow does not register a host hook per name: the single `event` handler fans out to the matching event-named script, so the script fires only for its own `event.type`. These hooks are always observe-only and receive the raw host event under `context.event`; since the host event stream has no output object, returned `mutations` are ignored. An event-named hook and the catch-all `event` hook may coexist - both fire, the event-named one first.
+A filename may also derive to one of the OpenCode v1 host event types. owflow does not register a host hook per name: the single `event` handler fans out to the matching event-named script, so the script fires only for its own `event.type`. Like all hooks, host event hooks fail closed on non-`ok` outcomes and receive the raw host event under `context.event`; since the host event stream has no output object, returned `mutations` are ignored. An event-named hook and the catch-all `event` hook may coexist - both fire, the event-named one first.
 
 Supported names (`HOST_EVENT_NAMES` in `src/types/hook-types.ts`):
 
@@ -106,13 +101,13 @@ Scripts speak one wire version. They read the envelope as JSON on stdin and writ
 }
 ```
 
-For an event-named hook, `event` is the host event name, `class` is `observe`, and `context.event` carries the raw host event (the same shape the catch-all `event` hook receives):
+For an event-named hook, `event` is the host event name, `class` is `"gate"` (retained for protocol stability), and `context.event` carries the raw host event (the same shape the catch-all `event` hook receives):
 
 ```json
 {
   "protocol": "owflow-hooks/1",
   "event": "session.idle",
-  "class": "observe",
+  "class": "gate",
   "session": { "sessionID": "ses_…" },
   "context": {
     "event": {
@@ -123,7 +118,7 @@ For an event-named hook, `event` is the host event name, `class` is `observe`, a
 }
 ```
 
-`class` is derived from the same event table the registry uses, so it can never disagree. `session` is present only when the event carries a session ID; for host events it is read from the event properties (or `message.updated`'s `info.sessionID`). `context` is projected to plain JSON data: host-runtime class instances keep only identity fields (`id`, `sessionID`, `messageID`, `partID`, `callID`, `providerID`, `type`, `name`, `tool`), functions and symbols are dropped, and non-finite numbers become `null`.
+`class` is always `"gate"` for wire compatibility. `session` is present only when the event carries a session ID; for host events it is read from the event properties (or `message.updated`'s `info.sessionID`). `context` is projected to plain JSON data: host-runtime class instances keep only identity fields (`id`, `sessionID`, `messageID`, `partID`, `callID`, `providerID`, `type`, `name`, `tool`), functions and symbols are dropped, and non-finite numbers become `null`.
 
 ### Script → wrapper
 
@@ -133,11 +128,11 @@ For an event-named hook, `event` is the host event name, `class` is `observe`, a
 { "protocol": "owflow-hooks/1", "status": "failed", "reason": "missing jq" }
 ```
 
-| Status | Gate meaning | Observe meaning |
-| ------ | ------------ | --------------- |
-| `ok` | continue; whitelisted `mutations` are applied | log nothing; whitelisted mutations are applied where the host surface provides an output (host event hooks accept none) |
-| `blocked` | fail closed: reject the operation with `Blocked: <reason>.` + actionable `Hint:`; the session continues | log `[owflow]` warning and continue |
-| `failed` | fail closed: reject the operation **and end the current session** with `Blocked: <reason>.` + actionable `Hint:` | log `[owflow]` warning and continue |
+| Status | Meaning |
+| ------ | ------- |
+| `ok` | continue; whitelisted `mutations` are applied where the host surface provides an output |
+| `blocked` | fail closed: reject the operation with `Blocked: <reason>.` + actionable `Hint:`; the session continues |
+| `failed` | fail closed: reject the operation **and end the current session** with `Blocked: <reason>.` + actionable `Hint:` |
 
 Result rules:
 
@@ -205,18 +200,17 @@ Save a script as `.owflow/hooks/session-idle.sh` and owflow invokes it only for 
 
 ## Execution Semantics
 
-- **Gate fail-closed**: a `blocked` outcome, an unavailable interpreter, or a `failed` outcome throws a `Blocked:`-prefixed error with a `Hint:` that names the script and the recovery (fix/remove + restart, or the bypass). A `failed` gate additionally calls the host's session-abort endpoint so the current session stops; a `blocked` gate rejects only the operation. The first failing gate stops the event's remaining scripts.
-- **Observe log-and-continue**: failures warn with the `[owflow]` prefix; installation and sessions are never broken by an observe script.
-- **Missing interpreters are not registration errors**: the registry records `will fail closed at fire` for gate scripts and `skipped (no interpreter)` for observe scripts. Install the interpreter or remove the script to change this.
+- **Universal fail-closed**: a `blocked` outcome, an unavailable interpreter, or a `failed` outcome throws a `Blocked:`-prefixed error with a `Hint:` that names the script and the recovery (fix/remove + restart, or the bypass). A `failed` hook additionally calls the host's session-abort endpoint so the current session stops; a `blocked` hook rejects only the operation. The first failing hook stops the event's remaining scripts.
+- **Missing interpreters always fail closed**: any hook whose interpreter is missing maps to `will fail closed at fire` in the registry and throws a missing-interpreter rejection at fire time (ending the active session if a session ID is present).
 
 ## Runtime Logs
 
-Every user-hook fire is considered for the per-workspace JSONL log. A fire is a gate run, a failed observe run, an event-named or one-shot (`config`/`dispose`) observe run, or a catch-all `event` run that captured output; only a silent successful catch-all `event` run is a no-op and appends nothing. Consecutive runs with identical event, hook, class, session, status, outcome, reason, exit code, signal, and captured output are coalesced into the first line instead of being appended again, so a persistent failure or an unchanged repeated output cannot flood the file; a changed outcome, session, reason, or capture starts a new line. The newest line for a run that started in the current session is the one the popup displays:
+Every user-hook fire is considered for the per-workspace JSONL log. A fire is any hook run, or a catch-all `event` run that captured output or non-ok outcome; only a silent successful catch-all `event` run is a no-op and appends nothing. Consecutive runs with identical event, hook, session, status, outcome, reason, exit code, signal, and captured output are coalesced into the first line instead of being appended again, so a persistent failure or an unchanged repeated output cannot flood the file; a changed outcome, session, reason, or capture starts a new line. The newest line for a run that started in the current session is the one the popup displays:
 
 `path.join(os.tmpdir(), "opencode", "owflow-hook-logs-<sha256(realpath(workspace))[0..16]>.jsonl")`
 
 - **Automatic capture, no script changes**: hooks contribute stdout, stderr, the exit code, and the terminating signal. A valid `owflow-hooks/1` result envelope is parsed from stdout and omitted from the captured text; all other stdout is stored as the `stdout` log field. Captured output is never forwarded to OpenCode's process output: the runtime log file and the TUI popup are its only surfaces. The dispatch envelope, prompt text, and tool arguments are never serialized.
-- **Record shape**: `version`, `runId` (`<event>#<counter>`), `pid`, `workspace`, `event`, `hook` path, `name`, `class`, `sessionID`, `startedAt`, `finishedAt`, `durationMs`, `status` (`success`/`failure`), `outcome` (`ok`/`blocked`/`failed`), optional `reason`, `exitCode`, `signal`, `stdout`, `stderr`, and `truncated`. Skipped interpreter runs are recorded as `failure` with the reason and no capture. Older lines that still carry `runnerClass` or `errorStack` remain readable.
+- **Record shape**: `version`, `runId` (`<event>#<counter>`), `pid`, `workspace`, `event`, `hook` path, `name`, optional `sessionID`, `startedAt`, `finishedAt`, `durationMs`, `status` (`success`/`failure`), `outcome` (`ok`/`blocked`/`failed`), optional `reason`, `exitCode`, `signal`, `stdout`, `stderr`, and `truncated`. Skipped interpreter runs are recorded as `failure` with the reason and no capture. Older lines that still carry `class`, `runnerClass`, or `errorStack` remain readable.
 - **Bounds and rotation**: each captured stream is capped at 16 KB, each JSONL record at 32 KB, and the file at 4 MB. On the next append past the file cap the current file is renamed to `<file>.1` (any older backup is removed) and a fresh file starts. One backup is intentional; older history is discarded.
 - **Best effort**: log capture and file I/O failures warn once with `[owflow] hooks:` and never change a hook result, gate rejection, session abort, or plugin startup.
 - **Local and unredacted**: the file lives in the local OpenCode tmp directory and may contain sensitive output produced by the hook itself. owflow performs no redaction; treat it like any other local diagnostic artifact. `OWFLOW_HOOK_LOGS_FILE` overrides the computed path for tests and manual debugging.
@@ -240,7 +234,7 @@ Each script stream has exactly one destination, and the TUI shows only what the 
 
 ## Visibility Surfaces
 
-All surfaces render the same row model - `path | event | class | interpreter | status` - from the same pure report module, so they agree by construction.
+All surfaces render the same row model - `path | event | interpreter | status` - from the same pure report module, so they agree by construction.
 
 | Surface | What it shows | Freshness |
 | ------- | ------------- | --------- |
@@ -248,7 +242,7 @@ All surfaces render the same row model - `path | event | class | interpreter | s
 | `owflow-hooks` CLI | table by default, `--json` for machine output; scans `./.owflow/hooks/` relative to the process CWD; exits 1 when any invalid entry is found; requires `bun` on PATH (same runtime as OpenCode) | would-load scan, always labeled `effective after next restart` |
 | TUI Active hooks panel | an always-on right-hand sidebar panel listing `Active hooks:` and one `- <name>` line per loaded hook, with live runtime colors and a click-to-open latest-run popup scoped to the current session; digests the current workspace at activation; no command invocation, session, message, or model turn | would-load scan (`effective after next restart`) plus a 200 ms live status poll; the popup reads the runtime log at click time and ignores runs from before the panel opened |
 
-Status vocabulary: `registered`, `will fail closed at fire`, `skipped (no interpreter)`, `invalid: <error>`, and `hooks bypassed (OWFLOW_HOOKS_DISABLED=1)`. The CLI and TUI re-derive with the same pure modules rather than reading the live registry (separate process by construction), and report invalid entries instead of failing fast.
+Status vocabulary: `registered`, `will fail closed at fire`, `invalid: <error>`, and `hooks bypassed (OWFLOW_HOOKS_DISABLED=1)`. The CLI and TUI re-derive with the same pure modules rather than reading the live registry (separate process by construction), and report invalid entries instead of failing fast.
 
 The TUI additionally renders **runtime status** for user hooks using a colored orb (`•`, matching the MCP status style): grey (`theme.textMuted`) before a hook has fired, yellow (`theme.warning`) while a hook is running, green (`theme.success`) after a successful fire, and red (`theme.error`) after a failed, blocked, or unavailable-interpreter run. Every hook reports `In progress` while its code runs. A successful catch-all `event` run that captured no stdout/stderr is a no-op: its pending state is cleared and the row returns to its previous outcome (or `Idle`) without writing a log, so the high-frequency `event` hook does not leave a terminal trace. Event-named hooks (`session-idle`, ...) and the one-shot `config`/`dispose` hooks record their outcome even when silent, so a successful `session-idle` fire still shows green `Success` with no captured output. A settled success or error stays visible until that hook fires again (the next run first shows yellow `In progress`, then its new outcome), so the row always reflects the last real fire. A session's panel also ignores runs that started before that panel opened, so a new session always begins with every row `Idle` - including the high-frequency `event` hook - even when the status snapshot still holds successes from an earlier session or a previous process; the next real fire lights the row. The hook name uses the normal `theme.text` color (hover uses `theme.primary`), and the current state follows it in muted grey as `Idle`, `In progress`, `Success`, or `Error`. Each openable row ends with a muted `›` and highlights on hover. The `Active hooks:` heading also uses `theme.text` like other sections. Status is recorded by owflow's dispatcher; scripts need no changes.
 

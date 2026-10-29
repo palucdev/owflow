@@ -41,11 +41,9 @@ afterEach(() => {
 
 const entry = (
   event: HookEventName = "tool.execute.before",
-  hookClass: HookRegistryEntry["class"] = "gate",
 ): HookRegistryEntry => ({
   path: `/project/.owflow/hooks/${event.replaceAll(".", "-")}.sh`,
   event,
-  class: hookClass,
   interpreter: { resolved: "/usr/bin/bash", available: true },
   status: "registered",
 });
@@ -144,7 +142,6 @@ describe("log writer", () => {
       event: "tool.execute.before",
       hook: "/project/.owflow/hooks/tool-execute-before.sh",
       name: "tool-execute-before",
-      class: "gate",
       sessionID: "ses_abc",
       startedAt: 1_000,
       finishedAt: 1_123,
@@ -485,7 +482,7 @@ describe("log reader", () => {
 
     store.record(
       report({
-        entry: entry("session.idle", "observe"),
+        entry: entry("session.idle"),
         runId: "session.idle#1",
         capture: { stderr: "idle\n" },
       }),
@@ -497,7 +494,6 @@ describe("log reader", () => {
       expect(read.records[0]).toMatchObject({
         event: "session.idle",
         name: "session-idle",
-        class: "observe",
         stderr: "idle\n",
       });
     }

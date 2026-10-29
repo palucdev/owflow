@@ -114,6 +114,7 @@ export const createDispatchHandlers = (dispatch: Dispatcher): Hooks => {
         eventChains.delete(key);
       }
     });
+    tracked.catch(() => {});
     eventChains.set(key, tracked);
     return next;
   };

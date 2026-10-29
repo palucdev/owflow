@@ -31,7 +31,6 @@ const script = (overrides: Partial<HookScript>): HookScript => ({
   path: "/hooks/tool-execute-before.sh",
   stem: "tool-execute-before",
   event: "tool.execute.before",
-  class: "gate",
   extension: ".sh",
   ...overrides,
 });
@@ -39,7 +38,6 @@ const script = (overrides: Partial<HookScript>): HookScript => ({
 const cellsOf = (row: HookReportRow): readonly string[] => [
   row.path,
   row.event,
-  row.class,
   row.interpreter,
   row.status,
 ];
@@ -57,7 +55,6 @@ describe("report formatting", () => {
           path: "/hooks/config.sh",
           stem: "config",
           event: "config",
-          class: "observe",
           extension: ".sh",
         }),
       ],

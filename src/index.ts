@@ -97,16 +97,9 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
 
       config = typedConfig;
 
-      // Observe-class user scripts run after every built-in config mutation;
-      // their failures stay log-only and can never break installation.
+      // User scripts run after built-in config mutations; failing closed on rejection.
       if (wrapper !== undefined) {
-        try {
-          await wrapper.dispatch(HookEvent.Config, typedConfig);
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          console.warn(`[owflow] config hook dispatch failed: ${message}`);
-        }
+        await wrapper.dispatch(HookEvent.Config, typedConfig);
       }
 
       console.log(

@@ -31,7 +31,6 @@ const entry = (
 ): HookRegistryEntry => ({
   path: `/project/.owflow/hooks/${event.replaceAll(".", "-")}.sh`,
   event,
-  class: "gate",
   interpreter: { resolved: "/usr/bin/bash", available: true },
   status: "registered",
 });
@@ -244,7 +243,7 @@ describe("status store", () => {
       write: () => {},
     });
     const fire = (runId: string, startedAt: number): HookStatusReport => ({
-      entry: { ...entry("event"), class: "observe" },
+      entry: entry("event"),
       phase: "settled",
       runId,
       outcome: { status: "ok" },
@@ -279,14 +278,14 @@ describe("status store", () => {
       write: () => {},
     });
     const fire = (runId: string, startedAt: number): HookStatusReport => ({
-      entry: { ...entry("event"), class: "observe" },
+      entry: entry("event"),
       phase: "settled",
       runId,
       outcome: { status: "ok" },
       startedAt,
     });
     const silent = (runId: string): HookStatusReport => ({
-      entry: { ...entry("event"), class: "observe" },
+      entry: entry("event"),
       phase: "settled",
       runId,
       startedAt: 5_100,
@@ -322,7 +321,7 @@ describe("status store", () => {
     store.observe(pending("event", "event#1"));
     expect(store.snapshot().hooks["event"]?.status).toBe("pending");
     store.observe({
-      entry: { ...entry("event"), class: "observe" },
+      entry: entry("event"),
       phase: "settled",
       runId: "event#1",
       startedAt: 1_000,
@@ -347,7 +346,7 @@ describe("status store", () => {
     store.observe(settled("event", "event#1", "ok"));
     expect(store.snapshot().hooks["event"]?.status).toBe("pending");
     store.observe({
-      entry: { ...entry("event"), class: "observe" },
+      entry: entry("event"),
       phase: "settled",
       runId: "event#2",
       startedAt: 1_000,
