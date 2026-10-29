@@ -24,7 +24,7 @@ Concretely: the digest checks file shape, not file content; scripts inherit the 
 
 | Extension | Interpreter | Transport |
 | --------- | ----------- | --------- |
-| `.sh` | `bash` (resolved via `Bun.which`) | envelope JSON on stdin; result JSON on stdout |
+| `.sh` | `bash` (resolved via `Bun.which`) | envelope JSON on stdin; result JSON and log output on stdout |
 | `.ps1` | `pwsh`, falling back to `powershell.exe` | same as `.sh` |
 
 ### Strict Digest
@@ -92,7 +92,7 @@ Names that must never be hooked: `permission.ask`, the object-shaped `tool`, `au
 
 ## Envelope Contract (`owflow-hooks/1`)
 
-Scripts speak one wire version. They read the envelope as JSON on stdin and write the result as JSON on stdout.
+Scripts speak one wire version. They read the envelope as JSON on stdin and write the result as JSON on stdout; any other stdout text is captured as hook log output.
 
 ### Wrapper → script
 
@@ -142,8 +142,9 @@ For an event-named hook, `event` is the host event name, `class` is `observe`, a
 Result rules:
 
 - The protocol version and status are required; `reason` must be a string and `mutations` a JSON object, or the result is malformed.
-- Unparseable stdout maps to `failed`.
-- Parsed stdout JSON is authoritative over the exit code. A non-zero exit without parseable JSON maps to `failed` (stderr becomes the reason when present); a signal kill maps to `failed` with the signal in the reason; an empty stdout with exit 0 means `ok`.
+- The result envelope is read from the whole stdout when it is the only content, or from the last object-shaped result line. It is excluded from the captured stdout log.
+- Parsed stdout JSON is authoritative over the exit code. A non-zero exit without a parseable result maps to `failed` (stderr becomes the reason when present); a signal kill maps to `failed` with the signal in the reason; stdout with no result and exit 0 means `ok`.
+- Plain stdout text is log output and never fails the run by itself. A line that looks like a result (`{` plus a `"protocol"` or `"status"` key) but does not parse as one still maps to `failed` on a zero exit, so a broken envelope can never pass silently. The envelope must stay on one line at the end of stdout; put it last when the script also logs.
 - Mutations naming a field outside the event's whitelist are warned and ignored - they never silently alter output. Host event hooks have no output, so all their mutations are ignored.
 - `experimental.session.compacting` is the one stateful mutation: `context` must be an array of strings and is **appended** after the built-in state re-read reminder; non-arrays and non-string entries are warned and dropped.
 
@@ -151,7 +152,7 @@ Result rules:
 
 The same logging hook - it records the event, session, tool, and command from the envelope - in both supported formats. Save **one** variant as `.owflow/hooks/tool-execute-before.<ext>`; a hook name may appear in exactly one format. Both examples return a complete `owflow-hooks/1` result, so they can be copied verbatim.
 
-Scripts cannot log to stdout (that channel is reserved for the result envelope) - write diagnostics to stderr, which is captured automatically; the Bash and PowerShell examples append to `.owflow/hook-events.log` as a durable example, but stderr would also show up in the runtime log. Their working directory is the project root. Keep ad-hoc log files outside `.owflow/hooks/` - the strict digest allows only hook scripts there.
+Scripts can log to stdout or stderr; both are captured automatically and shown in the runtime logs popup. A valid result envelope is consumed from stdout and excluded from the captured text, so print it as the last line after any diagnostics. The Bash and PowerShell examples append to `.owflow/hook-events.log` as a durable example. Their working directory is the project root. Keep ad-hoc log files outside `.owflow/hooks/` - the strict digest allows only hook scripts there.
 
 ### Bash
 
@@ -193,7 +194,7 @@ Add-Content -Path .owflow/hook-events.log -Value $line
 
 ### Event-named hook
 
-Save a script as `.owflow/hooks/session-idle.sh` and owflow invokes it only for the `session.idle` host event - no envelope filtering is needed. The repository's own bundled build hook (`.owflow/hooks/session-idle.sh`) is a working example: it drains stdin, checks `git status` for source changes, and runs `bun run build` only when the tree is dirty. Like any ordinary script, it stays silent on success and writes the build tail plus a failed result to stderr on failure; the TUI still records the silent success because `session.idle` is an event-named hook.
+Save a script as `.owflow/hooks/session-idle.sh` and owflow invokes it only for the `session.idle` host event - no envelope filtering is needed. The repository's own bundled build hook (`.owflow/hooks/session-idle.sh`) is a working example: it drains stdin, checks `git status` for source changes, and runs `bun run build` only when the tree is dirty. It prints the successful build output to stdout before its result envelope (captured in the logs popup) and writes the build tail plus a failed result to stderr on failure; the TUI records every settled run because `session.idle` is an event-named hook.
 
 ## Ordering Rules
 
@@ -210,11 +211,11 @@ Save a script as `.owflow/hooks/session-idle.sh` and owflow invokes it only for 
 
 ## Runtime Logs
 
-Every user-hook fire appends one JSON object line to a per-workspace file. A fire is a gate run, a failed observe run, an event-named or one-shot (`config`/`dispose`) observe run, or a catch-all `event` run that captured output; only a silent successful catch-all `event` run is a no-op and appends nothing. The newest line for a run that started in the current session is the one the popup displays:
+Every user-hook fire is considered for the per-workspace JSONL log. A fire is a gate run, a failed observe run, an event-named or one-shot (`config`/`dispose`) observe run, or a catch-all `event` run that captured output; only a silent successful catch-all `event` run is a no-op and appends nothing. Consecutive runs with identical event, hook, class, session, status, outcome, reason, exit code, signal, and captured output are coalesced into the first line instead of being appended again, so a persistent failure or an unchanged repeated output cannot flood the file; a changed outcome, session, reason, or capture starts a new line. The newest line for a run that started in the current session is the one the popup displays:
 
 `path.join(os.tmpdir(), "opencode", "owflow-hook-logs-<sha256(realpath(workspace))[0..16]>.jsonl")`
 
-- **Automatic capture, no script changes**: hooks contribute stderr, the exit code, and the terminating signal; stdout remains exclusively the `owflow-hooks/1` result channel and is stored raw only when it is malformed. Captured output is never forwarded to OpenCode's process output: the runtime log file and the TUI popup are its only surfaces. The dispatch envelope, prompt text, and tool arguments are never serialized.
+- **Automatic capture, no script changes**: hooks contribute stdout, stderr, the exit code, and the terminating signal. A valid `owflow-hooks/1` result envelope is parsed from stdout and omitted from the captured text; all other stdout is stored as the `stdout` log field. Captured output is never forwarded to OpenCode's process output: the runtime log file and the TUI popup are its only surfaces. The dispatch envelope, prompt text, and tool arguments are never serialized.
 - **Record shape**: `version`, `runId` (`<event>#<counter>`), `pid`, `workspace`, `event`, `hook` path, `name`, `class`, `sessionID`, `startedAt`, `finishedAt`, `durationMs`, `status` (`success`/`failure`), `outcome` (`ok`/`blocked`/`failed`), optional `reason`, `exitCode`, `signal`, `stdout`, `stderr`, and `truncated`. Skipped interpreter runs are recorded as `failure` with the reason and no capture. Older lines that still carry `runnerClass` or `errorStack` remain readable.
 - **Bounds and rotation**: each captured stream is capped at 16 KB, each JSONL record at 32 KB, and the file at 4 MB. On the next append past the file cap the current file is renamed to `<file>.1` (any older backup is removed) and a fresh file starts. One backup is intentional; older history is discarded.
 - **Best effort**: log capture and file I/O failures warn once with `[owflow] hooks:` and never change a hook result, gate rejection, session abort, or plugin startup.
@@ -226,14 +227,15 @@ Each script stream has exactly one destination, and the TUI shows only what the 
 
 | Script stream | Destination | TUI rendering |
 | ------------- | ----------- | ------------- |
-| stdout with a valid `owflow-hooks/1` result | result channel | parsed for `status`/`reason`/`mutations`; never displayed as text |
-| stdout that is not a valid result | captured `stdout` | raw text under `--- stdout ---` in the logs popup; a zero exit still fails closed |
+| stdout with a valid `owflow-hooks/1` result | result channel | parsed for `status`/`reason`/`mutations`; the envelope line itself is never displayed |
+| other stdout text | captured `stdout` | raw text under `--- stdout ---` in the logs popup; the exit code decides unless a result line is present |
+| stdout line that looks like a result but is malformed | malformed result | fails closed on a zero exit (raw stdout is captured) |
 | stderr | captured `stderr` | raw text under `--- stderr ---` in the logs popup; scripts should write only errors here, and output is never forwarded to OpenCode's process output |
 | exit code / signal | capture metadata | `Exit:` and `Signal:` lines in the run-detail popup |
 
 - **Active hooks row**: `Idle`, `In progress`, `Success`, or `Error` follows the live status snapshot. A settled `Success`/`Error` stays until the hook fires again.
 - **Run-detail popup** (click a row): `Event`, `Status` (`Success` or `Error`) with duration, `Time` (ISO-8601), `Session`, `Exit`/`Signal`, and `Reason`. Captured streams are deliberately omitted here; the popup body is bounded by a 4,000-character budget.
-- **Logs popup** (`View logs`): `--- stderr ---` first, then `--- stdout ---`, each containing the captured text verbatim. When neither stream was captured it shows `No output captured for this run.`; when any capture hit a cap it appends `[output truncated]`. The body is bounded by an 8,000-character budget, and the store caps each stream at 16 KB.
+- **Logs popup** (`View logs`): `--- stderr ---` first, then `--- stdout ---`, each containing the captured text verbatim. When neither stream was captured it shows `No output captured for this run.`; when any capture hit a cap it appends `[output truncated]`. The body scrolls when it exceeds the popup viewport, and the store caps each stream at 16 KB.
 - **Visibility rule**: event-named hooks (`session-idle`, `message-updated`, ...) and the one-shot `config`/`dispose` hooks record every settled run, including a silent success: the row turns green `Success` and the logs popup shows `No output captured for this run.` Only a silent successful catch-all `event` run is a no-op (it would otherwise light up on every host event), so the catch-all needs captured output or a failure to appear. Failures are always recorded, with stderr and the reason available in the two popups. The bundled `session-idle.sh` build hook therefore behaves like an ordinary script: silent success, errors on stderr.
 
 ## Visibility Surfaces
@@ -252,7 +254,7 @@ The TUI additionally renders **runtime status** for user hooks using a colored o
 
 The status transport is one overwritten JSON snapshot per workspace in OpenCode's tmp directory: `path.join(os.tmpdir(), "opencode", "owflow-hooks-<sha256(realpath(workspace))[0..16]>.json")`. Every update atomically replaces the previous content (one reused `.tmp` name), so no per-run or timestamped files accumulate. Multiple OpenCode instances on the same workspace share the file and last writer wins. The `pid` field is diagnostic only; the TUI does not require a PID match. `OWFLOW_HOOKS_STATUS_FILE` overrides the computed path for tests and manual debugging.
 
-Clicking a row opens a centered run-detail popup with the latest persisted run for that hook in the current session: status, duration, finish time, session, exit code or signal, and reason. Runs that started before that session's panel opened are ignored, so a fresh session does not replay the previous process's last record. A **View logs** button at the bottom opens a second popup with the captured stderr/stdout; both views are bounded by a fixed character budget. Rows advertise the detail popup with a trailing `›` and a hover highlight. The click path does not depend on the status poll; if no run has been recorded in the session (or the log is missing/malformed) the TUI shows an info toast instead of throwing. Rows remain non-interactive when `OWFLOW_HOOKS_DISABLED=1`.
+Clicking a row opens a centered run-detail popup with the latest persisted run for that hook in the current session: status, duration, finish time, session, exit code or signal, reason, and the full path of the workspace log file. Runs that started before that session's panel opened are ignored, so a fresh session does not replay the previous process's last record. A **View logs** button at the bottom opens a second popup with the captured stderr/stdout in a scrollable view; the detail view stays bounded by a fixed character budget. Rows advertise the detail popup with a trailing `›` and a hover highlight. The click path does not depend on the status poll; if no run has been recorded in the session (or the log is missing/malformed) the TUI shows an info toast instead of throwing. Rows remain non-interactive when `OWFLOW_HOOKS_DISABLED=1`.
 
 The CLI and TUI scans are **digest-only**: they validate naming, extension, event derivation, and duplicate names. Discovery is structural for every script, so the CLI, TUI, and startup banner report the same would-load set; no script is imported or executed.
 

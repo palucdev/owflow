@@ -14,6 +14,7 @@ changes="$(git status --porcelain=v1 --untracked-files=all -- "${SOURCE_PATHS[@]
 bun_bin="$(command -v bun 2>/dev/null)" || { printf '[owflow] build-hook: bun is not on PATH\n' >&2; exit 1; }
 
 if output="$("$bun_bin" run build 2>&1)"; then
+  [ -n "$output" ] && printf '%s\n' "$output"
   printf '{"protocol":"owflow-hooks/1","status":"ok"}\n'
 else
   status=$?
