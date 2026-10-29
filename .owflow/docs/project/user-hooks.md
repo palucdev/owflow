@@ -10,9 +10,9 @@ The shared model - event names, classes, registry entries, envelope types, and r
 
 ## Trust Model
 
-Scripts are the host project's own code, executed with the user's full privileges, with inherited environment, no name/path validation, no timeouts, and no output cap on the hook process itself — the git-hooks/husky convention; the bypass switch is the only control.
+Scripts are the host project's own code, executed with the user's full privileges, with inherited environment, no name/path validation, no default timeout (`OWFLOW_HOOK_TIMEOUT_MS` is opt-in), and no output cap on the hook process itself — the git-hooks/husky convention; the bypass and timeout switches are the operator controls.
 
-Concretely: the digest checks file shape, not file content; scripts inherit the full environment of the OpenCode process; subprocess scripts are spawned with piped stdio and no timeout, and owflow stops reading a stream after its capture cap rather than imposing an OS-level limit on the child. Before runtime logs, owflow kept no execution audit trail beyond transient `[owflow]` log lines; the persisted JSONL log described below is a bounded local diagnostic record, not a tamper-evident audit trail, and never includes the dispatch envelope or prompt/tool content. Run only hooks you trust, exactly as with git hooks or husky.
+Concretely: the digest checks file shape, not file content; scripts inherit the full environment of the OpenCode process; subprocess scripts are spawned with piped stdio and no default timeout (unless `OWFLOW_HOOK_TIMEOUT_MS` is set to a positive integer in milliseconds, which kills the child on expiry and maps the run to `failed`), in-flight children are terminated on plugin `dispose()`, and owflow stops reading a stream after its capture cap rather than imposing an OS-level limit on the child. Before runtime logs, owflow kept no execution audit trail beyond transient `[owflow]` log lines; the persisted JSONL log described below is a bounded local diagnostic record, not a tamper-evident audit trail, and never includes the dispatch envelope or prompt/tool content. Run only hooks you trust, exactly as with git hooks or husky.
 
 ## Discovery and Naming
 
@@ -194,7 +194,7 @@ Add-Content -Path .owflow/hook-events.log -Value $line
 
 ### Event-named hook
 
-Save a script as `.owflow/hooks/session-idle.sh` and owflow invokes it only for the `session.idle` host event - no envelope filtering is needed. The repository's own bundled build hook (`.owflow/hooks/session-idle.sh`) is a working example: it drains stdin, checks `git status` for source changes, and runs `bun run build` only when the tree is dirty. It prints the successful build output to stdout before its result envelope (captured in the logs popup) and writes the build tail plus a failed result to stderr on failure; the TUI records every settled run because `session.idle` is an event-named hook.
+Save a script as `.owflow/hooks/session-idle.sh` and owflow invokes it only for the `session.idle` host event - no envelope filtering is needed. The repository's own bundled build hook (`.owflow/hooks/session-idle.sh`) is a working example: it drains stdin, checks `git status` for source changes, and runs `bun run build` only when the tree is dirty. It prints the successful build output to stdout before its result envelope (captured in the logs popup) and writes the build tail plus a failed result to stderr on failure; the TUI records every settled run because `session.idle` is an event-named hook. Note: running a full build on `session.idle` is tailored to owflow's fast (~12 s) build; host projects with slower builds should adapt or omit a `session-idle` build hook (or set `OWFLOW_HOOK_TIMEOUT_MS`).
 
 ## Ordering Rules
 
@@ -265,8 +265,10 @@ There is no file watcher for **hook-set discovery**, and the hook set is not per
 ## Bypass and Recovery
 
 - `OWFLOW_HOOKS_DISABLED=1` skips the digest, registry, dispatch, status store, runtime log store, and TUI status polling entirely; no status or log file is written, and clicking a row does nothing. The startup banner reports `hooks bypassed (OWFLOW_HOOKS_DISABLED=1)`. The built-in hooks (destructive-command guard, post-compaction reminder) remain active, and invalid hook files cannot drop the plugin in this mode.
+- `OWFLOW_HOOK_TIMEOUT_MS=<milliseconds>` imposes an opt-in per-execution timeout on hook subprocesses; a script that exceeds the timeout is killed and resolves to `failed` (`process timed out after <ms>ms`). In-flight child processes are also killed on plugin `dispose()`.
 - On a fail-fast registration error, fix or remove the offending file and restart OpenCode - or start with the bypass. The destructive guard drops with the plugin until one of the two is done, which is why the error is loud and names both options.
 - A `failed` gate ends the current session; after the abort, fix or remove the failing script and restart OpenCode before continuing.
+- To roll back the plugin version in `opencode.json`, pin `"plugin": ["owflow@0.6.1"]` and restart OpenCode.
 
 ## Support Declaration
 

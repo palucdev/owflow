@@ -128,6 +128,9 @@ describe("log writer", () => {
     );
 
     expect(fs.existsSync(file)).toBe(true);
+    if (process.platform !== "win32") {
+      expect(fs.lstatSync(file).mode & 0o777).toBe(0o600);
+    }
     const lines = rawLines(file);
     expect(lines).toHaveLength(1);
     expect(lines[0]!.endsWith("}")).toBe(true);
@@ -331,6 +334,33 @@ describe("log writer", () => {
       warn.mockRestore();
     }
   });
+
+  test("should refuse to append when log file or .1 backup is a symlink", () => {
+    const directory = makeTempDir();
+    const target = path.join(directory, "victim.txt");
+    fs.writeFileSync(target, "original", "utf8");
+    const symlinkFile = path.join(directory, "logs.jsonl");
+    fs.symlinkSync(target, symlinkFile);
+
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const store = createHookLogStore({
+        file: symlinkFile,
+        workspace: "/project",
+        pid: 1,
+      });
+      store.record(report());
+      store.dispose();
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain(
+        "refusing to write non-regular file or symlink",
+      );
+      expect(fs.readFileSync(target, "utf8")).toBe("original");
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe("log reader", () => {
@@ -482,6 +512,12 @@ describe("log reader", () => {
 
     expect(readHookLogRecords(file)).toEqual({ kind: "missing" });
     expect(readHookLogRecords(directory)).toEqual({ kind: "invalid" });
+
+    const realLog = path.join(directory, "real-logs.jsonl");
+    fs.writeFileSync(realLog, "", "utf8");
+    const symlinkLog = path.join(directory, "symlink-logs.jsonl");
+    fs.symlinkSync(realLog, symlinkLog);
+    expect(readHookLogRecords(symlinkLog)).toEqual({ kind: "invalid" });
 
     fs.writeFileSync(file, "", "utf8");
     expect(readHookLogRecords(file)).toEqual({

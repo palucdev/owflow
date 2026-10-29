@@ -19,7 +19,12 @@ import {
   type HookRunLogReport,
 } from "../types/hook-types.js";
 import { errorMessage, isRecord } from "./shared.js";
-import { opencodeTmpDirectory, workspaceStatusKey } from "./status.js";
+import {
+  ensurePrivateDirectory,
+  opencodeTmpDirectory,
+  rejectSymlink,
+  workspaceStatusKey,
+} from "./status.js";
 
 export const LOG_FILE_PREFIX = "owflow-hook-logs-";
 export const LOG_FILE_EXTENSION = ".jsonl";
@@ -252,7 +257,7 @@ export interface HookLogStoreOptions {
 const rotateIfNeeded = (file: string, maxFileBytes: number): void => {
   let size: number;
   try {
-    size = fs.statSync(file).size;
+    size = fs.lstatSync(file).size;
   } catch {
     return;
   }
@@ -271,9 +276,12 @@ const defaultAppend = (
   data: string,
   maxFileBytes: number,
 ): void => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  ensurePrivateDirectory(path.dirname(file));
+  rejectSymlink(file);
+  rejectSymlink(`${file}.1`);
   rotateIfNeeded(file, maxFileBytes);
   fs.appendFileSync(file, data, { encoding: "utf8", mode: 0o600 });
+  fs.chmodSync(file, 0o600);
 };
 
 /**
@@ -318,8 +326,8 @@ export const createHookLogStore = ({
 export const readHookLogRecords = (file: string): HookLogReadResult => {
   let descriptor: number | undefined;
   try {
-    const stat = fs.statSync(file);
-    if (!stat.isFile()) return { kind: "invalid" };
+    const stat = fs.lstatSync(file);
+    if (stat.isSymbolicLink() || !stat.isFile()) return { kind: "invalid" };
     if (stat.size === 0) {
       return { kind: "ok", records: [], truncated: false };
     }

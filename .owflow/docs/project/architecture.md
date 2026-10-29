@@ -159,7 +159,7 @@ sequenceDiagram
 ## External Integrations
 - **OpenCode host runtime** — plugin config, hooks, tools, skill/agent/command registration
 - **npm registry** — distribution of the `owflow` package
-- **GitHub / Codeberg remotes** — source hosting (GitHub Actions CI added 2026-10-08; Codeberg runner pending)
+- **GitHub / Codeberg remotes** — source hosting (release verification runs via the local `prepack` build gate)
 - No databases, third-party APIs, or network services at runtime
 
 ## Database Schema

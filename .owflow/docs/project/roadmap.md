@@ -4,7 +4,7 @@
 
 - **Version**: 0.7.0 (pre-1.0)
 - **Key Features**: 4 workflow types (development, research, performance, migration); 51 skills (46 user-invocable, 5 internal); 23 subagents; 52 commands (6 maintained, 46 synthesized from skill frontmatter); 2 custom tools (`verify_template`, `fork_task`); destructive-command guard; user hooks wrapper (`.owflow/hooks/` `.sh`/`.ps1` subprocess scripts digested and dispatched with guard-first ordering, `owflow-hooks` CLI, always-on TUI Active hooks sidebar panel); task state machine with resume semantics; `.owflow/docs/` standards management
-- **Recent Updates**: Unreleased simplifies user hooks to subprocess-only `.sh`/`.ps1` scripts (breaking: `.ts`/`.js` hooks now fail the strict digest; the in-process runner and console-capture machinery are removed); 0.7.0 added the `.owflow/hooks/` user hooks wrapper (host-project scripts dispatched through owflow's handlers guard-first, uniform `owflow-hooks/1` JSON envelope, gate/observe semantics, `owflow-hooks` CLI, always-on TUI Active hooks sidebar panel, `OWFLOW_HOOKS_DISABLED=1` bypass); 0.6.0 split the performance orchestrator into 6 `performance-*` subskills (state re-keyed to 9 descriptive slugs, dispatcher trimmed 437 → 267 lines); 0.5.0 split migration into 8 subskills and introduced project docs under `.owflow/docs/`; 0.4.3 replaced 30 static command wrappers with runtime synthesis from skill frontmatter; 0.4.2 split research. All four workflows now share the dispatcher + subskill + `goal-*` architecture.
+- **Recent Updates**: 0.7.0 adds the `.owflow/hooks/` user hooks wrapper (`.sh`/`.ps1` subprocess scripts dispatched through owflow's handlers guard-first, event-named v1 host event hooks, uniform `owflow-hooks/1` JSON envelope, 13 gate and 3 observe events, `owflow-hooks` CLI, always-on TUI Active hooks sidebar panel with live runtime status and click-to-open run-detail/logs popups, `OWFLOW_HOOKS_DISABLED=1` bypass, opt-in `OWFLOW_HOOK_TIMEOUT_MS`, and `.d.ts` declaration emission); 0.6.1 added file-first `diagrams-mermaid` theming; 0.6.0 split the performance orchestrator into 6 `performance-*` subskills (state re-keyed to 9 descriptive slugs, dispatcher trimmed 437 → 267 lines); 0.5.0 split migration into 8 subskills and introduced project docs under `.owflow/docs/`; 0.4.3 replaced 30 static command wrappers with runtime synthesis from skill frontmatter; 0.4.2 split research. All four workflows now share the dispatcher + subskill + `goal-*` architecture.
 
 ## Planned Enhancements (Next 3-6 Months)
 
@@ -16,9 +16,9 @@
 
 ### Medium Priority
 
-- [x] **CI pipeline** — resolved for GitHub: `.github/workflows/ci.yml` runs `bun run build` (type-check + tests + coverage) on push/PR (2026-10-08); a Codeberg runner is still open
-- [ ] **Fix type declarations** — `package.json` declares `types: dist/index.d.ts`, but tsconfig never emits declarations and `dist/index.d.ts` is confirmed missing; enable `declaration` or remove the field
-- [ ] **CONTRIBUTING guide** — the CHANGELOG now exists (Keep a Changelog format, 0.1.0 → 0.6.1); what remains is a guide for adding skills/agents/commands and documenting Bun as the canonical contributor toolchain
+- [ ] **CI pipeline** — omitted by design for now; release verification runs locally via the `prepack` build gate (`bun run build`: type-check + tests + coverage)
+- [x] **Fix type declarations** — resolved (2026-10-29): `tsconfig.json` now emits `.d.ts` declarations (`dist/index.d.ts`, `dist/tui.d.ts`) and `package.json` `exports` exposes `types` conditions
+- [ ] **CONTRIBUTING guide** — the CHANGELOG now exists (Keep a Changelog format, 0.1.0 → 0.7.0); what remains is a guide for adding skills/agents/commands and documenting Bun as the canonical contributor toolchain
 - [ ] **Document plugin internals** — architecture doc for the registration flow and workflow state machine is available in `.owflow/docs/project/architecture.md`; link it from README
 - [x] **Sync `docs/commands.md`** — resolved: the six `/owflow:performance-*` subcommands are now documented for parity with the migration subcommands (2026-10-05)
 
@@ -26,7 +26,7 @@
 
 - [x] **`.gitattributes`** — resolved: `* text=auto eol=lf` normalizes the working tree to LF (2026-10-08; `commands-config.ts` still emits CRLF for rendered command bodies); a formatter (Prettier/ESLint) remains open
 - [x] **Dual lockfiles** — resolved: only `bun.lock` remains in the tree (`package-lock.json` removed, 2026-10)
-- [ ] **Hook hardening** — log swallowed non-`Blocked:` hook errors behind a debug flag; bound or clean the per-session agent map in `chat.message`
+- [x] **Hook hardening** — resolved (2026-10-29): unexpected non-`Blocked:` errors in `tool.execute.before` log a `[owflow] hooks:` warning while failing open, and `agentBySession` is bounded at 256 sessions and cleared on `dispose`
 - [ ] **Agent frontmatter consistency** — `src/agents/project-analyzer.md` lacks the `model: inherit` field present on the other 22 agents
 
 ## Future Considerations

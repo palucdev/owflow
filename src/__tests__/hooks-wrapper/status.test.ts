@@ -115,12 +115,53 @@ describe("status store", () => {
     store.flushNow();
 
     expect(fs.readdirSync(directory)).toEqual(["status.json"]);
+    if (process.platform !== "win32") {
+      expect(fs.lstatSync(file).mode & 0o777).toBe(0o600);
+    }
     const read = readHookStatusSnapshot(file);
     expect(read.kind).toBe("ok");
     if (read.kind === "ok") {
       expect(read.snapshot.hooks["tool.execute.before"]?.status).toBe("success");
     }
     store.dispose();
+  });
+
+  test("should refuse to overwrite a symlink target at status file or .tmp path", () => {
+    const directory = makeTempDir();
+    const target = path.join(directory, "victim.txt");
+    fs.writeFileSync(target, "original", "utf8");
+    const symlinkFile = path.join(directory, "status.json");
+    fs.symlinkSync(target, symlinkFile);
+
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const store = createHookStatusStore({
+        file: symlinkFile,
+        workspace: "/project",
+      });
+      store.observe(pending("tool.execute.before", "run#1"));
+      store.flushNow();
+      store.dispose();
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain(
+        "refusing to write non-regular file or symlink",
+      );
+      expect(fs.readFileSync(target, "utf8")).toBe("original");
+
+      // Also verify .tmp symlink rejection
+      fs.rmSync(symlinkFile);
+      const tmpSymlink = `${symlinkFile}.tmp`;
+      fs.symlinkSync(target, tmpSymlink);
+      const store2 = createHookStatusStore({
+        file: symlinkFile,
+        workspace: "/project",
+      });
+      store2.dispose();
+      expect(fs.readFileSync(target, "utf8")).toBe("original");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   test("should transition pending to success and pending to failure", () => {
@@ -449,5 +490,21 @@ describe("status reader", () => {
   test("should reject directory paths and unreadable entries safely", () => {
     const directory = makeTempDir();
     expect(readHookStatusSnapshot(directory)).toEqual({ kind: "invalid" });
+
+    const target = path.join(directory, "real-status.json");
+    fs.writeFileSync(
+      target,
+      JSON.stringify({
+        version: 1,
+        pid: 1,
+        workspace: "/project",
+        updatedAt: 1,
+        hooks: {},
+      }),
+      "utf8",
+    );
+    const link = path.join(directory, "symlink-status.json");
+    fs.symlinkSync(target, link);
+    expect(readHookStatusSnapshot(link)).toEqual({ kind: "invalid" });
   });
 });

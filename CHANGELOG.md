@@ -7,51 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **Event-named hook files** — `.owflow/hooks/` now accepts filenames that derive to a v1 host event (`session-idle.sh` → `session.idle`). The single `event` handler fans out to the matching observer, so the script fires only for that event type without parsing the envelope; accepted names are pinned to the v1 `Event` union (32 events), and v2-only `session.next.*` names stay rejected. The bundled build hook is now `session-idle.sh`.
-- **Hook runtime logs and click-to-open popup** — every user-hook fire now appends records to a per-workspace JSONL file in OpenCode's tmp directory (`owflow-hook-logs-<workspace-hash>.jsonl`). Hooks capture stderr, exit code, and signal automatically; valid stdout remains exclusively the `owflow-hooks/1` result and is stored raw only when malformed. Captured output is never forwarded to OpenCode's process output — the log file and popup are the only surfaces. Records are capped at 16 KB per stream and 32 KB each, the file at 4 MB with a single `.1` rotation, and all I/O is best-effort. Clicking an Active hooks row opens a centered run-detail popup with the latest run's status, duration, reason, exit code/signal, and session; its **View logs** button opens a second popup with the captured output. The popup follows the same session epoch as the row status: runs that started before the session's panel opened are ignored, so a fresh session shows an info toast instead of replaying the previous process's last record. A hook with no recorded run shows an info toast. `OWFLOW_HOOK_LOGS_FILE` overrides the path for tests and debugging. Logs are local-only and unredacted; the dispatch envelope and prompt/tool content are never captured.
-- **Live hook runtime status in the TUI** — each Active hooks row uses a colored status orb (`•`, like the OpenCode MCP status) that starts grey, turns yellow while a hook runs, green after a fire with visible output, and red after a failure, block, or unavailable interpreter; a settled outcome stays until that hook fires again. Every hook reports `In progress` while its code runs; only a silent successful catch-all `event` run clears that state without recording an outcome, returning the row to its previous state (or `Idle`). Event-named hooks and the one-shot `config`/`dispose` hooks record silent successes too. A session's panel ignores runs from before that panel opened, so every new session starts fully `Idle` (including the high-frequency `event` hook) and lights a row only on a real fire. The state is repeated after the hook name in muted grey as `Idle`, `In progress`, `Success`, or `Error`. Openable rows end with a muted `›` and highlight with the theme's primary color on hover. The dispatcher writes one overwritten JSON snapshot per workspace to OpenCode's tmp directory (`owflow-hooks-<workspace-hash>.json`), reusing one `.tmp` name and flushing at most every 50 ms; hook scripts and the `owflow-hooks/1` contract are unchanged. `OWFLOW_HOOKS_STATUS_FILE` overrides the path for tests and debugging.
-
-### Removed
-
-- **In-process user hooks** — `.ts`/`.js` hook scripts are no longer supported; `.owflow/hooks/` now accepts only `.sh` and `.ps1` subprocess scripts. The in-process runner, module-import validation, the AsyncLocalStorage console-capture machinery, late-output capture, and the `runnerClass`/`errorStack` log fields are removed. Existing `.ts`/`.js` hooks fail the strict digest at startup with a recovery hint; port them to `.sh`/`.ps1`, remove them, or set `OWFLOW_HOOKS_DISABLED=1`. Old JSONL log records remain readable.
-
-### Changed
-
-- **Silent catch-all `event` runs are no-ops** — a catch-all `event` run that returns `ok` without capturing any stdout/stderr reports `In progress` while it runs, then clears that state without recording a terminal outcome and writes no runtime-log record. This keeps the high-frequency `event` hook from lighting up on every host event it is invoked for. Event-named hooks (`session-idle`, ...) and the one-shot `config`/`dispose` hooks are recorded like any other script even when they capture nothing, so a silent build success still shows a green `Success` row and a log record with no captured output; failures and runs with output keep the full `In progress`/`Success`/`Error` lifecycle.
-
-## [0.7.0] - 2026-10-12
+## [0.7.0] - 2026-10-29
 
 ### Added
 
-- **User hooks wrapper** — host projects can drop scripts into `.owflow/hooks/` and have owflow dispatch them through its lifecycle handlers, no plugin code required. The kebab-case filename stem maps mechanically to the dotted event name (`tool-execute-before.sh` → `tool.execute.before`), and the extension selects the runner: `.ts`/`.js` in-process via `import()`, `.sh` via `bash`, `.ps1` via `pwsh`/`powershell.exe`.
-- Uniform versioned `owflow-hooks/1` JSON envelope (stdin/stdout) for every script type, with a per-event mutation whitelist derived from the host `Hooks` output types.
-- Per-event gate/observe semantics: 13 gate events translate any non-`ok` outcome to a fail-closed `Blocked:` error with an actionable `Hint:`; a `failed` gate also ends the current session, while `blocked` only rejects the operation. The 3 observe events (`config`, `event`, `dispose`) log with the `[owflow]` prefix and never break the session.
-- `owflow-hooks` CLI (new bin) — standalone would-load scan of `./.owflow/hooks/` with a table default and `--json` output; exits 1 when invalid entries are found. Requires `bun` on `PATH`.
-- **TUI Active hooks panel** (new `./tui` entry) — an always-on right-hand sidebar panel listing `Active hooks:` and one `- <name>` line per loaded hook, with no command, session, message, or model turn.
-- `OWFLOW_HOOKS_DISABLED=1` bypass — user hooks off, the two built-in hooks (destructive-command guard, post-compaction reminder) stay active.
+- **User hooks wrapper (`.owflow/hooks/`)** — host projects can drop `.sh` (`bash`) and `.ps1` (`pwsh`/`powershell.exe`) subprocess scripts into `.owflow/hooks/` and have owflow dispatch them through its lifecycle handlers (guard-first on `tool.execute.before`), with no plugin code required. The kebab-case filename stem maps mechanically to the dotted event name (`tool-execute-before.sh` → `tool.execute.before`).
+- **Event-named host event hooks** — `.owflow/hooks/` also accepts filenames that derive to a v1 host event (`session-idle.sh` → `session.idle`). The single `event` handler fans out to the matching observer, so the script fires only for that event type without parsing the envelope; accepted names are pinned to the v1 `Event` union (32 events), and v2-only `session.next.*` names stay rejected.
+- **Uniform `owflow-hooks/1` JSON envelope** — versioned stdin/stdout protocol with a per-event mutation allowlist derived from the host `Hooks` output types.
+- **Gate and observe semantics** — 13 fail-closed gate events translate any non-`ok` outcome to a `Blocked:` error with an actionable `Hint:`; a `blocked` outcome rejects the operation while a `failed` outcome rejects the operation and aborts the current session. The 3 observe events (`config`, `event`, `dispose`) and all 32 host event hooks log with the `[owflow]` prefix and never break the session.
+- **Live hook runtime status in the TUI** (new `./tui` entry) — an always-on **Active hooks** right-hand sidebar panel displays each loaded hook with a colored status orb (`•`): grey (`Idle`), yellow (`In progress`), green (`Success`), and red (`Error`). The dispatcher writes a single atomically overwritten JSON snapshot per workspace (`owflow-hooks-<workspace-hash>.json`, mode `0o600`, 50 ms trailing flush, overrideable via `OWFLOW_HOOKS_STATUS_FILE`). Silent successful catch-all `event` runs clear their pending state without recording a terminal outcome, while event-named and `config`/`dispose` hooks record silent successes too.
+- **Hook runtime logs and click-to-open TUI popups** — settled runs append bounded records to a per-workspace JSONL file (`owflow-hook-logs-<workspace-hash>.jsonl`, mode `0o600`, 16 KB stream cap, 32 KB record cap, 4 MB single-file `.1` rotation, consecutive identical-run coalescing, overrideable via `OWFLOW_HOOK_LOGS_FILE`). Clicking a hook row in the TUI opens a run-detail popup for the current session's latest run with a **View logs** button for captured stderr/stdout.
+- **`owflow-hooks` CLI** (new bin) — standalone digest scan of `./.owflow/hooks/` with a table default and `--json` output; exits 1 when invalid entries are found.
+- **Subprocess lifecycle and bypass controls** — `OWFLOW_HOOKS_DISABLED=1` bypasses user hooks while keeping built-in hooks active; optional `OWFLOW_HOOK_TIMEOUT_MS` terminates hung hook subprocesses and maps them to `failed`; in-flight child processes are tracked and terminated on plugin `dispose()`.
 
 ### Changed
 
-- `package.json`: new `owflow-hooks` bin and an `exports` map (`"."` server entry, `"./tui"` TUI entry).
+- `package.json`: new `owflow-hooks` bin, dual `exports` map (`"."` server entry and `"./tui"` TUI entry with emitted `.d.ts` declarations), repository metadata, and updated `engines` (`node >= 22`, `bun >= 1.3.0`).
 - Hook model centralized: event names are `HookEvent` enum values, all hook types/contracts live in `src/types/hook-types.ts`, and `.owflow` directory names live in `src/utils/workflow-paths.ts` and are referenced across the plugin.
-- Server hook wiring moved out of `src/index.ts` into `src/hooks/plugin-hooks.ts`.
+- Server hook wiring moved out of `src/index.ts` into `src/hooks/plugin-hooks.ts`; `tool.execute.before` now logs unexpected non-`Blocked:` errors with `[owflow] hooks:` while failing open, and `agentBySession` is bounded.
 - Documentation: README "User Hooks" section, `.owflow/docs/project/user-hooks.md` reference page (INDEX-registered), and an AGENTS.md Hooks section covering the dispatch layer.
-
-### Fixed
-
-- **One format per hook name** — a duplicate stem (for example `check.ts` plus `check.sh`) is now a fatal digest error; each hook name registers exactly once.
-- **Failed gates stop the session** — a gate returning `failed` (or missing its interpreter) now aborts the current session in addition to rejecting the operation.
-- **Persistent TUI visibility** — the one-shot toast was replaced by the always-on sidebar panel, so loaded hooks are visible without invoking a command.
 
 ### Notes
 
-- **Strict digest** — `.owflow/hooks/` may contain only hook scripts, one file per hook name: any other entry (directory, `.md` readme, dotfile) or duplicate name is a fatal registration error that drops the entire owflow plugin, including the destructive-command guard. Notes and fixtures belong elsewhere.
-- **Baseline trust** — scripts are the host project's own code, executed with the user's full privileges: inherited environment, no name/path validation, no timeouts, no output caps, no audit trail (the git-hooks/husky convention); the bypass switch is the only control.
-- Hooks are digested once at plugin startup — **restart OpenCode to reload** (there is no watcher). Registration is fail-fast; a broken gate hook blocks the operation when it fires and is never silently skipped.
-- PowerShell (`.ps1`) parity is verified against the same subprocess contract as `.sh`; the TUI panel is covered by the TUI test suite. The CLI and the startup banner remain the unconditional visibility fallbacks outside the TUI.
-- Zero new runtime dependencies; the execution core is deliberately platform-agnostic behind an internal `run(entry, envelope) → Outcome` seam, prepared for the staged OpenCode v2 port.
+- **Strict digest** — `.owflow/hooks/` may contain only `.sh` and `.ps1` hook scripts, one file per hook name: any other entry (directory, symlink, `.md` readme, dotfile, or unsupported extension) or duplicate stem is a fatal registration error that drops the owflow plugin until resolved or bypassed via `OWFLOW_HOOKS_DISABLED=1`. Notes and fixtures belong elsewhere.
+- **Baseline trust** — scripts are the host project's own code, executed with the user's full privileges and inherited environment (the git-hooks/husky convention); `OWFLOW_HOOKS_DISABLED=1` and opt-in `OWFLOW_HOOK_TIMEOUT_MS` are the operator controls.
+- **Restart to reload** — hooks are digested once at plugin startup (there is no file watcher). Registration is fail-fast; a broken gate hook blocks the operation when it fires and is never silently skipped.
+- **Transitive dependency audit** — `bun audit` reports 4 high-severity advisories on transitive dependencies (`toml@4.2.0` and `zod@4.1.8` pulled in by `@opencode-ai/plugin@^1.18.4`); neither package is imported or reachable by owflow's own code, and resolution is tracked upstream in `@opencode-ai/plugin`.
+- Zero new runtime dependencies; the execution core is platform-agnostic behind an internal `run(entry, envelope) → Outcome` seam, prepared for the staged OpenCode v2 port.
 
 ## [0.6.1] - 2026-10-08
 

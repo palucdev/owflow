@@ -201,6 +201,7 @@ export type HookRunner = Readonly<{
     entry: HookRegistryEntry,
     envelope: EnvelopeContext,
   ) => Promise<Outcome>;
+  dispose?: () => void;
 }>;
 
 export type SpawnProcessOptions = Readonly<{
@@ -223,6 +224,7 @@ export type SpawnedProcess = Readonly<{
   signalCode?: string | null;
   stdout?: SpawnedStream | null;
   stderr?: SpawnedStream | null;
+  kill?: (signal?: number | NodeJS.Signals) => void;
 }>;
 export type SpawnProcess = (
   command: string[],
@@ -231,6 +233,7 @@ export type SpawnProcess = (
 export type SubprocessRunnerDeps = Readonly<{
   cwd: string;
   spawn?: SpawnProcess;
+  timeoutMs?: number;
 }>;
 
 /* ── Dispatch ─────────────────────────────────────────────────────────────── */

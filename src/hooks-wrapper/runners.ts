@@ -457,12 +457,28 @@ const withStreams = (
 const signalReason = (signalCode: string | null | undefined): string =>
   `process terminated by signal ${signalCode ?? "unknown"}`;
 
+export const HOOK_TIMEOUT_ENV = "OWFLOW_HOOK_TIMEOUT_MS";
+
+const resolveTimeoutMs = (configured?: number): number | undefined => {
+  if (configured !== undefined) {
+    return Number.isFinite(configured) && configured > 0
+      ? Math.floor(configured)
+      : undefined;
+  }
+  const raw = process.env[HOOK_TIMEOUT_ENV];
+  if (raw === undefined || raw.trim().length === 0) return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+};
+
 export const createSubprocessRunner = ({
   cwd,
   spawn,
+  timeoutMs,
 }: SubprocessRunnerDeps): HookRunner => {
   const spawnProcess: SpawnProcess =
     spawn ?? ((command, options) => Bun.spawn(command, options));
+  const activeProcesses = new Set<SpawnedProcess>();
 
   return {
     run: async (entry, envelope) => {
@@ -483,12 +499,57 @@ export const createSubprocessRunner = ({
         stdout: "pipe",
         stderr: "pipe",
       });
+      activeProcesses.add(proc);
 
-      const [stdout, stderrStream, awaitedExit] = await Promise.all([
-        readStdout(proc.stdout),
-        readStream(proc.stderr),
-        proc.exited,
-      ]);
+      const effectiveTimeoutMs = resolveTimeoutMs(timeoutMs);
+      let timedOut = false;
+      let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise =
+        effectiveTimeoutMs !== undefined
+          ? new Promise<"timeout">((resolve) => {
+              timeoutTimer = setTimeout(() => {
+                timedOut = true;
+                try {
+                  proc.kill?.();
+                } catch {
+                  // Ignore errors when killing an already-exited or mock process.
+                }
+                resolve("timeout");
+              }, effectiveTimeoutMs);
+              timeoutTimer.unref?.();
+            })
+          : undefined;
+
+      let ioResult: [StdoutRead, StreamCapture, number | null] | "timeout";
+      try {
+        const ioPromise = Promise.all([
+          readStdout(proc.stdout),
+          readStream(proc.stderr),
+          proc.exited,
+        ]);
+        ioResult =
+          timeoutPromise !== undefined
+            ? await Promise.race([ioPromise, timeoutPromise])
+            : await ioPromise;
+      } finally {
+        if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+        activeProcesses.delete(proc);
+      }
+
+      if (ioResult === "timeout" || timedOut) {
+        return {
+          status: "failed",
+          reason: `process timed out after ${effectiveTimeoutMs}ms`,
+          capture: {
+            exitCode: proc.exitCode ?? null,
+            ...(proc.signalCode !== undefined && proc.signalCode !== null
+              ? { signal: proc.signalCode }
+              : {}),
+          },
+        };
+      }
+
+      const [stdout, stderrStream, awaitedExit] = ioResult;
       const exitCode =
         proc.exitCode === undefined ? awaitedExit : proc.exitCode;
       const parsedStdout = parseStdout(stdout);
@@ -550,6 +611,16 @@ export const createSubprocessRunner = ({
         status: "ok",
         capture: withStreams(logs, stderrStream, exitCode),
       };
+    },
+    dispose: () => {
+      for (const proc of activeProcesses) {
+        try {
+          proc.kill?.();
+        } catch {
+          // Best-effort termination on plugin shutdown.
+        }
+      }
+      activeProcesses.clear();
     },
   };
 };

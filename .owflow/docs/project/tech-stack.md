@@ -8,9 +8,9 @@ This document describes the technology choices and rationale for owflow, an Open
 
 ### TypeScript 5 (peer `^5`)
 
-- **Usage**: ~100% of source code (`src/`, 19 modules, ~2,131 lines of TS plus ~4,566 lines of tests)
-- **Rationale**: The OpenCode plugin API is typed; strict typing protects a logic-heavy registration and state-machine layer; declarations are the intended public interface
-- **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
+- **Usage**: ~100% of source code (`src/`, 25 modules)
+- **Rationale**: The OpenCode plugin API is typed; strict typing protects a logic-heavy registration and state-machine layer; declarations (`dist/index.d.ts`, `dist/tui.d.ts`) are emitted alongside ESM JavaScript
+- **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `declaration`, `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
 
 ### Markdown + YAML frontmatter
 
@@ -31,8 +31,8 @@ None. No server framework, HTTP API, or long-running service. The only runtime f
 
 ### Testing
 
-- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 208 tests across 16 suites with 19 YAML fixtures
-- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored); currently ~98.5% line / 100% function coverage
+- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 297 tests across 18 suites with 19 YAML fixtures
+- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored); currently ~97.8% line / ~98.7% function coverage
 
 ## Database
 
@@ -40,11 +40,11 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
 
 ## Build Tools & Package Management
 
-- **Bun** (`bunfig.toml`, `bun.lock`) — dev, build, and test runtime
-- **`bun tsc`** — type-check and emit ESM JavaScript to `dist/`
-- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS and html-renderer assets — 155 files total in the payload)
+- **Bun** (`bunfig.toml`, `bun.lock`) — dev, build, test, and CLI runtime
+- **`bun tsc`** — type-check and emit ESM JavaScript + `.d.ts` declarations to `dist/`
+- **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS, `.d.ts` declarations, and html-renderer assets — 189 files total in the payload)
 - **npm** — publish path only (`prepack` runs the full build as a publish guard); `package-lock.json` has been removed, leaving `bun.lock` as the single lockfile
-- **Node ^25** — host engine requirement (`engines` field)
+- **Bun >= 1.3.0 / Node >= 22** — host engine requirement (`engines` field)
 
 ## Build & Runtime Flow
 
@@ -119,13 +119,13 @@ Minimal dependency surface is a deliberate design principle — 3 runtime depend
 
 ## Version Management
 
-Semver in `package.json` (currently `0.7.0`, pre-1.0). `CHANGELOG.md` follows Keep a Changelog and records releases from 0.1.0 (2026-05-10) through 0.7.0 (2026-10-12); no git tags observed. Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
+Semver in `package.json` (currently `0.7.0`, pre-1.0). `CHANGELOG.md` follows Keep a Changelog and records releases from 0.1.0 (2026-05-10) through 0.7.0 (2026-10-29). Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
 
 ## Migration Path (for legacy projects)
 
-Not applicable — modern stack throughout (Bun, TypeScript 5, Node ^25). Known gap: `types: dist/index.d.ts` is declared but declarations are never emitted (no `declaration: true` in tsconfig) and the file is absent from `dist/`; fix or remove is a roadmap item.
+Not applicable — modern stack throughout (Bun >= 1.3, TypeScript 5, Node >= 22). Type declarations (`dist/index.d.ts`, `dist/tui.d.ts`) are emitted at build time via `declaration: true` in `tsconfig.json`.
 
 ---
 
-_Last Updated_: 2026-10-12
+_Last Updated_: 2026-10-29
 _Auto-detected_: languages, versions, dependencies, build/test tooling, absence of CI/linting/containers, distribution model — all from repository inspection

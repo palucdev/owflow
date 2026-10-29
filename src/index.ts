@@ -27,6 +27,8 @@ import type { HookReportInput } from "./types/hook-types.js";
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 
+const MAX_TRACKED_SESSIONS = 256;
+
 const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
   const agentBySession = new Map<string, string>();
   const hooksDisabled = process.env.OWFLOW_HOOKS_DISABLED === "1";
@@ -125,7 +127,14 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
 
     [HookEvent.ChatMessage]: async (input, output) => {
       try {
+        if (agentBySession.has(input.sessionID)) {
+          agentBySession.delete(input.sessionID);
+        }
         agentBySession.set(input.sessionID, input.agent ?? "main");
+        while (agentBySession.size > MAX_TRACKED_SESSIONS) {
+          const oldest = agentBySession.keys().next().value;
+          if (oldest !== undefined) agentBySession.delete(oldest);
+        }
       } catch {
         // ignore
       }
@@ -143,8 +152,12 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
           await wrapper.dispatch(HookEvent.ToolExecuteBefore, input, output);
         }
       } catch (e) {
-        // Re-throw only intentional blocks; swallow unexpected errors
+        // Re-throw only intentional blocks; log and swallow unexpected errors
         if ((e as Error).message?.startsWith("Blocked:")) throw e;
+        const message = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `[owflow] hooks: unexpected error in tool.execute.before (failing open): ${message}`,
+        );
       }
     },
   };
@@ -158,6 +171,7 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
     dispose: async () => {
       await userDispose?.();
       wrapper.dispose();
+      agentBySession.clear();
     },
   };
 };

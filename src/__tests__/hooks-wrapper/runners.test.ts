@@ -684,4 +684,78 @@ describe("createSubprocessRunner", () => {
     expect(missing.capture).toEqual({});
     expect(calls).toHaveLength(1);
   });
+
+  test("should kill a hung subprocess when timeoutMs or OWFLOW_HOOK_TIMEOUT_MS expires", async () => {
+    let killed = 0;
+    const hungProcess: SpawnedProcess = {
+      exited: new Promise<number | null>(() => {}),
+      exitCode: null,
+      signalCode: null,
+      stdout: { text: async () => new Promise<string>(() => {}) },
+      stderr: { text: async () => new Promise<string>(() => {}) },
+      kill: () => {
+        killed += 1;
+      },
+    };
+    const runner = createSubprocessRunner({
+      cwd: "/project",
+      spawn: () => hungProcess,
+      timeoutMs: 25,
+    });
+
+    const outcome = await runner.run(subprocessEntry(), envelope);
+    expect(killed).toBe(1);
+    expect(outcome.status).toBe("failed");
+    expect(outcome.reason).toBe("process timed out after 25ms");
+
+    const previous = process.env.OWFLOW_HOOK_TIMEOUT_MS;
+    process.env.OWFLOW_HOOK_TIMEOUT_MS = "20";
+    try {
+      const envRunner = createSubprocessRunner({
+        cwd: "/project",
+        spawn: () => hungProcess,
+      });
+      const envOutcome = await envRunner.run(subprocessEntry(), envelope);
+      expect(killed).toBe(2);
+      expect(envOutcome.status).toBe("failed");
+      expect(envOutcome.reason).toBe("process timed out after 20ms");
+    } finally {
+      if (previous === undefined) delete process.env.OWFLOW_HOOK_TIMEOUT_MS;
+      else process.env.OWFLOW_HOOK_TIMEOUT_MS = previous;
+    }
+  });
+
+  test("should track in-flight subprocesses and kill them on dispose()", async () => {
+    const killedSignals: Array<number | NodeJS.Signals | undefined> = [];
+    let resolveExit!: (code: number | null) => void;
+    const inFlight: SpawnedProcess = {
+      exited: new Promise<number | null>((resolve) => {
+        resolveExit = resolve;
+      }),
+      exitCode: null,
+      signalCode: "SIGTERM",
+      stdout: { text: async () => "" },
+      stderr: { text: async () => "" },
+      kill: (signal) => {
+        killedSignals.push(signal);
+        resolveExit(null);
+      },
+    };
+
+    const runner = createSubprocessRunner({
+      cwd: "/project",
+      spawn: () => inFlight,
+    });
+
+    const pendingRun = runner.run(subprocessEntry(), envelope);
+    runner.dispose?.();
+    const outcome = await pendingRun;
+
+    expect(killedSignals).toHaveLength(1);
+    expect(outcome.status).toBe("failed");
+
+    // Subsequent dispose after process settled should not kill again
+    runner.dispose?.();
+    expect(killedSignals).toHaveLength(1);
+  });
 });

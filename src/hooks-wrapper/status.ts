@@ -57,10 +57,32 @@ export const hooksStatusFile = (workspace: string): string =>
 export const resolveHooksStatusFile = (workspace: string): string =>
   process.env[STATUS_FILE_ENV] ?? hooksStatusFile(workspace);
 
+export const ensurePrivateDirectory = (directory: string): void => {
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+};
+
+export const rejectSymlink = (targetPath: string): void => {
+  try {
+    const stat = fs.lstatSync(targetPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error(
+        `refusing to write non-regular file or symlink: ${targetPath}`,
+      );
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOENT") return;
+    throw error;
+  }
+};
+
 const writeAtomic = (file: string, data: string): void => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  ensurePrivateDirectory(path.dirname(file));
   const temporary = `${file}.tmp`;
-  fs.writeFileSync(temporary, data, "utf8");
+  rejectSymlink(file);
+  rejectSymlink(temporary);
+  fs.writeFileSync(temporary, data, { encoding: "utf8", mode: 0o600 });
+  fs.chmodSync(temporary, 0o600);
   fs.renameSync(temporary, file);
 };
 
@@ -127,8 +149,12 @@ export const readHookStatusSnapshot = (
   file: string,
 ): HookStatusReadResult => {
   try {
-    const stat = fs.statSync(file);
-    if (!stat.isFile() || stat.size > MAX_STATUS_FILE_BYTES) {
+    const stat = fs.lstatSync(file);
+    if (
+      stat.isSymbolicLink() ||
+      !stat.isFile() ||
+      stat.size > MAX_STATUS_FILE_BYTES
+    ) {
       return { kind: "invalid" };
     }
     const raw = fs.readFileSync(file, "utf8");

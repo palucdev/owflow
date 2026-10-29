@@ -63,7 +63,10 @@ export const initializeHooksWrapper = async (
       onRunLog: (report) => logStore.record(report),
     }),
     snapshot: { entries: registry.entries },
-    dispose: () => statusStore.dispose(),
+    dispose: () => {
+      runner.dispose?.();
+      statusStore.dispose();
+    },
   };
 };
 
@@ -99,14 +102,32 @@ export const createDispatchHandlers = (dispatch: Dispatcher): Hooks => {
     ]),
   ) as Hooks;
 
+  const eventChains = new Map<string, Promise<void>>();
+  const runSerialized = (
+    key: string,
+    task: () => Promise<void>,
+  ): Promise<void> => {
+    const previous = eventChains.get(key) ?? Promise.resolve();
+    const next = previous.catch(() => {}).then(task);
+    const tracked = next.finally(() => {
+      if (eventChains.get(key) === tracked) {
+        eventChains.delete(key);
+      }
+    });
+    eventChains.set(key, tracked);
+    return next;
+  };
+
   return {
     ...handlers,
     [HookEvent.Event]: async (input: unknown) => {
       const type = hostEventTypeFrom(input);
       if (type !== undefined && isHostEventName(type)) {
-        await dispatch(type, input);
+        await runSerialized(type, () => dispatch(type, input));
       }
-      await dispatch(HookEvent.Event, input);
+      await runSerialized(HookEvent.Event, () =>
+        dispatch(HookEvent.Event, input),
+      );
     },
   };
 };

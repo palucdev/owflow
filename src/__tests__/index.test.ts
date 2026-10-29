@@ -274,13 +274,14 @@ describe("OwflowPlugin index", () => {
       }
     });
 
-    test("should swallow non-'Blocked:' errors from guardAgainstDestructiveActions", async () => {
+    test("should swallow non-'Blocked:' errors from guardAgainstDestructiveActions and log a warning", async () => {
       const guardSpy = spyOn(
         beforeTool,
         "guardAgainstDestructiveActions",
       ).mockImplementation(async () => {
         throw new Error("Unexpected database connection error");
       });
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
 
       try {
         const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
@@ -290,9 +291,49 @@ describe("OwflowPlugin index", () => {
         await expect(
           plugin["tool.execute.before"]!(input, output),
         ).resolves.toBeUndefined();
+        expect(warnSpy).toHaveBeenCalledWith(
+          "[owflow] hooks: unexpected error in tool.execute.before (failing open): Unexpected database connection error",
+        );
       } finally {
         guardSpy.mockRestore();
+        warnSpy.mockRestore();
       }
+    });
+
+    test("should bound tracked sessions by evicting the oldest entry past MAX_TRACKED_SESSIONS", async () => {
+      const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+      // First session uses whitelisted agent "task-group-implementer"
+      await plugin["chat.message"]!(
+        { sessionID: "sess-0", agent: "task-group-implementer" },
+        {} as any,
+      );
+
+      // Push 256 more sessions to evict sess-0 (MAX_TRACKED_SESSIONS = 256)
+      for (let i = 1; i <= 256; i += 1) {
+        await plugin["chat.message"]!(
+          { sessionID: `sess-${i}`, agent: "task-group-implementer" },
+          {} as any,
+        );
+      }
+
+      // sess-0 was evicted so it falls back to "main" (blocked for destructive actions),
+      // while sess-256 is still tracked as "task-group-implementer" (allowed).
+      await expect(
+        plugin["tool.execute.before"]!(
+          { tool: "bash", sessionID: "sess-0", callID: "c-evicted" },
+          { args: { command: "git reset --hard" } },
+        ),
+      ).rejects.toThrow(
+        'Blocked: destructive command not permitted for agent "main"',
+      );
+
+      await expect(
+        plugin["tool.execute.before"]!(
+          { tool: "bash", sessionID: "sess-256", callID: "c-retained" },
+          { args: { command: "git reset --hard" } },
+        ),
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -960,6 +1001,41 @@ describe("OwflowPlugin index", () => {
           );
         }
       });
+    });
+
+    test("should serialize overlapping host-event dispatches on the event bus", async () => {
+      let active = 0;
+      let maxConcurrent = 0;
+      const order: string[] = [];
+
+      const dispatcherSpy = spyOn(
+        dispatcherModule,
+        "createDispatcher",
+      ).mockReturnValue(async (event) => {
+        if (event === "session.idle") {
+          active += 1;
+          maxConcurrent = Math.max(maxConcurrent, active);
+          order.push("start");
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          order.push("end");
+          active -= 1;
+        }
+      });
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          await Promise.all([
+            plugin.event!({ event: { type: "session.idle" } }),
+            plugin.event!({ event: { type: "session.idle" } }),
+          ]);
+
+          expect(maxConcurrent).toBe(1);
+          expect(order).toEqual(["start", "end", "start", "end"]);
+        });
+      } finally {
+        dispatcherSpy.mockRestore();
+      }
     });
   });
 });

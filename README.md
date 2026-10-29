@@ -41,7 +41,7 @@ owflow/
 ### Prerequisites
 
 - [Opencode](https://opencode.ai/) CLI installed and configured
-- [Node.js](https://nodejs.org/) >= 25
+- [Bun](https://bun.sh/) >= 1.3 (used by OpenCode and the `owflow-hooks` CLI)
 
 ### Installation
 
@@ -287,9 +287,9 @@ Add-Content -Path .owflow/hook-events.log -Value $line
 
 > **Strict digest - important**: `.owflow/hooks/` may contain **only** hook scripts, and each hook name may appear in **exactly one** format (`.sh` or `.ps1` - never two files with the same stem). Any other entry - a directory, a `.md` readme, a dotfile - is a fatal registration error that drops the entire owflow plugin (including the destructive-command guard) until you fix or remove the file. Keep notes and fixtures elsewhere.
 
-Hooks are digested once at startup: **restart OpenCode to reload** after adding, editing, or removing a script (there is no watcher). Registration is fail-fast - a broken gate hook blocks the operation when it fires, it is never silently skipped; a `failed` gate also ends the current session. To start with user hooks disabled, set `OWFLOW_HOOKS_DISABLED=1`; the two built-in hooks (destructive-command guard and post-compaction reminder) remain active.
+Hooks are digested once at startup: **restart OpenCode to reload** after adding, editing, or removing a script (there is no watcher). Registration is fail-fast - a broken gate hook blocks the operation when it fires, it is never silently skipped; a `failed` gate also ends the current session. To start with user hooks disabled, set `OWFLOW_HOOKS_DISABLED=1`; the two built-in hooks (destructive-command guard and post-compaction reminder) remain active. To cap how long any single hook subprocess may run before being killed and treated as `failed`, set `OWFLOW_HOOK_TIMEOUT_MS=<milliseconds>` (default: untimed); in-flight hook subprocesses are also terminated automatically when the plugin disposes. To roll back to the previous release at any time, pin `"plugin": ["owflow@0.6.1"]` in `opencode.json` and restart OpenCode.
 
-**Trust model**: scripts are the host project's own code, executed with the user's full privileges, with inherited environment, no name/path validation, no timeouts, and no output cap on the hook process itself — the git-hooks/husky convention; the bypass switch is the only control. Runtime logs (below) are a bounded local diagnostic record, not a tamper-evident audit trail, and never include the dispatch envelope, prompt text, or tool arguments.
+**Trust model**: scripts are the host project's own code, executed with the user's full privileges, with inherited environment, no name/path validation, no default timeout (`OWFLOW_HOOK_TIMEOUT_MS` is opt-in), and no output cap on the hook process itself — the git-hooks/husky convention; the bypass and timeout switches are the operator controls. Runtime logs (below) are a bounded local diagnostic record, not a tamper-evident audit trail, and never include the dispatch envelope, prompt text, or tool arguments.
 
 **Visibility surfaces** (the loaded hook set is "effective after next restart"; TUI runtime colors are live):
 
