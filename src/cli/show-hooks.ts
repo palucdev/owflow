@@ -1,11 +1,13 @@
 #!/usr/bin/env bun
 import {
-  HookDigestMode,
   renderJson,
   renderTable,
   scanHooks,
+} from "../hooks/user-hooks.js";
+import {
+  HookDigestMode,
   type HookReportInput,
-} from "../hooks/plugin-hooks.js";
+} from "../types/hook-types.js";
 import { hooksDirectory } from "../utils/workflow-paths.js";
 
 export interface ShowHooksOptions {

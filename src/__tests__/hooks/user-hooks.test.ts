@@ -29,9 +29,9 @@ import {
   scanHooks,
   STATUS_FILE_ENV,
   TABLE_COLUMNS,
-} from "../../hooks/plugin-hooks.js";
+} from "../../hooks/user-hooks.js";
 
-describe("plugin-hooks (consolidated user-hooks engine)", () => {
+describe("user-hooks (consolidated user-hooks engine)", () => {
   const tempDirs: string[] = [];
 
   const makeTempDir = (): string => {

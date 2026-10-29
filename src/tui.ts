@@ -2,18 +2,20 @@ import fs from "node:fs";
 import path from "node:path";
 import type { TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
 import {
-  HookDigestMode,
   readHookStatusSnapshot,
   readLatestHookLog,
   resolveHooksLogFile,
   resolveHooksStatusFile,
   scanHooks,
+} from "./hooks/user-hooks.js";
+import {
+  HookDigestMode,
   type HookEventName,
   type HookRunLogRecord,
   type HookRunState,
   type HookRuntimeEntry,
   type HookStatusReadResult,
-} from "./hooks/plugin-hooks.js";
+} from "./types/hook-types.js";
 import { hooksDirectory } from "./utils/workflow-paths.js";
 
 const SIDEBAR_SLOT = "sidebar_content";

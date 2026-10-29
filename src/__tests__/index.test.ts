@@ -10,12 +10,12 @@ import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";
 import * as sessionCompaction from "../hooks/session-compaction.js";
 import * as beforeTool from "../hooks/before-tool.js";
-import * as pluginHooksModule from "../hooks/plugin-hooks.js";
+import * as userHooksModule from "../hooks/user-hooks.js";
 import {
   LOG_FILE_ENV,
   readHookLogRecords,
   type Dispatcher,
-} from "../hooks/plugin-hooks.js";
+} from "../hooks/user-hooks.js";
 import { verify_template } from "../tools/verify_template.js";
 import { fork_task } from "../tools/fork_task.js";
 
@@ -492,7 +492,7 @@ describe("OwflowPlugin index", () => {
       });
       const calls: DispatchRecord[] = [];
       const wrapperSpy = spyOn(
-        pluginHooksModule,
+        userHooksModule,
         "initializeHooksWrapper",
       ).mockResolvedValue({
         dispatch: stubDispatcher((record) => {
@@ -537,7 +537,7 @@ describe("OwflowPlugin index", () => {
       });
       const calls: DispatchRecord[] = [];
       const wrapperSpy = spyOn(
-        pluginHooksModule,
+        userHooksModule,
         "initializeHooksWrapper",
       ).mockResolvedValue({
         dispatch: stubDispatcher((record) => {
@@ -572,7 +572,7 @@ describe("OwflowPlugin index", () => {
 
     test("should update the session map before chat.message dispatch and propagate gate errors", async () => {
       const wrapperSpy = spyOn(
-        pluginHooksModule,
+        userHooksModule,
         "initializeHooksWrapper",
       ).mockResolvedValue({
         dispatch: stubDispatcher((record) => {
@@ -632,7 +632,7 @@ describe("OwflowPlugin index", () => {
         order.push("agents");
       });
       const wrapperSpy = spyOn(
-        pluginHooksModule,
+        userHooksModule,
         "initializeHooksWrapper",
       ).mockResolvedValue({
         dispatch: stubDispatcher((record) => {
@@ -677,7 +677,7 @@ describe("OwflowPlugin index", () => {
       const previous = process.env.OWFLOW_HOOKS_DISABLED;
       process.env.OWFLOW_HOOKS_DISABLED = "1";
       writeHookFixture("tool-execute-before");
-      const scanSpy = spyOn(pluginHooksModule, "scanHooks");
+      const scanSpy = spyOn(userHooksModule, "scanHooks");
       const consoleLogSpy = spyOn(console, "log").mockImplementation(
         () => {},
       );
@@ -998,7 +998,7 @@ describe("OwflowPlugin index", () => {
       const order: string[] = [];
 
       const wrapperSpy = spyOn(
-        pluginHooksModule,
+        userHooksModule,
         "initializeHooksWrapper",
       ).mockResolvedValue({
         dispatch: async (event) => {

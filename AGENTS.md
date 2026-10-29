@@ -70,7 +70,7 @@ Fires after context compaction. Injects a reminder to re-read `orchestrator-stat
 
 ### User Hooks Wrapper (`.owflow/hooks/`)
 
-Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. All discovery, execution, reporting, status, and log logic lives in `src/hooks/plugin-hooks.ts`; `src/cli/show-hooks.ts` (CLI) and `src/tui.ts` (TUI) hold the standalone surfaces.
+Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. All discovery, execution, reporting, status, and log logic lives in `src/hooks/user-hooks.ts`; `src/cli/show-hooks.ts` (CLI) and `src/tui.ts` (TUI) hold the standalone surfaces.
 
 - Scripts are named `kebab-event.ext` (`tool-execute-before.sh` → `tool.execute.before`) and run as subprocesses; supported extensions are `.sh` and `.ps1`.
 - A stem may also name a v1 host event (`session-idle.sh` → `session.idle`). These fire only for their matching `event.type` via the single `event` hook, and accept the pinned `HOST_EVENT_NAMES` set (32 events); v2-only `session.next.*` names are rejected.

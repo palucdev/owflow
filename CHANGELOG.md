@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `package.json`: new `owflow-hooks` bin, dual `exports` map (`"."` server entry and `"./tui"` TUI entry with emitted `.d.ts` declarations), repository metadata, and updated `engines` (`node >= 22`, `bun >= 1.3.0`).
 - Hook model centralized: event names are `HookEvent` enum values, all hook types/contracts live in `src/types/hook-types.ts`, and `.owflow` directory names live in `src/utils/workflow-paths.ts` and are referenced across the plugin.
-- Server hook wiring moved out of `src/index.ts` into `src/hooks/plugin-hooks.ts`; `tool.execute.before` now logs unexpected non-`Blocked:` errors with `[owflow] hooks:` while failing open, and `agentBySession` is bounded.
+- Server hook wiring moved out of `src/index.ts` into `src/hooks/user-hooks.ts`; `tool.execute.before` now logs unexpected non-`Blocked:` errors with `[owflow] hooks:` while failing open, and `agentBySession` is bounded.
 - Documentation: README "User Hooks" section, `.owflow/docs/project/user-hooks.md` reference page (INDEX-registered), and an AGENTS.md Hooks section covering the dispatch layer.
 
 ### Notes

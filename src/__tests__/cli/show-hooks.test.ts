@@ -10,7 +10,7 @@ import {
   renderTable,
   scanHooks,
   type HookReportInput,
-} from "../../hooks/plugin-hooks.js";
+} from "../../hooks/user-hooks.js";
 
 describe("owflow-hooks CLI", () => {
   const tempDirs: string[] = [];

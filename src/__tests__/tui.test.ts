@@ -19,7 +19,7 @@ import {
   scanHooks,
   type HookRunLogRecord,
   type HookRunState,
-} from "../hooks/plugin-hooks.js";
+} from "../hooks/user-hooks.js";
 
 interface FakeNode {
   readonly tag: string;
