@@ -19,11 +19,11 @@ import { configureCommands } from "./configuration/commands-config.js";
 import { configureAgents } from "./configuration/agents-config.js";
 import {
   createDispatchHandlers,
+  HookEvent,
   initializeHooksWrapper,
+  renderSnapshot,
 } from "./hooks/plugin-hooks.js";
-import { renderSnapshot } from "./hooks-wrapper/report.js";
-import { HookEvent } from "./types/hook-types.js";
-import type { HookReportInput } from "./types/hook-types.js";
+import type { HookReportInput } from "./hooks/plugin-hooks.js";
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 

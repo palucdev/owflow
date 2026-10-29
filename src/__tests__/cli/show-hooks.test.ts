@@ -3,14 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runShowHooks } from "../../cli/show-hooks.js";
-import { scanHooks } from "../../hooks-wrapper/registry.js";
-import { HookDigestMode } from "../../types/hook-types.js";
-import type { HookReportInput } from "../../hooks-wrapper/report.js";
 import {
   EFFECTIVE_AFTER_RESTART,
+  HookDigestMode,
   renderJson,
   renderTable,
-} from "../../hooks-wrapper/report.js";
+  scanHooks,
+  type HookReportInput,
+} from "../../hooks/plugin-hooks.js";
 
 describe("owflow-hooks CLI", () => {
   const tempDirs: string[] = [];
@@ -67,9 +67,7 @@ describe("owflow-hooks CLI", () => {
     expect(exitCode).toBe(0);
     expect(parsed.label).toBe(EFFECTIVE_AFTER_RESTART);
     expect(parsed.rows).toHaveLength(1);
-    expect(parsed.rows[0]!.path).toBe(
-      path.join(hooksDir, "tool-execute-before.sh"),
-    );
+    expect(parsed.rows[0]!.path).toBe(path.join(hooksDir, "tool-execute-before.sh"));
     expect(parsed.rows[0]!.event).toBe("tool.execute.before");
   });
 
@@ -98,9 +96,7 @@ describe("owflow-hooks CLI", () => {
     };
 
     expect(jsonCode).toBe(1);
-    const invalidRows = parsed.rows.filter((row) =>
-      row.status.startsWith("invalid:"),
-    );
+    const invalidRows = parsed.rows.filter((row) => row.status.startsWith("invalid:"));
     expect(invalidRows.map((row) => row.path)).toEqual([
       path.join(hooksDir, "BadName.sh"),
       path.join(hooksDir, "readme.md"),
@@ -117,15 +113,11 @@ describe("owflow-hooks CLI", () => {
     const { lines, log } = capture();
     const tableCode = runShowHooks({ cwd: root, argv: [], log });
     const { lines: jsonLines, log: jsonLog } = capture();
-    const jsonCode = runShowHooks({
-      cwd: root,
-      argv: ["--json"],
-      log: jsonLog,
-    });
+    const jsonCode = runShowHooks({ cwd: root, argv: ["--json"], log: jsonLog });
 
     const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report });
     const input: HookReportInput = {
-      entries: scan.registry.entries,
+      entries: scan.entries,
       failures: scan.failures,
     };
 

@@ -1,23 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
-import { scanHooks } from "./hooks-wrapper/registry.js";
 import {
+  HookDigestMode,
+  readHookStatusSnapshot,
   readLatestHookLog,
   resolveHooksLogFile,
-} from "./hooks-wrapper/hook-logs.js";
-import {
-  readHookStatusSnapshot,
   resolveHooksStatusFile,
-} from "./hooks-wrapper/status.js";
-import { HookDigestMode } from "./types/hook-types.js";
-import type {
-  HookEventName,
-  HookRunLogRecord,
-  HookRunState,
-  HookRuntimeEntry,
-  HookStatusReadResult,
-} from "./types/hook-types.js";
+  scanHooks,
+  type HookEventName,
+  type HookRunLogRecord,
+  type HookRunState,
+  type HookRuntimeEntry,
+  type HookStatusReadResult,
+} from "./hooks/plugin-hooks.js";
 import { hooksDirectory } from "./utils/workflow-paths.js";
 
 const SIDEBAR_SLOT = "sidebar_content";
@@ -27,14 +23,8 @@ const OPEN_HINT = "›";
 const SHOW_LOGS_LABEL = "View logs";
 const DETAIL_DIALOG_SIZE = "large";
 const RUN_SUMMARY_MAX_CHARS = 4_000;
-const LOGS_SCROLL_FALLBACK_HEIGHT = 24;
-const LOGS_SCROLL_MIN_HEIGHT = 4;
 const DEFAULT_STATUS_POLL_MS = 200;
 
-/**
- * Minimal surface of the host-provided Solid runtime needed to build nodes
- * without JSX. The TUI process owns this peer; owflow only consumes it.
- */
 interface SolidRuntime {
   readonly createElement: (tag: string) => unknown;
   readonly insert: (parent: unknown, child: unknown) => unknown;
@@ -54,14 +44,6 @@ export interface SidebarTheme {
 
 type SolidElement = ReturnType<TuiPluginApi["ui"]["Dialog"]>;
 
-interface SidebarSlotContext {
-  readonly theme: { readonly current: SidebarTheme };
-}
-
-interface SidebarSlotProps {
-  readonly session_id?: string;
-}
-
 export interface ActiveHookRow {
   readonly name: string;
   readonly event: HookEventName;
@@ -72,75 +54,43 @@ export interface ActiveHooksView {
   readonly rows: readonly ActiveHookRow[];
 }
 
-/**
- * A3: the TUI is a separate process from the server, so the live registry is
- * unreachable; this re-derives the would-load set with the same pure modules.
- */
 export const buildActiveHooksView = (directory: string): ActiveHooksView => {
-  const scan = scanHooks(hooksDirectory(directory), {
-    mode: HookDigestMode.Report,
-  });
+  const scan = scanHooks(hooksDirectory(directory), { mode: HookDigestMode.Report });
   return {
     title: ACTIVE_HOOKS_TITLE,
-    rows: scan.registry.entries.map((entry) => ({
+    rows: scan.entries.map((entry) => ({
       name: path.basename(entry.path, path.extname(entry.path)),
       event: entry.event,
     })),
   };
 };
 
-type StatusColorKey = HookRunState | "idle";
+export const statusLabelFor = (status: HookRunState | undefined): string =>
+  status === "pending"
+    ? "In progress"
+    : status === "success"
+      ? "Success"
+      : status === "failure"
+        ? "Error"
+        : "Idle";
 
-const HOOK_STATUS_ORB = "•";
-
-/** Status text follows the same vocabulary everywhere in the panel. */
-export const statusLabelFor = (status: HookRunState | undefined): string => {
-  switch (status) {
-    case "pending":
-      return "In progress";
-    case "success":
-      return "Success";
-    case "failure":
-      return "Error";
-    default:
-      return "Idle";
-  }
-};
-
-/** Pure color mapping so idle, pending, success, and failure stay one table. */
 export const colorForStatus = (
   status: HookRunState | undefined,
   theme: SidebarTheme,
-): unknown => {
-  switch (status) {
-    case "pending":
-      return theme.warning;
-    case "success":
-      return theme.success;
-    case "failure":
-      return theme.error;
-    default:
-      return theme.textMuted;
-  }
-};
+): unknown =>
+  status === "pending"
+    ? theme.warning
+    : status === "success"
+      ? theme.success
+      : status === "failure"
+        ? theme.error
+        : theme.textMuted;
 
-const colorKeyForStatus = (status: HookRunState | undefined): StatusColorKey =>
-  status ?? "idle";
-
-/**
- * The last outcome stays visible until the hook runs again (pending is shown
- * while it runs). Runs that started before the panel opened for the session
- * are ignored, so statuses left behind by an earlier session or a previous
- * process never show as green at session start.
- */
 export const statusForDisplay = (
   entry: HookRuntimeEntry | undefined,
   notBefore = Number.NEGATIVE_INFINITY,
-): HookRunState | undefined => {
-  if (entry === undefined) return undefined;
-  if (entry.startedAt < notBefore) return undefined;
-  return entry.status;
-};
+): HookRunState | undefined =>
+  entry !== undefined && entry.startedAt >= notBefore ? entry.status : undefined;
 
 export const effectiveStatuses = (
   entries: ReadonlyMap<string, HookRuntimeEntry>,
@@ -160,99 +110,85 @@ const truncateMessage = (message: string, maxChars: number): string => {
   return message.slice(0, Math.max(0, maxChars - suffix.length)) + suffix;
 };
 
-/**
- * Run metadata shown in the detail popup. Captured output is intentionally
- * omitted here; it lives in the separate logs popup behind the "View logs" button.
- */
 export const formatHookRunSummary = (
   record: HookRunLogRecord,
   maxChars = RUN_SUMMARY_MAX_CHARS,
 ): string => {
-  const lines: string[] = [
+  const lines = [
     `Event:  ${record.event}`,
     `Status: ${record.status === "success" ? "Success" : "Error"} — ${record.durationMs} ms`,
     `Time:   ${new Date(record.finishedAt).toISOString()}`,
+    ...(record.sessionID !== undefined ? [`Session: ${record.sessionID}`] : []),
+    ...(record.exitCode !== undefined ? [`Exit:   ${record.exitCode ?? "none"}`] : []),
+    ...(record.signal ? [`Signal: ${record.signal}`] : []),
+    ...(record.reason !== undefined ? ["", `Reason: ${record.reason}`] : []),
   ];
-  if (record.sessionID !== undefined) {
-    lines.push(`Session: ${record.sessionID}`);
-  }
-  if (record.exitCode !== undefined) {
-    lines.push(`Exit:   ${record.exitCode === null ? "none" : record.exitCode}`);
-  }
-  if (record.signal !== undefined && record.signal !== null) {
-    lines.push(`Signal: ${record.signal}`);
-  }
-  if (record.reason !== undefined) {
-    lines.push("", `Reason: ${record.reason}`);
-  }
-
   return truncateMessage(lines.join("\n"), maxChars);
 };
 
-/**
- * Plain-text logs popup body. Rendered inside a scrollbox, so no default
- * character budget applies; captured streams are already byte-capped by the
- * store. Callers may still pass a budget for one-shot textual summaries.
- */
 export const formatHookLogsMessage = (
   record: HookRunLogRecord,
   maxChars = Number.POSITIVE_INFINITY,
 ): string => {
   const sections: string[] = [];
-  const section = (title: string, text: string): void => {
-    sections.push(`--- ${title} ---\n${text}`);
-  };
-  if (record.stderr !== undefined) section("stderr", record.stderr);
-  if (record.stdout !== undefined) section("stdout", record.stdout);
-  if (sections.length === 0) {
-    sections.push("No output captured for this run.");
-  }
-  if (record.truncated === true) {
-    sections.push("[output truncated]");
-  }
-
+  if (record.stderr !== undefined) sections.push(`--- stderr ---\n${record.stderr}`);
+  if (record.stdout !== undefined) sections.push(`--- stdout ---\n${record.stdout}`);
+  if (sections.length === 0) sections.push("No output captured for this run.");
+  if (record.truncated === true) sections.push("[output truncated]");
   return truncateMessage(sections.join("\n\n"), maxChars);
 };
 
-const isDestroyed = (node: unknown): boolean => {
-  if (typeof node !== "object" || node === null) return false;
-  return (node as { readonly isDestroyed?: unknown }).isDestroyed === true;
-};
-
-interface HookRowNodes {
-  readonly orb: unknown;
-  readonly label: unknown;
-}
-
 export interface SidebarRenderHandle {
   readonly root: unknown;
-  readonly rows: Map<string, HookRowNodes>;
+  readonly rows: Map<string, { readonly orb: unknown; readonly label: unknown }>;
   readonly colors: Map<string, string>;
   readonly theme: SidebarTheme;
   readonly notBefore: number;
   disposed: () => boolean;
 }
 
-const staticText = (
+const el = (
   solid: SolidRuntime,
-  content: string,
-  color: unknown,
+  tag: string,
+  props: Record<string, unknown>,
+  children: readonly unknown[] = [],
 ): unknown => {
-  const node = solid.createElement("text");
-  solid.setProp(node, "fg", color);
-  solid.setProp(node, "content", content);
+  const node = solid.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v !== undefined) {
+      try {
+        solid.setProp(node, k, v);
+      } catch {}
+    }
+  }
+  for (const child of children) {
+    if (child !== undefined) solid.insert(node, child);
+  }
   return node;
 };
 
-const logsScrollMaxHeight = (terminalHeight: number | undefined): number => {
-  const height =
-    typeof terminalHeight === "number" &&
-    Number.isFinite(terminalHeight) &&
-    terminalHeight > 0
-      ? terminalHeight
-      : LOGS_SCROLL_FALLBACK_HEIGHT;
-  return Math.max(LOGS_SCROLL_MIN_HEIGHT, Math.floor((height * 3) / 4) - 8);
-};
+const txt = (
+  solid: SolidRuntime,
+  content: string,
+  fg: unknown,
+  extra: Record<string, unknown> = {},
+): unknown => el(solid, "text", { fg, content, ...extra });
+
+const buildHeader = (
+  solid: SolidRuntime,
+  titleText: string,
+  theme: SidebarTheme,
+  onClose: () => void,
+): unknown =>
+  el(
+    solid,
+    "box",
+    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 1 },
+    [
+      txt(solid, titleText, theme.text, { flexGrow: 1, textAlign: "center" }),
+      txt(solid, "esc", theme.textMuted, { flexShrink: 0, onMouseUp: onClose }),
+    ],
+  );
 
 const buildHookLogsBody = (
   record: HookRunLogRecord,
@@ -260,48 +196,21 @@ const buildHookLogsBody = (
   solid: SolidRuntime,
   onClose: () => void,
   maxHeight: number,
-): unknown => {
-  const root = solid.createElement("box");
-  solid.setProp(root, "flexDirection", "column");
-  solid.setProp(root, "width", "100%");
-  solid.setProp(root, "paddingLeft", 2);
-  solid.setProp(root, "paddingRight", 2);
-  solid.setProp(root, "paddingTop", 1);
-  solid.setProp(root, "paddingBottom", 1);
-  solid.setProp(root, "gap", 1);
-
-  const header = solid.createElement("box");
-  solid.setProp(header, "flexDirection", "row");
-  solid.setProp(header, "alignItems", "center");
-  solid.setProp(header, "justifyContent", "space-between");
-  solid.setProp(header, "width", "100%");
-  solid.setProp(header, "gap", 1);
-  const title = staticText(solid, `Hook logs: ${record.name}`, theme.text);
-  solid.setProp(title, "flexGrow", 1);
-  solid.setProp(title, "textAlign", "center");
-  solid.insert(header, title);
-  const closeHint = staticText(solid, "esc", theme.textMuted);
-  solid.setProp(closeHint, "flexShrink", 0);
-  solid.setProp(closeHint, "onMouseUp", onClose);
-  solid.insert(header, closeHint);
-  solid.insert(root, header);
-
-  const scrollbox = solid.createElement("scrollbox");
-  solid.setProp(scrollbox, "flexGrow", 1);
-  solid.setProp(scrollbox, "width", "100%");
-  solid.setProp(scrollbox, "maxHeight", maxHeight);
-  try {
-    solid.setProp(scrollbox, "focused", true);
-  } catch {
-    // Keyboard scrolling is an enhancement; mouse-wheel scrolling still works.
-  }
-  const body = staticText(solid, formatHookLogsMessage(record), theme.text);
-  solid.setProp(body, "width", "100%");
-  solid.insert(scrollbox, body);
-  solid.insert(root, scrollbox);
-
-  return root;
-};
+): unknown =>
+  el(
+    solid,
+    "box",
+    { flexDirection: "column", width: "100%", paddingLeft: 2, paddingRight: 2, paddingTop: 1, paddingBottom: 1, gap: 1 },
+    [
+      buildHeader(solid, `Hook logs: ${record.name}`, theme, onClose),
+      el(
+        solid,
+        "scrollbox",
+        { flexGrow: 1, width: "100%", maxHeight, focused: true },
+        [txt(solid, formatHookLogsMessage(record), theme.text, { width: "100%" })],
+      ),
+    ],
+  );
 
 const buildHookRunDetailBody = (
   record: HookRunLogRecord,
@@ -311,74 +220,46 @@ const buildHookRunDetailBody = (
   onShowLogs: () => void,
   onClose: () => void,
 ): unknown => {
-  const root = solid.createElement("box");
-  solid.setProp(root, "flexDirection", "column");
-  solid.setProp(root, "alignItems", "center");
-  solid.setProp(root, "width", "100%");
-  solid.setProp(root, "paddingLeft", 2);
-  solid.setProp(root, "paddingRight", 2);
-  solid.setProp(root, "paddingTop", 1);
-  solid.setProp(root, "paddingBottom", 1);
-  solid.setProp(root, "gap", 1);
-
-  const header = solid.createElement("box");
-  solid.setProp(header, "flexDirection", "row");
-  solid.setProp(header, "alignItems", "center");
-  solid.setProp(header, "justifyContent", "space-between");
-  solid.setProp(header, "width", "100%");
-  solid.setProp(header, "gap", 1);
-  const title = staticText(solid, `Hook run: ${record.name}`, theme.text);
-  solid.setProp(title, "flexGrow", 1);
-  solid.setProp(title, "textAlign", "center");
-  solid.insert(header, title);
-  const closeHint = staticText(solid, "esc", theme.textMuted);
-  solid.setProp(closeHint, "flexShrink", 0);
-  solid.setProp(closeHint, "onMouseUp", onClose);
-  solid.insert(header, closeHint);
-  solid.insert(root, header);
-
-  const summary = staticText(
-    solid,
-    formatHookRunSummary(record),
-    theme.textMuted,
-  );
-  solid.setProp(summary, "width", "100%");
-  solid.setProp(summary, "textAlign", "center");
-  solid.insert(root, summary);
-
-  const logPath = staticText(solid, `Log file: ${logFile}`, theme.textMuted);
-  solid.setProp(logPath, "width", "100%");
-  solid.setProp(logPath, "textAlign", "center");
-  solid.insert(root, logPath);
-
-  const buttonRow = solid.createElement("box");
-  solid.setProp(buttonRow, "flexDirection", "row");
-  solid.setProp(buttonRow, "justifyContent", "center");
-  solid.setProp(buttonRow, "width", "100%");
   const button = solid.createElement("box");
-  solid.setProp(button, "backgroundColor", theme.primary);
-  solid.setProp(button, "paddingLeft", 3);
-  solid.setProp(button, "paddingRight", 3);
-  solid.setProp(button, "onMouseUp", onShowLogs);
-  const buttonLabel = staticText(
-    solid,
-    SHOW_LOGS_LABEL,
-    theme.selectedListItemText,
-  );
-  solid.setProp(buttonLabel, "flexShrink", 0);
-  solid.setProp(button, "onMouseOver", () => {
-    solid.setProp(button, "backgroundColor", theme.backgroundElement);
-    solid.setProp(buttonLabel, "fg", theme.primary);
-  });
-  solid.setProp(button, "onMouseOut", () => {
-    solid.setProp(button, "backgroundColor", theme.primary);
-    solid.setProp(buttonLabel, "fg", theme.selectedListItemText);
-  });
+  const buttonLabel = txt(solid, SHOW_LOGS_LABEL, theme.selectedListItemText, { flexShrink: 0 });
+  for (const [k, v] of Object.entries({
+    backgroundColor: theme.primary,
+    paddingLeft: 3,
+    paddingRight: 3,
+    onMouseUp: onShowLogs,
+    onMouseOver: () => {
+      solid.setProp(button, "backgroundColor", theme.backgroundElement);
+      solid.setProp(buttonLabel, "fg", theme.primary);
+    },
+    onMouseOut: () => {
+      solid.setProp(button, "backgroundColor", theme.primary);
+      solid.setProp(buttonLabel, "fg", theme.selectedListItemText);
+    },
+  })) {
+    solid.setProp(button, k, v);
+  }
   solid.insert(button, buttonLabel);
-  solid.insert(buttonRow, button);
-  solid.insert(root, buttonRow);
 
-  return root;
+  return el(
+    solid,
+    "box",
+    {
+      flexDirection: "column",
+      alignItems: "center",
+      width: "100%",
+      paddingLeft: 2,
+      paddingRight: 2,
+      paddingTop: 1,
+      paddingBottom: 1,
+      gap: 1,
+    },
+    [
+      buildHeader(solid, `Hook run: ${record.name}`, theme, onClose),
+      txt(solid, formatHookRunSummary(record), theme.textMuted, { width: "100%", textAlign: "center" }),
+      txt(solid, `Log file: ${logFile}`, theme.textMuted, { width: "100%", textAlign: "center" }),
+      el(solid, "box", { flexDirection: "row", justifyContent: "center", width: "100%" }, [button]),
+    ],
+  );
 };
 
 const materializeSidebar = (
@@ -390,45 +271,23 @@ const materializeSidebar = (
   interactive: boolean,
   notBefore: number,
 ): SidebarRenderHandle => {
-  const root = solid.createElement("box");
-  solid.setProp(root, "flexDirection", "column");
-
-  const title = solid.createElement("text");
-  solid.setProp(title, "fg", theme.text);
-  solid.insert(title, view.title);
-  solid.insert(root, title);
-
-  const rows = new Map<string, HookRowNodes>();
+  const rows = new Map<string, { readonly orb: unknown; readonly label: unknown }>();
   const colors = new Map<string, string>();
+  const root = el(solid, "box", { flexDirection: "column" }, [
+    el(solid, "text", { fg: theme.text }, [view.title]),
+  ]);
+
   if (view.rows.length === 0) {
-    solid.insert(
-      root,
-      staticText(solid, EMPTY_HOOKS_NAME, theme.textMuted),
-    );
+    solid.insert(root, txt(solid, EMPTY_HOOKS_NAME, theme.textMuted));
   } else {
     for (const row of view.rows) {
-      const line = solid.createElement("box");
-      solid.setProp(line, "flexDirection", "row");
-      solid.setProp(line, "gap", 1);
-
-      const orb = staticText(
-        solid,
-        HOOK_STATUS_ORB,
-        colorForStatus(undefined, theme),
-      );
-      solid.setProp(orb, "flexShrink", 0);
-      const name = staticText(solid, row.name, theme.text);
-      const label = staticText(
-        solid,
-        statusLabelFor(undefined),
-        theme.textMuted,
-      );
+      const line = el(solid, "box", { flexDirection: "row", gap: 1 });
+      const orb = txt(solid, "•", colorForStatus(undefined, theme), { flexShrink: 0 });
+      const name = txt(solid, row.name, theme.text);
+      const label = txt(solid, statusLabelFor(undefined), theme.textMuted);
       let hint: unknown;
       if (interactive) {
-        hint = staticText(solid, OPEN_HINT, theme.textMuted);
-        solid.setProp(hint, "flexShrink", 0);
-        // Open on release: the host dialog backdrop dismisses on mouse-up, so
-        // opening on mouse-down would close the popup with the same click.
+        hint = txt(solid, OPEN_HINT, theme.textMuted, { flexShrink: 0 });
         solid.setProp(line, "onMouseUp", () => onRowClick(row, theme));
         solid.setProp(line, "onMouseOver", () => {
           solid.setProp(line, "backgroundColor", theme.backgroundElement);
@@ -443,14 +302,12 @@ const materializeSidebar = (
           onRowHover();
         });
       }
-
-      solid.insert(line, orb);
-      solid.insert(line, name);
-      solid.insert(line, label);
-      if (hint !== undefined) solid.insert(line, hint);
+      for (const child of [orb, name, label, hint]) {
+        if (child !== undefined) solid.insert(line, child);
+      }
       solid.insert(root, line);
       rows.set(row.event, { orb, label });
-      colors.set(row.event, colorKeyForStatus(undefined));
+      colors.set(row.event, "idle");
     }
   }
 
@@ -460,39 +317,18 @@ const materializeSidebar = (
     colors,
     theme,
     notBefore,
-    disposed: () => isDestroyed(root),
+    disposed: () => Boolean((root as { isDestroyed?: unknown } | null)?.isDestroyed),
   };
-};
-
-const applyStatuses = (
-  handle: SidebarRenderHandle,
-  statuses: ReadonlyMap<string, HookRunState>,
-  solid: SolidRuntime,
-): boolean => {
-  let changed = false;
-  for (const [event, nodes] of handle.rows) {
-    const status = statuses.get(event);
-    const key = colorKeyForStatus(status);
-    if (handle.colors.get(event) === key) continue;
-    solid.setProp(nodes.orb, "fg", colorForStatus(status, handle.theme));
-    solid.setProp(nodes.label, "content", statusLabelFor(status));
-    handle.colors.set(event, key);
-    changed = true;
-  }
-  return changed;
 };
 
 const loadSolidRuntime = async (): Promise<SolidRuntime | null> => {
   try {
     const runtime = (await import("@opentui/solid")) as Partial<SolidRuntime>;
-    if (
-      typeof runtime.createElement !== "function" ||
-      typeof runtime.insert !== "function" ||
-      typeof runtime.setProp !== "function"
-    ) {
-      return null;
-    }
-    return runtime as SolidRuntime;
+    return typeof runtime.createElement === "function" &&
+      typeof runtime.insert === "function" &&
+      typeof runtime.setProp === "function"
+      ? (runtime as SolidRuntime)
+      : null;
   } catch (error) {
     console.warn("[owflow] Failed to import @opentui/solid", error);
     return null;
@@ -512,11 +348,6 @@ export interface ActiveHooksSidebarOptions {
   readonly now?: () => number;
 }
 
-/**
- * Registers the always-on right-hand sidebar panel. The hook set is scanned
- * once (hooks reload only on restart); runtime status is polled from the
- * dispatcher's overwritten snapshot file and applied imperatively.
- */
 export const registerActiveHooksSidebar = async (
   api: TuiPluginApi,
   directory: string,
@@ -525,9 +356,7 @@ export const registerActiveHooksSidebar = async (
 ): Promise<boolean> => {
   const solid = await loadSolid();
   if (solid === null) {
-    console.warn(
-      "[owflow] TUI Solid runtime unavailable; cannot render the active hooks panel.",
-    );
+    console.warn("[owflow] TUI Solid runtime unavailable; cannot render the active hooks panel.");
     return false;
   }
 
@@ -542,26 +371,22 @@ export const registerActiveHooksSidebar = async (
   let lastMtime: number | undefined;
   const sessionEpochs = new Map<string, number>();
 
-  /**
-   * A session's panel ignores every run it did not witness starting. This
-   * keeps statuses from earlier sessions or a previous process from being
-   * replayed as green when a session begins; the next fire re-lights the row.
-   */
-  const notBeforeFor = (sessionID: string | undefined): number => {
-    const key = sessionID ?? "";
-    const existing = sessionEpochs.get(key);
-    if (existing !== undefined) return existing;
-    const epoch = now();
-    sessionEpochs.set(key, epoch);
-    return epoch;
-  };
-
   const applyToHandle = (
     handle: SidebarRenderHandle,
     next: ReadonlyMap<string, HookRunState>,
   ): boolean => {
     try {
-      return applyStatuses(handle, next, solid);
+      let changed = false;
+      for (const [event, nodes] of handle.rows) {
+        const status = next.get(event);
+        const key = status ?? "idle";
+        if (handle.colors.get(event) === key) continue;
+        solid.setProp(nodes.orb, "fg", colorForStatus(status, handle.theme));
+        solid.setProp(nodes.label, "content", statusLabelFor(status));
+        handle.colors.set(event, key);
+        changed = true;
+      }
+      return changed;
     } catch {
       return false;
     }
@@ -569,19 +394,12 @@ export const registerActiveHooksSidebar = async (
 
   const pollingEnabled = process.env.OWFLOW_HOOKS_DISABLED !== "1";
 
-  const openHookLogPopup = (
-    row: ActiveHookRow,
-    theme: SidebarTheme,
-    notBefore: number,
-  ): void => {
+  const openHookLogPopup = (row: ActiveHookRow, theme: SidebarTheme, notBefore: number): void => {
     if (!pollingEnabled) return;
-    let loaded: HookRunLogRecord | undefined;
+    let record: HookRunLogRecord | undefined;
     try {
-      loaded = readLatestLog(logFile, row.event, notBefore);
-    } catch {
-      loaded = undefined;
-    }
-    const record = loaded;
+      record = readLatestLog(logFile, row.event, notBefore);
+    } catch {}
     try {
       if (record === undefined) {
         api.ui.toast({
@@ -594,92 +412,66 @@ export const registerActiveHooksSidebar = async (
       const onClose = (): void => api.ui.dialog.clear();
       const showLogs = (): void => {
         try {
+          const h = api.renderer.height;
+          const maxHeight = Math.max(4, Math.floor(((h > 0 ? h : 24) * 3) / 4) - 8);
           api.ui.dialog.replace(
-            () =>
-              buildHookLogsBody(
-                record,
-                theme,
-                solid,
-                onClose,
-                logsScrollMaxHeight(api.renderer.height),
-              ) as SolidElement,
+            () => buildHookLogsBody(record, theme, solid, onClose, maxHeight) as SolidElement,
             () => {},
           );
           api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
-        } catch {
-          // Keep the detail popup usable if the logs popup cannot open.
-        }
+        } catch {}
       };
       api.ui.dialog.replace(
-        () =>
-          buildHookRunDetailBody(
-            record,
-            logFile,
-            theme,
-            solid,
-            showLogs,
-            onClose,
-          ) as SolidElement,
+        () => buildHookRunDetailBody(record, logFile, theme, solid, showLogs, onClose) as SolidElement,
         () => {},
       );
-      // The host resets the dialog size to medium on every replace, so the
-      // large size must be applied afterwards for the centered detail panel.
       api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
-    } catch {
-      // A click must never throw into the renderer; the panel stays usable.
-    }
+    } catch {}
   };
 
   if (pollingEnabled) {
     const renderer = api.renderer;
-
     const tick = (): void => {
-      let stat: fs.Stats | undefined;
       try {
-        stat = fs.statSync(statusFile);
-      } catch {
-        lastMtime = undefined;
-      }
-      if (stat !== undefined) {
-        if (!stat.isFile()) {
-          lastMtime = undefined;
-        } else if (lastMtime !== stat.mtimeMs) {
+        const stat = fs.statSync(statusFile);
+        if (stat.isFile() && lastMtime !== stat.mtimeMs) {
           lastMtime = stat.mtimeMs;
           const result = readSnapshot(statusFile);
           if (result.kind === "ok") {
-            const next = new Map<string, HookRuntimeEntry>();
-            for (const [event, runtime] of Object.entries(
-              result.snapshot.hooks,
-            )) {
-              next.set(event, runtime);
-            }
-            statuses = next;
+            statuses = new Map(Object.entries(result.snapshot.hooks));
           }
+        } else if (!stat.isFile()) {
+          lastMtime = undefined;
         }
+      } catch {
+        lastMtime = undefined;
       }
 
       for (const handle of handles) {
         if (handle.disposed()) continue;
-        const displayed = effectiveStatuses(statuses, handle.notBefore);
-        if (applyToHandle(handle, displayed)) renderer.requestRender();
+        if (applyToHandle(handle, effectiveStatuses(statuses, handle.notBefore))) {
+          renderer.requestRender();
+        }
       }
-      for (let index = handles.length - 1; index >= 0; index -= 1) {
-        if (handles[index]!.disposed()) handles.splice(index, 1);
+      for (let i = handles.length - 1; i >= 0; i -= 1) {
+        if (handles[i]!.disposed()) handles.splice(i, 1);
       }
     };
 
     const timer = setInterval(tick, options.pollMs ?? DEFAULT_STATUS_POLL_MS);
-    if (typeof (timer as { unref?: () => void }).unref === "function") {
-      (timer as { unref: () => void }).unref();
-    }
+    (timer as { unref?: () => void }).unref?.();
     api.lifecycle.onDispose(() => clearInterval(timer));
   }
 
   api.slots.register({
     order: 50,
     slots: {
-      [SIDEBAR_SLOT]: (ctx: SidebarSlotContext, props?: SidebarSlotProps) => {
-        const notBefore = notBeforeFor(props?.session_id);
+      [SIDEBAR_SLOT]: (
+        ctx: { readonly theme: { readonly current: SidebarTheme } },
+        props?: { readonly session_id?: string },
+      ) => {
+        const key = props?.session_id ?? "";
+        const notBefore = sessionEpochs.get(key) ?? (sessionEpochs.set(key, now()), sessionEpochs.get(key)!);
         const handle = materializeSidebar(
           view,
           ctx.theme.current,
@@ -689,10 +481,7 @@ export const registerActiveHooksSidebar = async (
           pollingEnabled,
           notBefore,
         );
-        applyToHandle(
-          handle,
-          effectiveStatuses(statuses, notBefore),
-        );
+        applyToHandle(handle, effectiveStatuses(statuses, notBefore));
         handles.push(handle);
         return handle.root;
       },
@@ -704,9 +493,7 @@ export const registerActiveHooksSidebar = async (
 const tui = async (api: TuiPluginApi): Promise<void> => {
   const directory = api.state.path.directory;
   if (typeof directory !== "string" || directory.length === 0) {
-    console.warn(
-      "[owflow] workspace directory unavailable; cannot render the active hooks panel.",
-    );
+    console.warn("[owflow] workspace directory unavailable; cannot render the active hooks panel.");
     return;
   }
   await registerActiveHooksSidebar(api, directory);

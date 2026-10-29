@@ -238,24 +238,24 @@ Script names map to events: the kebab-case filename stem becomes the dotted even
 
 | Extension | Interpreter | Transport |
 | --------- | ----------- | --------- |
-| `.sh` | subprocess via `bash` | envelope on stdin, JSON result and log output on stdout |
-| `.ps1` | subprocess via `pwsh`/`powershell.exe` | envelope on stdin, JSON result and log output on stdout |
+| `.sh` | subprocess via `bash` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
+| `.ps1` | subprocess via `pwsh`/`powershell.exe` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
 
-**All hooks are gate hooks** governed by universal fail-closed semantics (16 lifecycle events and 32 host events). A `blocked` outcome rejects the operation with a `Blocked:` error and an actionable `Hint:`; a `failed` outcome rejects the operation and terminates the active session. Missing interpreters fail closed at fire time.
-
-The wrapper and your scripts exchange one JSON envelope, `owflow-hooks/1`: the wrapper sends `{ protocol, event, class, session?, context }`; a script returns `{ protocol, status: "ok" | "blocked" | "failed", reason?, mutations? }`, where `mutations` may only touch the event's whitelisted fields (e.g. `args` for `tool.execute.before`). The full schema, event table, ordering rules, and mutation whitelist live in the [user hooks reference](.owflow/docs/project/user-hooks.md).
+**All hooks are gate hooks** governed by universal fail-closed semantics (16 lifecycle events and 32 host events) using the standard **git-hooks contract**:
+- **Input (`stdin`)**: JSON `{ event, session?: { sessionID }, context }`.
+- **Output (`exit code` + `stdout`/`stderr`)**: Exit `0` succeeds; any non-zero exit rejects the operation with a `Blocked:` error (using `stderr` or `stdout` as the reason) and terminates the active session. Missing interpreters fail closed at fire time.
 
 ### Example hook in both formats
 
-The same logging hook - it records the event, session, tool, and command from the envelope - written in each supported format. Save **one** of these as `.owflow/hooks/tool-execute-before.<ext>`; the same hook name may not exist in two formats.
+The same logging hook - it records the event, session, tool, and command from stdin - written in each supported format. Save **one** of these as `.owflow/hooks/tool-execute-before.<ext>`; the same hook name may not exist in two formats.
 
-Scripts may log to stdout or stderr; both are captured automatically and shown in the TUI logs popup. When a script returns an `owflow-hooks/1` result, the result envelope is consumed from stdout and excluded from the captured log; keep it as the last line (or the only stdout content) so a verbose script cannot bury it. The Bash and PowerShell examples append to `.owflow/hook-events.log` as a durable example. Their working directory is the project root. Keep ad-hoc log files outside `.owflow/hooks/` - the strict digest allows only hook scripts there.
+Scripts may log to stdout or stderr; both are captured automatically and shown in the TUI logs popup. Their working directory is the project root. Keep ad-hoc log files outside `.owflow/hooks/` - the strict digest allows only hook scripts there.
 
 **Bash** (`.owflow/hooks/tool-execute-before.sh`, uses `jq`):
 
 ```bash
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
 envelope="$(cat)"
 event="$(jq -r '.event // "unknown"' <<<"$envelope")"
@@ -265,8 +265,6 @@ command="$(jq -r '.context.args.command // ""' <<<"$envelope")"
 
 printf '%s [example-hook] %s session=%s tool=%s command=%s\n' \
   "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$event" "$session" "$tool" "$command" >> .owflow/hook-events.log
-
-printf '%s\n' '{"protocol":"owflow-hooks/1","status":"ok"}'
 ```
 
 **PowerShell** (`.owflow/hooks/tool-execute-before.ps1`):
@@ -281,8 +279,6 @@ $stamp = Get-Date -Format o
 
 $line = "$stamp [example-hook] $($envelope.event) session=$session tool=$($context.tool) command=$($context.args.command)"
 Add-Content -Path .owflow/hook-events.log -Value $line
-
-@{ protocol = "owflow-hooks/1"; status = "ok" } | ConvertTo-Json -Compress
 ```
 
 > **Strict digest - important**: `.owflow/hooks/` may contain **only** hook scripts, and each hook name may appear in **exactly one** format (`.sh` or `.ps1` - never two files with the same stem). Any other entry - a directory, a `.md` readme, a dotfile - is a fatal registration error that drops the entire owflow plugin (including the destructive-command guard) until you fix or remove the file. Keep notes and fixtures elsewhere.

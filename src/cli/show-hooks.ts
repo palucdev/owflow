@@ -1,8 +1,11 @@
 #!/usr/bin/env bun
-import { scanHooks } from "../hooks-wrapper/registry.js";
-import type { HookReportInput } from "../types/hook-types.js";
-import { HookDigestMode } from "../types/hook-types.js";
-import { renderJson, renderTable } from "../hooks-wrapper/report.js";
+import {
+  HookDigestMode,
+  renderJson,
+  renderTable,
+  scanHooks,
+  type HookReportInput,
+} from "../hooks/plugin-hooks.js";
 import { hooksDirectory } from "../utils/workflow-paths.js";
 
 export interface ShowHooksOptions {
@@ -11,12 +14,6 @@ export interface ShowHooksOptions {
   readonly log?: (line: string) => void;
 }
 
-/**
- * Standalone would-load scan: a separate process can never read the live
- * registry, so the CLI re-derives with the same pure modules and reports
- * invalid entries as rows instead of failing fast. The exit code carries the
- * set's validity: 0 clean, 1 invalid.
- */
 export const runShowHooks = (options: ShowHooksOptions = {}): number => {
   const cwd = options.cwd ?? process.cwd();
   const argv = options.argv ?? process.argv;
@@ -24,7 +21,7 @@ export const runShowHooks = (options: ShowHooksOptions = {}): number => {
 
   const scan = scanHooks(hooksDirectory(cwd), { mode: HookDigestMode.Report });
   const input: HookReportInput = {
-    entries: scan.registry.entries,
+    entries: scan.entries,
     failures: scan.failures,
   };
 

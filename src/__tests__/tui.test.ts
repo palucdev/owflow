@@ -14,12 +14,12 @@ import tuiModule, {
   statusLabelFor,
 } from "../tui.js";
 import type { SidebarTheme } from "../tui.js";
-import { scanHooks } from "../hooks-wrapper/registry.js";
-import { HookDigestMode } from "../types/hook-types.js";
-import type {
-  HookRunLogRecord,
-  HookRunState,
-} from "../types/hook-types.js";
+import {
+  HookDigestMode,
+  scanHooks,
+  type HookRunLogRecord,
+  type HookRunState,
+} from "../hooks/plugin-hooks.js";
 
 interface FakeNode {
   readonly tag: string;
@@ -242,7 +242,6 @@ const logRecord = (
   finishedAt: 1_123,
   durationMs: 123,
   status: "success",
-  outcome: "ok",
   ...overrides,
 });
 
@@ -352,7 +351,7 @@ describe("owflow TUI plugin", () => {
     fs.writeFileSync(path.join(hooksDir, "session-idle.sh"), "");
 
     const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report });
-    expect(scan.registry.entries.map((entry) => entry.event)).toEqual([
+    expect(scan.entries.map((entry) => entry.event)).toEqual([
       "config",
       "session.idle",
       "tool.execute.before",
@@ -536,7 +535,6 @@ describe("owflow TUI plugin", () => {
     const logFile = path.join(root, "hook-logs.jsonl");
     writeLogRecord(logFile, {
       status: "failure",
-      outcome: "blocked",
       reason: "policy says no",
       exitCode: 2,
       stderr: "captured stderr\n",
@@ -721,7 +719,6 @@ describe("owflow TUI plugin", () => {
   test("should truncate run details and explicitly budgeted logs", () => {
     const record = logRecord({
       status: "failure",
-      outcome: "failed",
       reason: "boom ".repeat(100),
       stderr: "x".repeat(10_000),
       truncated: true,
