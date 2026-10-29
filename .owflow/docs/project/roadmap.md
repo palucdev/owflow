@@ -16,17 +16,10 @@
 
 ### Medium Priority
 
-- [ ] **CI pipeline** — omitted by design for now; release verification runs locally via the `prepack` build gate (`bun run build`: type-check + tests + coverage)
-- [x] **Fix type declarations** — resolved (2026-10-29): `tsconfig.json` now emits `.d.ts` declarations (`dist/index.d.ts`, `dist/tui.d.ts`) and `package.json` `exports` exposes `types` conditions
-- [ ] **CONTRIBUTING guide** — the CHANGELOG now exists (Keep a Changelog format, 0.1.0 → 0.7.0); what remains is a guide for adding skills/agents/commands and documenting Bun as the canonical contributor toolchain
-- [ ] **Document plugin internals** — architecture doc for the registration flow and workflow state machine is available in `.owflow/docs/project/architecture.md`; link it from README
-- [x] **Sync `docs/commands.md`** — resolved: the six `/owflow:performance-*` subcommands are now documented for parity with the migration subcommands (2026-10-05)
+- [ ] **CI pipeline** — planned CI pipelines for github/codeberg, with focus on linting and testing.
 
 ### Technical Debt
 
-- [x] **`.gitattributes`** — resolved: `* text=auto eol=lf` normalizes the working tree to LF (2026-10-08; `commands-config.ts` still emits CRLF for rendered command bodies); a formatter (Prettier/ESLint) remains open
-- [x] **Dual lockfiles** — resolved: only `bun.lock` remains in the tree (`package-lock.json` removed, 2026-10)
-- [x] **Hook hardening** — resolved (2026-10-29): unexpected non-`Blocked:` errors in `tool.execute.before` log a `[owflow] hooks:` warning while failing open, and `agentBySession` is bounded at 256 sessions and cleared on `dispose`
 - [ ] **Agent frontmatter consistency** — `src/agents/project-analyzer.md` lacks the `model: inherit` field present on the other 22 agents
 
 ## Future Considerations
