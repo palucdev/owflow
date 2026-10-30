@@ -10,4 +10,4 @@ Multi-word TypeScript filenames use kebab-case (e.g., `session-compaction.ts`, `
 Use two-space indentation (no tabs), double-quoted strings, terminating semicolons, and trailing commas in multiline literals and arguments.
 
 ### Arrow-function const Exports
-Export `const` arrow functions, constants, or interfaces; do not use function declarations. Only `src/index.ts` may default-export, and only the plugin factory (documented OpenCode handling policy).
+Export `const` arrow functions, constants, or interfaces; do not use function declarations. Only `src/index.ts` may default-export, and only the plugin factory (documented OpenCode handling policy). `src/tui.ts` is the one other sanctioned default-export: it must default-export the `{ id, tui }` module object the host TUI plugin loader expects.

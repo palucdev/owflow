@@ -68,6 +68,17 @@ All other agents — including the main agent — are checked against destructiv
 
 Fires after context compaction. Injects a reminder to re-read `orchestrator-state.yml` and use `question` at phase gates.
 
+### User Hooks Wrapper (`.owflow/hooks/`)
+
+Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. All discovery, execution, reporting, status, and log logic lives in `src/hooks/user-hooks.ts`; `src/cli/show-hooks.ts` (CLI) and `src/tui.ts` (TUI) hold the standalone surfaces.
+
+- Scripts are named `kebab-event.ext` (`tool-execute-before.sh` → `tool.execute.before`) and run as subprocesses; supported extensions are `.sh` and `.ps1`.
+- A stem may also name a v1 host event (`session-idle.sh` → `session.idle`). These fire only for their matching `event.type` via the single `event` hook, and accept the pinned `HOST_EVENT_NAMES` set (32 events); v2-only `session.next.*` names are rejected.
+- Git-hooks contract: scripts receive `{ event, session?, context }` as JSON on `stdin`. Exit `0` succeeds (`stdout`/`stderr` captured as logs); any non-zero exit (or missing interpreter / timeout) fails closed (`Blocked: <stderr || stdout || exit reason>. Hint: ...`) and ends the active session.
+- Visibility: startup `[owflow]` banner snapshot, `owflow-hooks` CLI, and the always-on TUI **Active hooks** right-sidebar panel — all "effective after next restart". Hooks load once, so restart OpenCode to reload.
+- `OWFLOW_HOOKS_DISABLED=1` bypasses user hooks (built-ins stay active). Baseline trust: scripts are host-project code run with the user's full privileges — inherited environment, no name/path validation, opt-in timeout via `OWFLOW_HOOK_TIMEOUT_MS`; the bypass switch is the operator control.
+- Full operator reference: @.owflow/docs/project/user-hooks.md
+
 ## Workflow Types Supported
 
 This plugin supports 4 workflow types that route to specialized orchestrators:

@@ -10,6 +10,12 @@ import * as commandsConfig from "../configuration/commands-config.js";
 import * as agentsConfig from "../configuration/agents-config.js";
 import * as sessionCompaction from "../hooks/session-compaction.js";
 import * as beforeTool from "../hooks/before-tool.js";
+import * as userHooksModule from "../hooks/user-hooks.js";
+import {
+  LOG_FILE_ENV,
+  readHookLogRecords,
+  type Dispatcher,
+} from "../hooks/user-hooks.js";
 import { verify_template } from "../tools/verify_template.js";
 import { fork_task } from "../tools/fork_task.js";
 
@@ -267,13 +273,14 @@ describe("OwflowPlugin index", () => {
       }
     });
 
-    test("should swallow non-'Blocked:' errors from guardAgainstDestructiveActions", async () => {
+    test("should swallow non-'Blocked:' errors from guardAgainstDestructiveActions and log a warning", async () => {
       const guardSpy = spyOn(
         beforeTool,
         "guardAgainstDestructiveActions",
       ).mockImplementation(async () => {
         throw new Error("Unexpected database connection error");
       });
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
 
       try {
         const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
@@ -283,8 +290,744 @@ describe("OwflowPlugin index", () => {
         await expect(
           plugin["tool.execute.before"]!(input, output),
         ).resolves.toBeUndefined();
+        expect(warnSpy).toHaveBeenCalledWith(
+          "[owflow] hooks: unexpected error in tool.execute.before (failing open): Unexpected database connection error",
+        );
       } finally {
         guardSpy.mockRestore();
+        warnSpy.mockRestore();
+      }
+    });
+
+    test("should bound tracked sessions by evicting the oldest entry past MAX_TRACKED_SESSIONS", async () => {
+      const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+      // First session uses whitelisted agent "task-group-implementer"
+      await plugin["chat.message"]!(
+        { sessionID: "sess-0", agent: "task-group-implementer" },
+        {} as any,
+      );
+
+      // Push 256 more sessions to evict sess-0 (MAX_TRACKED_SESSIONS = 256)
+      for (let i = 1; i <= 256; i += 1) {
+        await plugin["chat.message"]!(
+          { sessionID: `sess-${i}`, agent: "task-group-implementer" },
+          {} as any,
+        );
+      }
+
+      // sess-0 was evicted so it falls back to "main" (blocked for destructive actions),
+      // while sess-256 is still tracked as "task-group-implementer" (allowed).
+      await expect(
+        plugin["tool.execute.before"]!(
+          { tool: "bash", sessionID: "sess-0", callID: "c-evicted" },
+          { args: { command: "git reset --hard" } },
+        ),
+      ).rejects.toThrow(
+        'Blocked: destructive command not permitted for agent "main"',
+      );
+
+      await expect(
+        plugin["tool.execute.before"]!(
+          { tool: "bash", sessionID: "sess-256", callID: "c-retained" },
+          { args: { command: "git reset --hard" } },
+        ),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("hooks wrapper composition", () => {
+    const wrapperHandlerKeys = [
+      "tool.execute.after",
+      "tool.definition",
+      "chat.params",
+      "chat.headers",
+      "command.execute.before",
+      "shell.env",
+      "experimental.chat.messages.transform",
+      "experimental.chat.system.transform",
+      "experimental.compaction.autocontinue",
+      "experimental.text.complete",
+      "event",
+      "dispose",
+    ] as const;
+
+    const builtInKeys = [
+      "tool",
+      "config",
+      "experimental.session.compacting",
+      "chat.message",
+      "tool.execute.before",
+    ] as const;
+
+    type DispatchRecord = {
+      readonly event: string;
+      readonly input: unknown;
+      readonly output: Record<string, unknown> | undefined;
+    };
+
+    const asRecord = (plugin: unknown): Record<string, unknown> =>
+      plugin as Record<string, unknown>;
+
+    const withHooksEnabled = async <T>(run: () => Promise<T>): Promise<T> => {
+      const previous = process.env.OWFLOW_HOOKS_DISABLED;
+      delete process.env.OWFLOW_HOOKS_DISABLED;
+      try {
+        return await run();
+      } finally {
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
+        else process.env.OWFLOW_HOOKS_DISABLED = previous;
+      }
+    };
+
+    const withStatusFile = async <T>(
+      file: string,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      const previous = process.env.OWFLOW_HOOKS_STATUS_FILE;
+      process.env.OWFLOW_HOOKS_STATUS_FILE = file;
+      try {
+        return await run();
+      } finally {
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_STATUS_FILE;
+        else process.env.OWFLOW_HOOKS_STATUS_FILE = previous;
+      }
+    };
+
+    const withLogFile = async <T>(
+      file: string,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      const previous = process.env[LOG_FILE_ENV];
+      process.env[LOG_FILE_ENV] = file;
+      try {
+        return await run();
+      } finally {
+        if (previous === undefined) delete process.env[LOG_FILE_ENV];
+        else process.env[LOG_FILE_ENV] = previous;
+      }
+    };
+
+    const writeHookFile = (fileName: string, contents: string): string => {
+      const hooksDir = path.join(tmpDir, ".owflow", "hooks");
+      fs.mkdirSync(hooksDir, { recursive: true });
+      const filePath = path.join(hooksDir, fileName);
+      fs.writeFileSync(filePath, contents, "utf8");
+      return filePath;
+    };
+
+    const writeHookFixture = (stem: string): void => {
+      writeHookFile(`${stem}.sh`, "#!/bin/bash\n");
+    };
+
+    const stubDispatcher = (
+      behavior?: (record: DispatchRecord) => void,
+    ): Dispatcher => {
+      return async (event, input, output) => {
+        behavior?.({ event, input, output });
+      };
+    };
+
+    test("should expose the 12 wrapper dispatch handlers when hooks are enabled", async () => {
+      writeHookFixture("tool-execute-before");
+
+      await withHooksEnabled(async () => {
+        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+        for (const key of wrapperHandlerKeys) {
+          expect(typeof asRecord(plugin)[key]).toBe("function");
+        }
+      });
+    });
+
+    test("should reject the plugin factory when a hook entry fails digest validation", async () => {
+      writeHookFile("unknown-event.sh", "#!/bin/bash\n");
+
+      await withHooksEnabled(async () => {
+        await expect(
+          OwflowPlugin(mockPluginInput(tmpDir)),
+        ).rejects.toThrow(/\[owflow\] 1 invalid entry/);
+      });
+    });
+
+    test("should abort the current session when a gate hook reports failed", async () => {
+      writeHookFile(
+        "tool-execute-before.sh",
+        '#!/bin/bash\ncat >/dev/null\necho "gate broke" >&2\nexit 1\n',
+      );
+      const aborts: Array<{ path: { id: string } }> = [];
+      const pluginInput = {
+        ...mockPluginInput(tmpDir),
+        client: {
+          session: {
+            abort: async (options: { path: { id: string } }) => {
+              aborts.push(options);
+            },
+          },
+        },
+      };
+
+      await withHooksEnabled(async () => {
+        const plugin = await OwflowPlugin(pluginInput);
+        const input = {
+          tool: "bash",
+          sessionID: "sess-failed-gate",
+          callID: "call-failed-gate",
+        };
+
+        await expect(
+          plugin["tool.execute.before"]!(input, { args: { command: "ls" } }),
+        ).rejects.toThrow(/gate broke/);
+        expect(aborts).toEqual([{ path: { id: "sess-failed-gate" } }]);
+      });
+    });
+
+    test("should run the destructive guard before dispatching tool.execute.before", async () => {
+      const order: string[] = [];
+      const guardSpy = spyOn(
+        beforeTool,
+        "guardAgainstDestructiveActions",
+      ).mockImplementation(async () => {
+        order.push("guard");
+      });
+      const calls: DispatchRecord[] = [];
+      const wrapperSpy = spyOn(
+        userHooksModule,
+        "initializeHooksWrapper",
+      ).mockResolvedValue({
+        dispatch: stubDispatcher((record) => {
+          order.push(`dispatch:${record.event}`);
+          calls.push(record);
+        }),
+        snapshot: { entries: [] },
+        dispose: () => {},
+      });
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const input = {
+            tool: "bash",
+            sessionID: "sess-order",
+            callID: "call-order",
+          };
+          const output = { args: { command: "ls -la" } };
+
+          await plugin["tool.execute.before"]!(input, output);
+
+          expect(order).toEqual(["guard", "dispatch:tool.execute.before"]);
+          expect(calls[0]?.event).toBe("tool.execute.before");
+          expect(calls[0]?.input).toBe(input);
+          expect(calls[0]?.output).toBe(output);
+        });
+      } finally {
+        guardSpy.mockRestore();
+        wrapperSpy.mockRestore();
+      }
+    });
+
+    test("should keep the built-in reminder first on compaction", async () => {
+      const order: string[] = [];
+      const rereadSpy = spyOn(
+        sessionCompaction,
+        "rereadOrchestratorState",
+      ).mockImplementation(async (_directory, output) => {
+        order.push("reread");
+        output.context.push("built-in reminder");
+      });
+      const calls: DispatchRecord[] = [];
+      const wrapperSpy = spyOn(
+        userHooksModule,
+        "initializeHooksWrapper",
+      ).mockResolvedValue({
+        dispatch: stubDispatcher((record) => {
+          order.push(`dispatch:${record.event}`);
+          calls.push(record);
+        }),
+        snapshot: { entries: [] },
+        dispose: () => {},
+      });
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const input = { sessionID: "sess-compact" };
+          const output: { context: string[]; prompt?: string } = { context: [] };
+
+          await plugin["experimental.session.compacting"]!(input, output);
+
+          expect(order).toEqual([
+            "reread",
+            "dispatch:experimental.session.compacting",
+          ]);
+          expect(output.context).toEqual(["built-in reminder"]);
+          expect(output.prompt).toBeUndefined();
+          expect(calls[0]?.output).toBe(output);
+        });
+      } finally {
+        rereadSpy.mockRestore();
+        wrapperSpy.mockRestore();
+      }
+    });
+
+    test("should update the session map before chat.message dispatch and propagate gate errors", async () => {
+      const wrapperSpy = spyOn(
+        userHooksModule,
+        "initializeHooksWrapper",
+      ).mockResolvedValue({
+        dispatch: stubDispatcher((record) => {
+          if (record.event === "chat.message") {
+            throw new Error("chat dispatch exploded");
+          }
+        }),
+        snapshot: { entries: [] },
+        dispose: () => {},
+      });
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const chatInput = {
+            sessionID: "sess-gate",
+            agent: "codebase-analyzer",
+          };
+
+          await expect(
+            plugin["chat.message"]!(chatInput as any, {} as any),
+          ).rejects.toThrow("chat dispatch exploded");
+
+          await expect(
+            plugin["tool.execute.before"]!(
+              { tool: "bash", sessionID: "sess-gate", callID: "call-gate" },
+              { args: { command: "git reset --hard" } },
+            ),
+          ).rejects.toThrow(
+            'Blocked: destructive command not permitted for agent "codebase-analyzer"',
+          );
+        });
+      } finally {
+        wrapperSpy.mockRestore();
+      }
+    });
+
+    test("should configure first and propagate config dispatch errors to fail closed", async () => {
+      const order: string[] = [];
+      const calls: DispatchRecord[] = [];
+      const skillsSpy = spyOn(
+        skillsConfig,
+        "configureSkills",
+      ).mockImplementation(() => {
+        order.push("skills");
+      });
+      const commandsSpy = spyOn(
+        commandsConfig,
+        "configureCommands",
+      ).mockImplementation(() => {
+        order.push("commands");
+      });
+      const agentsSpy = spyOn(
+        agentsConfig,
+        "configureAgents",
+      ).mockImplementation(() => {
+        order.push("agents");
+      });
+      const wrapperSpy = spyOn(
+        userHooksModule,
+        "initializeHooksWrapper",
+      ).mockResolvedValue({
+        dispatch: stubDispatcher((record) => {
+          order.push(`dispatch:${record.event}`);
+          calls.push(record);
+          throw new Error("config script exploded");
+        }),
+        snapshot: { entries: [] },
+        dispose: () => {},
+      });
+      const consoleLogSpy = spyOn(console, "log").mockImplementation(
+        () => {},
+      );
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          const inputConfig = { small_model: "test-haiku" };
+
+          await expect(
+            plugin.config!(inputConfig as any),
+          ).rejects.toThrow("config script exploded");
+
+          expect(order).toEqual([
+            "skills",
+            "commands",
+            "agents",
+            "dispatch:config",
+          ]);
+          expect(calls[0]?.input).toBe(inputConfig);
+        });
+      } finally {
+        skillsSpy.mockRestore();
+        commandsSpy.mockRestore();
+        agentsSpy.mockRestore();
+        wrapperSpy.mockRestore();
+        consoleLogSpy.mockRestore();
+      }
+    });
+
+    test("should keep only the built-in hook shape and skip the scan when OWFLOW_HOOKS_DISABLED=1", async () => {
+      const previous = process.env.OWFLOW_HOOKS_DISABLED;
+      process.env.OWFLOW_HOOKS_DISABLED = "1";
+      writeHookFixture("tool-execute-before");
+      const scanSpy = spyOn(userHooksModule, "scanHooks");
+      const consoleLogSpy = spyOn(console, "log").mockImplementation(
+        () => {},
+      );
+
+      try {
+        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+        expect(Object.keys(plugin).sort()).toEqual([...builtInKeys].sort());
+        for (const key of wrapperHandlerKeys) {
+          expect(asRecord(plugin)[key]).toBeUndefined();
+        }
+        expect(typeof plugin.config).toBe("function");
+        expect(typeof plugin["experimental.session.compacting"]).toBe(
+          "function",
+        );
+        expect(typeof plugin["chat.message"]).toBe("function");
+        expect(typeof plugin["tool.execute.before"]).toBe("function");
+        expect(scanSpy).not.toHaveBeenCalled();
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+          expect.stringContaining("OWFLOW_HOOKS_DISABLED=1"),
+        );
+      } finally {
+        scanSpy.mockRestore();
+        consoleLogSpy.mockRestore();
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
+        else process.env.OWFLOW_HOOKS_DISABLED = previous;
+      }
+    });
+
+    test("should write an empty runtime snapshot at initialization, clearing prior statuses", async () => {
+      const statusFile = path.join(tmpDir, "runtime-status.json");
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({
+          version: 1,
+          pid: 1,
+          workspace: tmpDir,
+          updatedAt: 1,
+          hooks: {
+            event: { status: "success", startedAt: 1, finishedAt: 2 },
+          },
+        }),
+        "utf8",
+      );
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          expect(typeof plugin.dispose).toBe("function");
+
+          const snapshot = JSON.parse(
+            fs.readFileSync(statusFile, "utf8"),
+          ) as { hooks: Record<string, unknown>; workspace: string };
+          expect(snapshot.hooks).toEqual({});
+          expect(snapshot.workspace).toBe(tmpDir);
+        });
+      });
+    });
+
+    test("should persist one JSONL record per settled user hook run", async () => {
+      writeHookFile(
+        "tool-execute-before.sh",
+        '#!/bin/bash\ncat >/dev/null\necho "hooked stderr" >&2\nexit 0\n',
+      );
+      const statusFile = path.join(tmpDir, "logged-status.json");
+      const logFile = path.join(tmpDir, "hook-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin["tool.execute.before"]!(
+              {
+                tool: "bash",
+                sessionID: "ses_logged",
+                callID: "call-logged",
+              },
+              { args: { command: "ls" } },
+            );
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "tool.execute.before",
+                name: "tool-execute-before",
+                status: "success",
+                sessionID: "ses_logged",
+                exitCode: 0,
+                stderr: "hooked stderr\n",
+              });
+            }
+          });
+        });
+      });
+    });
+
+    test("should keep a silent catch-all event run out of the status snapshot and log", async () => {
+      writeHookFile(
+        "event.sh",
+        "#!/bin/bash\ncat >/dev/null\nexit 0\n",
+      );
+      const statusFile = path.join(tmpDir, "silent-event-status.json");
+      const logFile = path.join(tmpDir, "silent-event-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({ event: { type: "session.updated" } });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, unknown> };
+            expect(snapshot.hooks).toEqual({});
+
+            expect(readHookLogRecords(logFile)).toEqual({ kind: "missing" });
+          });
+        });
+      });
+    });
+
+    test("should report a catch-all event run that logs output", async () => {
+      writeHookFile(
+        "event.sh",
+        '#!/bin/bash\nenvelope="$(cat)"\nif [[ "$envelope" == *\'"type":"session.idle"\'* ]]; then\n  echo "[event-hook] building" >&2\nfi\nexit 0\n',
+      );
+      const statusFile = path.join(tmpDir, "fired-event-status.json");
+      const logFile = path.join(tmpDir, "fired-event-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({ event: { type: "session.updated" } });
+            await plugin.event!({ event: { type: "session.idle" } });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, { status: string }> };
+            expect(snapshot.hooks["event"]?.status).toBe("success");
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "event",
+                status: "success",
+                stderr: "[event-hook] building\n",
+              });
+            }
+          });
+        });
+      });
+    });
+
+    test("should fire an event-named hook only for its matching host event", async () => {
+      writeHookFile(
+        "session-idle.sh",
+        '#!/bin/bash\ncat >/dev/null\necho "idle fired" >&2\nexit 0\n',
+      );
+      const statusFile = path.join(tmpDir, "session-idle-status.json");
+      const logFile = path.join(tmpDir, "session-idle-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({
+              event: { type: "session.updated", properties: {} },
+            });
+            expect(fs.existsSync(logFile)).toBe(false);
+
+            await plugin.event!({
+              event: {
+                type: "session.idle",
+                properties: { sessionID: "ses_idle" },
+              },
+            });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, { status: string }> };
+            expect(snapshot.hooks["session.idle"]?.status).toBe("success");
+            expect(snapshot.hooks["event"]).toBeUndefined();
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "session.idle",
+                name: "session-idle",
+                sessionID: "ses_idle",
+                stderr: "idle fired\n",
+              });
+            }
+          });
+        });
+      });
+    });
+
+    test("should record a silent successful event-named hook without requiring output", async () => {
+      writeHookFile(
+        "session-idle.sh",
+        "#!/bin/bash\ncat >/dev/null\nexit 0\n",
+      );
+      const statusFile = path.join(tmpDir, "silent-named-status.json");
+      const logFile = path.join(tmpDir, "silent-named-logs.jsonl");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+            await plugin.event!({
+              event: {
+                type: "session.idle",
+                properties: { sessionID: "ses_silent" },
+              },
+            });
+            await plugin.dispose?.();
+
+            const snapshot = JSON.parse(
+              fs.readFileSync(statusFile, "utf8"),
+            ) as { hooks: Record<string, { status: string }> };
+            expect(snapshot.hooks["session.idle"]?.status).toBe("success");
+
+            const read = readHookLogRecords(logFile);
+            expect(read.kind).toBe("ok");
+            if (read.kind === "ok") {
+              expect(read.records).toHaveLength(1);
+              expect(read.records[0]).toMatchObject({
+                event: "session.idle",
+                name: "session-idle",
+                sessionID: "ses_silent",
+                status: "success",
+              });
+              expect(read.records[0]?.stderr).toBeUndefined();
+              expect(read.records[0]?.stdout).toBeUndefined();
+            }
+          });
+        });
+      });
+    });
+
+    test("should not write a status or log file when OWFLOW_HOOKS_DISABLED=1", async () => {
+      const previous = process.env.OWFLOW_HOOKS_DISABLED;
+      process.env.OWFLOW_HOOKS_DISABLED = "1";
+      const statusFile = path.join(tmpDir, "disabled-status.json");
+      const logFile = path.join(tmpDir, "disabled-logs.jsonl");
+
+      try {
+        await withStatusFile(statusFile, async () => {
+          await withLogFile(logFile, async () => {
+            const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+            expect(fs.existsSync(statusFile)).toBe(false);
+            expect(fs.existsSync(logFile)).toBe(false);
+            expect(plugin.dispose).toBeUndefined();
+          });
+        });
+      } finally {
+        if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
+        else process.env.OWFLOW_HOOKS_DISABLED = previous;
+      }
+    });
+
+    test("should run the user dispose dispatch before cleaning up", async () => {
+      const marker = path.join(tmpDir, "dispose-called.txt");
+      writeHookFile(
+        "dispose.sh",
+        `#!/bin/bash\ncat >/dev/null\nprintf 'called' >> "${marker}"\necho "dispose ran" >&2\nexit 0\n`,
+      );
+      const statusFile = path.join(tmpDir, "dispose-status.json");
+
+      await withHooksEnabled(async () => {
+        await withStatusFile(statusFile, async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+          await plugin.dispose?.();
+
+          expect(fs.readFileSync(marker, "utf8")).toBe("called");
+          const snapshot = JSON.parse(
+            fs.readFileSync(statusFile, "utf8"),
+          ) as { hooks: Record<string, { status: string }> };
+          expect(snapshot.hooks["dispose"]?.status).toBe("success");
+        });
+      });
+    });
+
+    test("should resolve with no-op wrapper handlers when the hooks directory is absent", async () => {
+      await withHooksEnabled(async () => {
+        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+        for (const key of wrapperHandlerKeys) {
+          const handler = asRecord(plugin)[key];
+          expect(typeof handler).toBe("function");
+          await (handler as (input: unknown, output: unknown) => Promise<void>)(
+            {},
+            {},
+          );
+        }
+      });
+    });
+
+    test("should serialize overlapping host-event dispatches on the event bus", async () => {
+      let active = 0;
+      let maxConcurrent = 0;
+      const order: string[] = [];
+
+      const wrapperSpy = spyOn(
+        userHooksModule,
+        "initializeHooksWrapper",
+      ).mockResolvedValue({
+        dispatch: async (event) => {
+          if (event === "session.idle") {
+            active += 1;
+            maxConcurrent = Math.max(maxConcurrent, active);
+            order.push("start");
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            order.push("end");
+            active -= 1;
+          }
+        },
+        snapshot: { entries: [] },
+        dispose: () => {},
+      });
+
+      try {
+        await withHooksEnabled(async () => {
+          const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+          await Promise.all([
+            plugin.event!({ event: { type: "session.idle" } }),
+            plugin.event!({ event: { type: "session.idle" } }),
+          ]);
+
+          expect(maxConcurrent).toBe(1);
+          expect(order).toEqual(["start", "end", "start", "end"]);
+        });
+      } finally {
+        wrapperSpy.mockRestore();
       }
     });
   });
