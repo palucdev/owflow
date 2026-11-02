@@ -98,6 +98,7 @@ export interface HookRuntimeEntry {
   readonly finishedAt?: number;
   readonly durationMs?: number;
   readonly reason?: string;
+  readonly sessionID?: string;
 }
 
 export interface HookStatusSnapshot {

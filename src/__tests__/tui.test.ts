@@ -5,12 +5,13 @@ import path from "node:path";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import tuiModule, {
   buildActiveHooksView,
+  buildHookLogsBody,
   colorForStatus,
-  effectiveStatuses,
+  DEFAULT_LOG_CHUNK_LINES,
   formatHookLogsMessage,
   formatHookRunSummary,
+  formatSessionHookLogsMessage,
   registerActiveHooksSidebar,
-  statusForDisplay,
   statusLabelFor,
 } from "../tui.js";
 import type { SidebarTheme } from "../tui.js";
@@ -250,7 +251,7 @@ const writeLogRecord = (
   overrides: Partial<HookRunLogRecord> = {},
 ): void => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(logRecord(overrides))}\n`, "utf8");
+  fs.appendFileSync(file, `${JSON.stringify(logRecord(overrides))}\n`, "utf8");
 };
 
 const wait = (ms: number): Promise<void> =>
@@ -375,52 +376,6 @@ describe("owflow TUI plugin", () => {
     expect(statusLabelFor("success")).toBe("Success");
     expect(statusLabelFor("failure")).toBe("Error");
     expect(statusLabelFor(undefined)).toBe("Idle");
-  });
-
-  test("should keep the last outcome visible until the hook runs again", () => {
-    const settled = {
-      status: "success" as const,
-      startedAt: 1_000,
-      finishedAt: 1_100,
-    };
-    expect(statusForDisplay(undefined)).toBeUndefined();
-    expect(statusForDisplay(settled)).toBe("success");
-    expect(
-      statusForDisplay({ status: "failure", startedAt: 1_000, finishedAt: 1_100 }),
-    ).toBe("failure");
-    expect(statusForDisplay({ status: "pending", startedAt: 1_000 })).toBe(
-      "pending",
-    );
-
-    const entries = new Map([
-      ["tool.execute.before", settled],
-      ["event", { status: "pending" as const, startedAt: 1_000 }],
-    ]);
-    expect(effectiveStatuses(entries)).toEqual(
-      new Map([
-        ["tool.execute.before", "success"],
-        ["event", "pending"],
-      ]),
-    );
-  });
-
-  test("should ignore runs that started before the panel's session epoch", () => {
-    const settled = {
-      status: "success" as const,
-      startedAt: 1_000,
-      finishedAt: 1_100,
-    };
-    expect(statusForDisplay(settled, 2_000)).toBeUndefined();
-    expect(statusForDisplay(settled, 1_000)).toBe("success");
-    expect(
-      statusForDisplay({ status: "pending", startedAt: 1_000 }, 2_000),
-    ).toBeUndefined();
-
-    const entries = new Map([["event", settled]]);
-    expect(effectiveStatuses(entries, 2_000)).toEqual(new Map());
-    expect(effectiveStatuses(entries, 1_000)).toEqual(
-      new Map([["event", "success"]]),
-    );
   });
 
   test("should render an always-on right sidebar panel with one line per hook", async () => {
@@ -1153,5 +1108,306 @@ describe("owflow TUI plugin", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  test("should load the current state of hooks logs for a given session when resuming", async () => {
+    const { root, hooksDir } = makeWorkspace();
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+    fs.writeFileSync(path.join(hooksDir, "chat-message.sh"), "");
+    fs.writeFileSync(path.join(hooksDir, "event.sh"), "");
+    const statusFile = path.join(root, "status.json");
+    const logFile = path.join(root, "hook-logs.jsonl");
+
+    const clock = Date.now();
+    // Earlier runs from ses_resumed
+    writeLogRecord(logFile, {
+      event: "tool.execute.before",
+      name: "tool-execute-before",
+      hook: path.join(hooksDir, "tool-execute-before.sh"),
+      sessionID: "ses_resumed",
+      status: "success",
+      startedAt: clock - 100_000,
+      finishedAt: clock - 99_000,
+      durationMs: 1_000,
+      stdout: "tool stdout\n",
+    });
+    writeLogRecord(logFile, {
+      event: "chat.message",
+      name: "chat-message",
+      hook: path.join(hooksDir, "chat-message.sh"),
+      sessionID: "ses_resumed",
+      status: "failure",
+      reason: "failed in resume",
+      startedAt: clock - 90_000,
+      finishedAt: clock - 89_000,
+      durationMs: 1_000,
+      stderr: "chat stderr\n",
+    });
+    // Another session run in between
+    writeLogRecord(logFile, {
+      event: "event",
+      name: "event",
+      hook: path.join(hooksDir, "event.sh"),
+      sessionID: "ses_other",
+      status: "success",
+      startedAt: clock - 50_000,
+      finishedAt: clock - 49_000,
+    });
+
+    const { api, slots, dialogCalls } = makeFakeApi(root);
+    const { runtime } = makeSolid();
+
+    await registerActiveHooksSidebar(api, root, async () => runtime, {
+      statusFile,
+      logFile,
+      pollMs: 5,
+      now: () => clock,
+    });
+
+    // Resume session "ses_resumed"
+    const rendered = slots[0]!.slots.sidebar_content!(
+      slotContext(),
+      { session_id: "ses_resumed" },
+    ) as FakeNode;
+    await wait(30);
+
+    // tool-execute-before was success
+    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("success-color");
+    expect(statusOf(rendered, "tool-execute-before").props.content).toBe("Success");
+
+    // chat-message was failure
+    expect(orbOf(rendered, "chat-message").props.fg).toBe("error-color");
+    expect(statusOf(rendered, "chat-message").props.content).toBe("Error");
+
+    // event was only run in ses_other, not ses_resumed, so it must be idle
+    expect(orbOf(rendered, "event").props.fg).toBe("muted-color");
+    expect(statusOf(rendered, "event").props.content).toBe("Idle");
+
+    // Click on tool-execute-before: opens dialog with the resumed log
+    clickRow(rendered, "tool-execute-before");
+    expect(dialogCalls).toHaveLength(1);
+    const detail = collectText(dialogCalls[0]!.render() as FakeNode);
+    expect(detail).toContain("Hook run: tool-execute-before");
+    expect(detail).toContain("Session: ses_resumed");
+    expect(detail).toContain("Success");
+
+    // View logs button opens logs with captured output
+    const button = findClickableByContent(dialogCalls[0]!.render() as FakeNode, "View logs");
+    expect(button).toBeDefined();
+    (button!.props.onMouseUp as () => void)();
+    expect(dialogCalls).toHaveLength(2);
+    const logs = collectText(dialogCalls[1]!.render() as FakeNode);
+    expect(logs).toContain("tool stdout");
+
+    // Clicking chat-message opens its run-detail with stderr
+    clickRow(rendered, "chat-message");
+    expect(dialogCalls).toHaveLength(3);
+    const chatDetail = collectText(dialogCalls[2]!.render() as FakeNode);
+    expect(chatDetail).toContain("failed in resume");
+
+    // Subsequent run in the resumed session updates the status properly
+    writeStatusSnapshot(statusFile, {
+      "tool.execute.before": "pending",
+    }, clock);
+    await wait(30);
+    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("warning-color");
+    expect(statusOf(rendered, "tool-execute-before").props.content).toBe("In progress");
+    // chat-message is preserved as error
+    expect(orbOf(rendered, "chat-message").props.fg).toBe("error-color");
+  });
+
+  test("formatSessionHookLogsMessage formats single and multiple session runs", () => {
+    const clock = 1_700_000_000_000;
+    const run1 = logRecord({
+      runId: "run#1",
+      sessionID: "ses_multi",
+      startedAt: clock,
+      finishedAt: clock + 100,
+      durationMs: 100,
+      status: "success",
+      stdout: "output from first run",
+    });
+    const run2 = logRecord({
+      runId: "run#2",
+      sessionID: "ses_multi",
+      startedAt: clock + 200,
+      finishedAt: clock + 350,
+      durationMs: 150,
+      status: "failure",
+      stderr: "error from second run",
+    });
+
+    // Single run formats plain hook logs
+    const single = formatSessionHookLogsMessage(run1);
+    expect(single).toContain("--- stdout ---\noutput from first run");
+    expect(single).not.toContain("=== Run #");
+
+    // Multiple runs format with headers for each run
+    const multi = formatSessionHookLogsMessage([run1, run2]);
+    expect(multi).toContain("=== Run #1");
+    expect(multi).toContain("output from first run");
+    expect(multi).toContain("=== Run #2");
+    expect(multi).toContain("error from second run");
+  });
+
+  test("buildHookLogsBody lazy loads large logs by scrolling without truncation", () => {
+    const { runtime } = makeSolid();
+    const onClose = mock(() => {});
+    const renders: number[] = [];
+    const renderer = {
+      requestRender: () => {
+        renders.push(Date.now());
+      },
+    };
+
+    // Create a record with 250 lines of stdout
+    const lines = Array.from({ length: 250 }, (_, i) => `log line ${i + 1}`);
+    const record = logRecord({
+      stdout: lines.join("\n"),
+    });
+
+    // Render with chunkLines = 50
+    const body = buildHookLogsBody(
+      record,
+      THEME,
+      runtime,
+      onClose,
+      20,
+      renderer,
+      50,
+    ) as FakeNode;
+
+    const scrollbox = body.children.find(
+      (c): c is FakeNode => typeof c === "object" && c.tag === "scrollbox",
+    );
+    expect(scrollbox).toBeDefined();
+
+    // Initial state: only first 50 lines loaded
+    let text = collectText(scrollbox!);
+    expect(text).toContain("log line 1");
+    expect(text).toContain("log line 49");
+    expect(text).not.toContain("log line 50");
+    expect(text).toContain("[scroll for more logs: 50/251 lines loaded]");
+    expect(text).not.toContain("[output truncated]");
+
+    // Scroll: onScroll handler triggers loadMore
+    expect(typeof scrollbox!.props.onScroll).toBe("function");
+    (scrollbox!.props.onScroll as () => void)();
+
+    // After 1st scroll: 100 lines loaded
+    text = collectText(scrollbox!);
+    expect(text).toContain("log line 50");
+    expect(text).toContain("log line 99");
+    expect(text).not.toContain("log line 100");
+    expect(text).toContain("[scroll for more logs: 100/251 lines loaded]");
+    expect(renders.length).toBe(1);
+
+    // Scroll more: via loadMore prop with custom chunk
+    expect(typeof scrollbox!.props.loadMore).toBe("function");
+    (scrollbox!.props.loadMore as (n: number) => void)(100);
+
+    // After 2nd scroll: 200 lines loaded
+    text = collectText(scrollbox!);
+    expect(text).toContain("log line 150");
+    expect(text).toContain("log line 199");
+    expect(text).not.toContain("log line 200");
+    expect(text).toContain("[scroll for more logs: 200/251 lines loaded]");
+
+    // Scroll to end
+    (scrollbox!.props.loadMore as (n: number) => void)(100);
+
+    // All 250 lines loaded, footer hint cleared, no truncation
+    text = collectText(scrollbox!);
+    expect(text).toContain("log line 250");
+    expect(text).not.toContain("[scroll for more logs");
+    expect(text).not.toContain("[output truncated]");
+  });
+
+  test("resuming a session with multiple runs of a hook shows session runs and lazy loads logs", async () => {
+    const { root, hooksDir } = makeWorkspace();
+    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+    const statusFile = path.join(root, "status.json");
+    const logFile = path.join(root, "hook-logs.jsonl");
+
+    const clock = Date.now();
+    // Run 1 in ses_multi
+    writeLogRecord(logFile, {
+      event: "tool.execute.before",
+      name: "tool-execute-before",
+      hook: path.join(hooksDir, "tool-execute-before.sh"),
+      sessionID: "ses_multi",
+      status: "success",
+      startedAt: clock - 20_000,
+      finishedAt: clock - 19_000,
+      durationMs: 1_000,
+      stdout: Array.from({ length: 80 }, (_, i) => `run1 line ${i + 1}`).join("\n"),
+    });
+    // Run 2 in ses_multi
+    writeLogRecord(logFile, {
+      event: "tool.execute.before",
+      name: "tool-execute-before",
+      hook: path.join(hooksDir, "tool-execute-before.sh"),
+      sessionID: "ses_multi",
+      status: "failure",
+      reason: "syntax error on run 2",
+      startedAt: clock - 10_000,
+      finishedAt: clock - 9_500,
+      durationMs: 500,
+      stderr: Array.from({ length: 80 }, (_, i) => `run2 error ${i + 1}`).join("\n"),
+    });
+
+    const { api, slots, dialogCalls } = makeFakeApi(root);
+    const { runtime } = makeSolid();
+
+    await registerActiveHooksSidebar(api, root, async () => runtime, {
+      statusFile,
+      logFile,
+      pollMs: 5,
+      now: () => clock,
+    });
+
+    const rendered = slots[0]!.slots.sidebar_content!(
+      slotContext(),
+      { session_id: "ses_multi" },
+    ) as FakeNode;
+    await wait(30);
+
+    // Latest status was failure
+    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("error-color");
+    expect(statusOf(rendered, "tool-execute-before").props.content).toBe("Error");
+
+    // Click opens run-detail popup showing both runs count
+    clickRow(rendered, "tool-execute-before");
+    expect(dialogCalls).toHaveLength(1);
+    const detail = collectText(dialogCalls[0]!.render() as FakeNode);
+    expect(detail).toContain("Hook run: tool-execute-before");
+    expect(detail).toContain("Runs in session: 2");
+
+    // Click View logs opens session logs popup
+    const button = findClickableByContent(dialogCalls[0]!.render() as FakeNode, "View logs");
+    expect(button).toBeDefined();
+    (button!.props.onMouseUp as () => void)();
+    expect(dialogCalls).toHaveLength(2);
+
+    const logs = dialogCalls[1]!.render() as FakeNode;
+    const scrollbox = logs.children.find(
+      (c): c is FakeNode => typeof c === "object" && c.tag === "scrollbox",
+    );
+    expect(scrollbox).toBeDefined();
+
+    // Initial content contains Run #1 and partial lines, lazy loaded
+    let logsText = collectText(scrollbox!);
+    expect(logsText).toContain("=== Run #1");
+    expect(logsText).toContain("run1 line 1");
+    expect(logsText).toContain("[scroll for more logs");
+
+    // Scroll to load all
+    (scrollbox!.props.loadAll as () => void)();
+    logsText = collectText(scrollbox!);
+    expect(logsText).toContain("=== Run #1");
+    expect(logsText).toContain("run1 line 80");
+    expect(logsText).toContain("=== Run #2");
+    expect(logsText).toContain("run2 error 80");
+    expect(logsText).not.toContain("[output truncated]");
   });
 });

@@ -3,7 +3,8 @@ import path from "node:path";
 import type { TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui";
 import {
   readHookStatusSnapshot,
-  readLatestHookLog,
+  readSessionHookLogs,
+  readSessionLatestLogs,
   resolveHooksLogFile,
   resolveHooksStatusFile,
   scanHooks,
@@ -88,24 +89,6 @@ export const colorForStatus = (
         ? theme.error
         : theme.textMuted;
 
-export const statusForDisplay = (
-  entry: HookRuntimeEntry | undefined,
-  notBefore = Number.NEGATIVE_INFINITY,
-): HookRunState | undefined =>
-  entry !== undefined && entry.startedAt >= notBefore ? entry.status : undefined;
-
-export const effectiveStatuses = (
-  entries: ReadonlyMap<string, HookRuntimeEntry>,
-  notBefore = Number.NEGATIVE_INFINITY,
-): Map<string, HookRunState> => {
-  const statuses = new Map<string, HookRunState>();
-  for (const [event, entry] of entries) {
-    const status = statusForDisplay(entry, notBefore);
-    if (status !== undefined) statuses.set(event, status);
-  }
-  return statuses;
-};
-
 const truncateMessage = (message: string, maxChars: number): string => {
   if (message.length <= maxChars) return message;
   const suffix = "\n[message truncated]";
@@ -146,6 +129,8 @@ export interface SidebarRenderHandle {
   readonly colors: Map<string, string>;
   readonly theme: SidebarTheme;
   readonly notBefore: number;
+  readonly sessionID?: string;
+  readonly sessionStates: Map<string, HookRunState>;
   disposed: () => boolean;
 }
 
@@ -192,27 +177,102 @@ const buildHeader = (
     ],
   );
 
-const buildHookLogsBody = (
-  record: HookRunLogRecord,
+export const DEFAULT_LOG_CHUNK_LINES = 100;
+
+export const formatSessionHookLogsMessage = (
+  recordOrRecords: HookRunLogRecord | readonly HookRunLogRecord[],
+  maxChars = Number.POSITIVE_INFINITY,
+): string => {
+  const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
+  if (records.length === 0) return "No output captured for this run.";
+  if (records.length === 1) return formatHookLogsMessage(records[0]!, maxChars);
+
+  const parts: string[] = [];
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i]!;
+    const time = new Date(rec.finishedAt).toISOString();
+    const status = rec.status === "success" ? "Success" : "Error";
+    const header = `=== Run #${i + 1} (${time}) — ${status} (${rec.durationMs} ms) ===`;
+    parts.push(header);
+    parts.push(formatHookLogsMessage(rec, maxChars));
+  }
+  return parts.join("\n\n");
+};
+
+export const buildHookLogsBody = (
+  recordOrRecords: HookRunLogRecord | readonly HookRunLogRecord[],
   theme: SidebarTheme,
   solid: SolidRuntime,
   onClose: () => void,
   maxHeight: number,
-): unknown =>
-  el(
+  renderer?: { requestRender: () => void },
+  chunkLines = DEFAULT_LOG_CHUNK_LINES,
+): unknown => {
+  const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
+  const name = records[0]?.name ?? "unknown";
+  const fullText = formatSessionHookLogsMessage(records);
+  const allLines = fullText.split("\n");
+  const totalLines = allLines.length;
+
+  let loadedLines = Math.min(totalLines, chunkLines);
+
+  const getVisibleText = (): string => allLines.slice(0, loadedLines).join("\n");
+  const getFooterText = (): string | undefined => {
+    if (loadedLines >= totalLines) return undefined;
+    return `[scroll for more logs: ${loadedLines}/${totalLines} lines loaded]`;
+  };
+
+  const bodyNode = txt(solid, getVisibleText(), theme.text, { width: "100%" });
+  const footerNode = txt(solid, getFooterText() ?? "", theme.textMuted, {
+    width: "100%",
+  });
+
+  const children: unknown[] = [bodyNode];
+  if (loadedLines < totalLines) {
+    children.push(footerNode);
+  }
+
+  const scrollbox = el(
+    solid,
+    "scrollbox",
+    { flexGrow: 1, width: "100%", maxHeight, focused: true },
+    children,
+  );
+
+  const loadMore = (lines = chunkLines): boolean => {
+    if (loadedLines >= totalLines) return false;
+    loadedLines = Math.min(totalLines, loadedLines + lines);
+    solid.setProp(bodyNode, "content", getVisibleText());
+    const footer = getFooterText();
+    if (footer !== undefined) {
+      solid.setProp(footerNode, "content", footer);
+    } else {
+      solid.setProp(footerNode, "content", "");
+    }
+    renderer?.requestRender();
+    return true;
+  };
+
+  solid.setProp(scrollbox, "onScroll", () => loadMore());
+  solid.setProp(scrollbox, "onWheel", () => loadMore());
+  solid.setProp(scrollbox, "loadMore", (lines?: number) => loadMore(lines));
+  solid.setProp(scrollbox, "loadAll", () => loadMore(totalLines));
+
+  try {
+    (scrollbox as any).on?.("scroll", () => loadMore());
+    (scrollbox as any).verticalScrollBar?.on?.("change", () => loadMore());
+  } catch {}
+
+  return el(
     solid,
     "box",
     { flexDirection: "column", width: "100%", paddingLeft: 2, paddingRight: 2, paddingTop: 1, paddingBottom: 1, gap: 1 },
     [
-      buildHeader(solid, `Hook logs: ${record.name}`, theme, onClose),
-      el(
-        solid,
-        "scrollbox",
-        { flexGrow: 1, width: "100%", maxHeight, focused: true },
-        [txt(solid, formatHookLogsMessage(record), theme.text, { width: "100%" })],
-      ),
+      buildHeader(solid, `Hook logs: ${name}`, theme, onClose),
+      scrollbox,
     ],
   );
+};
 
 const buildHookRunDetailBody = (
   record: HookRunLogRecord,
@@ -221,6 +281,7 @@ const buildHookRunDetailBody = (
   solid: SolidRuntime,
   onShowLogs: () => void,
   onClose: () => void,
+  totalRunsInSession?: number,
 ): unknown => {
   const button = solid.createElement("box");
   const buttonLabel = txt(solid, SHOW_LOGS_LABEL, theme.selectedListItemText, { flexShrink: 0 });
@@ -258,6 +319,9 @@ const buildHookRunDetailBody = (
     [
       buildHeader(solid, `Hook run: ${record.name}`, theme, onClose),
       txt(solid, formatHookRunSummary(record), theme.textMuted, { width: "100%", textAlign: "center" }),
+      ...(totalRunsInSession !== undefined && totalRunsInSession > 1
+        ? [txt(solid, `Runs in session: ${totalRunsInSession}`, theme.textMuted, { width: "100%", textAlign: "center" })]
+        : []),
       txt(solid, `Log file: ${logFile}`, theme.textMuted, { width: "100%", textAlign: "center" }),
       el(solid, "box", { flexDirection: "row", justifyContent: "center", width: "100%" }, [button]),
     ],
@@ -272,9 +336,12 @@ const materializeSidebar = (
   onRowHover: () => void,
   interactive: boolean,
   notBefore: number,
+  sessionID?: string,
+  initialStates?: ReadonlyMap<string, HookRunState>,
 ): SidebarRenderHandle => {
   const rows = new Map<string, { readonly orb: unknown; readonly label: unknown }>();
   const colors = new Map<string, string>();
+  const sessionStates = new Map<string, HookRunState>(initialStates);
   const root = el(solid, "box", { flexDirection: "column" }, [
     el(solid, "text", { fg: theme.text }, [view.title]),
   ]);
@@ -283,10 +350,12 @@ const materializeSidebar = (
     solid.insert(root, txt(solid, EMPTY_HOOKS_NAME, theme.textMuted));
   } else {
     for (const row of view.rows) {
+      const initialStatus = sessionStates.get(row.event);
+      const initialKey = initialStatus ?? "idle";
       const line = el(solid, "box", { flexDirection: "row", gap: 1 });
-      const orb = txt(solid, "•", colorForStatus(undefined, theme), { flexShrink: 0 });
+      const orb = txt(solid, "•", colorForStatus(initialStatus, theme), { flexShrink: 0 });
       const name = txt(solid, row.name, theme.text);
-      const label = txt(solid, statusLabelFor(undefined), theme.textMuted);
+      const label = txt(solid, statusLabelFor(initialStatus), theme.textMuted);
       let hint: unknown;
       if (interactive) {
         hint = txt(solid, OPEN_HINT, theme.textMuted, { flexShrink: 0 });
@@ -309,7 +378,7 @@ const materializeSidebar = (
       }
       solid.insert(root, line);
       rows.set(row.event, { orb, label });
-      colors.set(row.event, "idle");
+      colors.set(row.event, initialKey);
     }
   }
 
@@ -319,6 +388,8 @@ const materializeSidebar = (
     colors,
     theme,
     notBefore,
+    sessionID,
+    sessionStates,
     disposed: () => Boolean((root as { isDestroyed?: unknown } | null)?.isDestroyed),
   };
 };
@@ -341,11 +412,16 @@ export interface ActiveHooksSidebarOptions {
   readonly statusFile?: string;
   readonly logFile?: string;
   readonly readSnapshot?: (file: string) => HookStatusReadResult;
-  readonly readLatestLog?: (
+  readonly readSessionLogs?: (
+    file: string,
+    sessionID: string,
+  ) => Map<string, HookRunLogRecord>;
+  readonly readSessionHookLogs?: (
     file: string,
     event: HookEventName,
     since?: number,
-  ) => HookRunLogRecord | undefined;
+    sessionID?: string,
+  ) => readonly HookRunLogRecord[];
   readonly pollMs?: number;
   readonly now?: () => number;
 }
@@ -366,7 +442,8 @@ export const registerActiveHooksSidebar = async (
   const statusFile = options.statusFile ?? resolveHooksStatusFile(directory);
   const logFile = options.logFile ?? resolveHooksLogFile(directory);
   const readSnapshot = options.readSnapshot ?? readHookStatusSnapshot;
-  const readLatestLog = options.readLatestLog ?? readLatestHookLog;
+  const readSessionLogs = options.readSessionLogs ?? readSessionLatestLogs;
+  const readSessionLogsList = options.readSessionHookLogs ?? readSessionHookLogs;
   const now = options.now ?? Date.now;
   const handles: SidebarRenderHandle[] = [];
   let statuses = new Map<string, HookRuntimeEntry>();
@@ -375,12 +452,22 @@ export const registerActiveHooksSidebar = async (
 
   const applyToHandle = (
     handle: SidebarRenderHandle,
-    next: ReadonlyMap<string, HookRunState>,
+    snapshotEntries: ReadonlyMap<string, HookRuntimeEntry>,
   ): boolean => {
     try {
       let changed = false;
+      for (const [event, entry] of snapshotEntries) {
+        const belongs =
+          handle.sessionID !== undefined && handle.sessionID.length > 0
+            ? entry.sessionID === handle.sessionID ||
+              (entry.sessionID === undefined && entry.startedAt >= handle.notBefore)
+            : entry.startedAt >= handle.notBefore;
+        if (belongs) {
+          handle.sessionStates.set(event, entry.status);
+        }
+      }
       for (const [event, nodes] of handle.rows) {
-        const status = next.get(event);
+        const status = handle.sessionStates.get(event);
         const key = status ?? "idle";
         if (handle.colors.get(event) === key) continue;
         solid.setProp(nodes.orb, "fg", colorForStatus(status, handle.theme));
@@ -396,14 +483,19 @@ export const registerActiveHooksSidebar = async (
 
   const pollingEnabled = process.env.OWFLOW_HOOKS_DISABLED !== "1";
 
-  const openHookLogPopup = (row: ActiveHookRow, theme: SidebarTheme, notBefore: number): void => {
+  const openHookLogPopup = (
+    row: ActiveHookRow,
+    theme: SidebarTheme,
+    notBefore: number,
+    sessionID?: string,
+  ): void => {
     if (!pollingEnabled) return;
-    let record: HookRunLogRecord | undefined;
+    let records: readonly HookRunLogRecord[] = [];
     try {
-      record = readLatestLog(logFile, row.event, notBefore);
+      records = readSessionLogsList(logFile, row.event, notBefore, sessionID);
     } catch {}
     try {
-      if (record === undefined) {
+      if (records.length === 0) {
         api.ui.toast({
           variant: "info",
           title: "Hook logs",
@@ -411,20 +503,38 @@ export const registerActiveHooksSidebar = async (
         });
         return;
       }
+      const targetRecord = records[records.length - 1]!;
       const onClose = (): void => api.ui.dialog.clear();
       const showLogs = (): void => {
         try {
           const h = api.renderer.height;
           const maxHeight = Math.max(4, Math.floor(((h > 0 ? h : 24) * 3) / 4) - 8);
           api.ui.dialog.replace(
-            () => buildHookLogsBody(record, theme, solid, onClose, maxHeight) as SolidElement,
+            () =>
+              buildHookLogsBody(
+                records,
+                theme,
+                solid,
+                onClose,
+                maxHeight,
+                api.renderer,
+              ) as SolidElement,
             () => {},
           );
           api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
         } catch {}
       };
       api.ui.dialog.replace(
-        () => buildHookRunDetailBody(record, logFile, theme, solid, showLogs, onClose) as SolidElement,
+        () =>
+          buildHookRunDetailBody(
+            targetRecord,
+            logFile,
+            theme,
+            solid,
+            showLogs,
+            onClose,
+            records.length,
+          ) as SolidElement,
         () => {},
       );
       api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
@@ -451,7 +561,7 @@ export const registerActiveHooksSidebar = async (
 
       for (const handle of handles) {
         if (handle.disposed()) continue;
-        if (applyToHandle(handle, effectiveStatuses(statuses, handle.notBefore))) {
+        if (applyToHandle(handle, statuses)) {
           renderer.requestRender();
         }
       }
@@ -472,18 +582,30 @@ export const registerActiveHooksSidebar = async (
         ctx: { readonly theme: { readonly current: SidebarTheme } },
         props?: { readonly session_id?: string },
       ) => {
-        const key = props?.session_id ?? "";
+        const sessionID = props?.session_id;
+        const key = sessionID ?? "";
         const notBefore = sessionEpochs.get(key) ?? (sessionEpochs.set(key, now()), sessionEpochs.get(key)!);
+        const initialStates = new Map<string, HookRunState>();
+        if (sessionID !== undefined && sessionID.length > 0) {
+          try {
+            const sessionLogs = readSessionLogs(logFile, sessionID);
+            for (const [event, rec] of sessionLogs) {
+              initialStates.set(event, rec.status);
+            }
+          } catch {}
+        }
         const handle = materializeSidebar(
           view,
           ctx.theme.current,
           solid,
-          (row, theme) => openHookLogPopup(row, theme, notBefore),
+          (row, theme) => openHookLogPopup(row, theme, notBefore, sessionID),
           () => api.renderer.requestRender(),
           pollingEnabled,
           notBefore,
+          sessionID,
+          initialStates,
         );
-        applyToHandle(handle, effectiveStatuses(statuses, notBefore));
+        applyToHandle(handle, statuses);
         handles.push(handle);
         return handle.root;
       },

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Session-scoped, non-truncated hook logs with lazy-loaded scrolling** — hook outputs in active sessions are preserved in full without stream truncation, and displayed in the TUI logs popup with incremental lazy-loading as the user scrolls. Multiple runs within a session are grouped and viewable across the session lifecycle.
+
 ## [0.8.0] - 2026-10-29
 
 ### Changed

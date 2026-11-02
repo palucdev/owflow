@@ -16,7 +16,7 @@ owflow exposes OpenCode's lifecycle events to the host project as git-style scri
 All 16 lifecycle events and 32 host events are fail-closed gate hooks:
 
 - **Input (`stdin`)**: JSON object `{ event, session?: { sessionID }, context }`. Host class instances inside `context` are stripped to identity keys (`id`, `sessionID`, `messageID`, `partID`, `callID`, `providerID`, `type`, `name`, `tool`).
-- **Success (`exit 0`)**: Operation continues; `stdout` and `stderr` (up to 16 KB each) are captured into the workspace JSONL runtime log (`owflow-hook-logs-<hash>.jsonl`, 4 MB rotation) and TUI logs popup. Silent successful runs of the catch-all `event` hook are treated as no-ops so hot bus events do not flood logs or TUI status.
+- **Success (`exit 0`)**: Operation continues; `stdout` and `stderr` are captured into the workspace JSONL runtime log (`owflow-hook-logs-<hash>.jsonl`, 4 MB rotation). Session hook logs are captured in full without truncation and lazy-loaded by scrolling in the TUI logs popup (non-session runs remain capped at 16 KB per stream). Silent successful runs of the catch-all `event` hook are treated as no-ops so hot bus events do not flood logs or TUI status.
 - **Failure (`exit != 0`, signal, timeout, or missing interpreter)**: Fails closed with `Blocked: <stderr || stdout || exit reason>. Hint: ...` and aborts the active session.
 
 ## Controls & Visibility
@@ -24,4 +24,4 @@ All 16 lifecycle events and 32 host events are fail-closed gate hooks:
 - `OWFLOW_HOOKS_DISABLED=1`: bypasses user hooks (built-in destructive-command guard and compaction reminder stay active).
 - `OWFLOW_HOOK_TIMEOUT_MS=<ms>`: opt-in per-hook execution timeout.
 - `owflow-hooks` CLI (`src/cli/show-hooks.ts`): prints the table or `--json` report and exits `1` on invalid entries.
-- TUI **Active hooks** sidebar (`src/tui.ts`): polls `owflow-hooks-<hash>.json` for live status orbs (`Idle`, `In progress`, `Success`, `Error`) and opens the latest session run details + captured `stderr`/`stdout` on click.
+- TUI **Active hooks** sidebar (`src/tui.ts`): polls `owflow-hooks-<hash>.json` for live status orbs (`Idle`, `In progress`, `Success`, `Error`) and opens session run details + captured `stderr`/`stdout` on click with lazy-loaded scrolling.

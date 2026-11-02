@@ -18,7 +18,6 @@ import {
   type HookReportInput,
   type HookReportRow,
   type HookRunLogRecord,
-  type HookRunState,
   type HookRuntimeEntry,
   type HookScan,
   type HookStatusReadResult,
@@ -26,7 +25,6 @@ import {
   type HookValidationFailure,
   type HooksWrapper,
   type HooksWrapperOptions,
-  type HostEventName,
   type InterpreterResolution,
 } from "../types/hook-types.js";
 
@@ -284,10 +282,44 @@ export const readLatestHookLog = (
   file: string,
   event: HookEventName,
   since = Number.NEGATIVE_INFINITY,
+  sessionID?: string,
 ): HookRunLogRecord | undefined => {
+  const records = readSessionHookLogs(file, event, since, sessionID);
+  return records.length > 0 ? records[records.length - 1] : undefined;
+};
+
+export const readSessionLatestLogs = (
+  file: string,
+  sessionID: string,
+): Map<string, HookRunLogRecord> => {
+  const map = new Map<string, HookRunLogRecord>();
+  if (!sessionID) return map;
   const result = readHookLogRecords(file);
-  if (result.kind !== "ok") return undefined;
-  return result.records.findLast((r) => r.event === event && r.startedAt >= since);
+  if (result.kind !== "ok") return map;
+  for (const record of result.records) {
+    if (record.sessionID === sessionID) {
+      map.set(record.event, record);
+    }
+  }
+  return map;
+};
+
+export const readSessionHookLogs = (
+  file: string,
+  event: HookEventName,
+  since = Number.NEGATIVE_INFINITY,
+  sessionID?: string,
+): readonly HookRunLogRecord[] => {
+  const result = readHookLogRecords(file);
+  if (result.kind !== "ok") return [];
+  return result.records.filter((r) => {
+    if (r.event !== event) return false;
+    if (sessionID !== undefined && sessionID.length > 0) {
+      if (r.sessionID === sessionID) return true;
+      if (r.sessionID !== undefined) return false;
+    }
+    return r.startedAt >= since;
+  });
 };
 
 /* ── Git-Hooks Style Execution & Dispatch ─────────────────────────────────── */
@@ -342,7 +374,10 @@ const sessionIDFrom = (input: unknown): string | undefined => {
   return typeof candidate === "string" && candidate.length > 0 ? candidate : undefined;
 };
 
-const capStream = (text: string): { text: string; truncated: boolean } => {
+const capStream = (text: string, isSession = false): { text: string; truncated: boolean } => {
+  if (isSession) {
+    return { text, truncated: false };
+  }
   if (Buffer.byteLength(text, "utf8") <= MAX_CAPTURE_BYTES) {
     return { text, truncated: false };
   }
@@ -414,7 +449,14 @@ export const initializeHooksWrapper = async (
       if (!entry.interpreter.available || !entry.interpreter.resolved) {
         const label = entry.interpreter.resolved ?? entry.interpreter.expected;
         const reason = `${label} is not available`;
-        statuses.set(event, { status: "failure", startedAt, finishedAt: startedAt, durationMs: 0, reason });
+        statuses.set(event, {
+          status: "failure",
+          startedAt,
+          finishedAt: startedAt,
+          durationMs: 0,
+          reason,
+          ...(sessionID ? { sessionID } : {}),
+        });
         writeStatusFile(statusFile, directory, statuses);
         appendLog({
           version: 1, runId, pid: process.pid, workspace: directory,
@@ -429,7 +471,11 @@ export const initializeHooksWrapper = async (
       }
 
       const previousStatus = statuses.get(event);
-      statuses.set(event, { status: "pending", startedAt });
+      statuses.set(event, {
+        status: "pending",
+        startedAt,
+        ...(sessionID ? { sessionID } : {}),
+      });
       writeStatusFile(statusFile, directory, statuses);
 
       // shortcut: buffers full child stdout/stderr via Response.text() before slicing to 16KB;
@@ -478,8 +524,9 @@ export const initializeHooksWrapper = async (
 
       const finishedAt = Date.now();
       const durationMs = Math.max(0, finishedAt - startedAt);
-      const out = capStream(rawStdout);
-      const err = capStream(rawStderr);
+      const isSession = sessionID !== undefined && sessionID.length > 0;
+      const out = capStream(rawStdout, isSession);
+      const err = capStream(rawStderr, isSession);
       const truncated = out.truncated || err.truncated;
       const signal = proc.signalCode ?? null;
       const ok = !timedOut && exitCode === 0 && signal === null;
@@ -504,6 +551,7 @@ export const initializeHooksWrapper = async (
         finishedAt,
         durationMs,
         ...(reason ? { reason } : {}),
+        ...(sessionID ? { sessionID } : {}),
       });
       writeStatusFile(statusFile, directory, statuses);
 

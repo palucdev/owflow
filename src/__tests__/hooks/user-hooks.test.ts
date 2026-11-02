@@ -21,6 +21,8 @@ import {
   readHookLogRecords,
   readHookStatusSnapshot,
   readLatestHookLog,
+  readSessionHookLogs,
+  readSessionLatestLogs,
   renderJson,
   renderSnapshot,
   renderTable,
@@ -226,17 +228,25 @@ describe("user-hooks (consolidated user-hooks engine)", () => {
       { statusFile, logFile },
     );
 
+    // Session hook run is NOT truncated
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: "ses_ok" }, {});
-    const latestOk = readLatestHookLog(logFile, HookEvent.ToolExecuteBefore);
+    const latestOk = readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, Number.NEGATIVE_INFINITY, "ses_ok");
     expect(latestOk?.status).toBe("success");
-    expect(latestOk?.truncated).toBe(true);
+    expect(latestOk?.truncated).toBeUndefined();
+    expect(latestOk?.stdout?.length).toBeGreaterThan(MAX_CAPTURE_BYTES);
     expect(latestOk?.stderr).toBe("warn line\n");
     expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, Date.now() + 10_000)).toBeUndefined();
 
+    // Non-session hook run caps at MAX_CAPTURE_BYTES and is marked truncated
+    await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
+    const nonSession = readLatestHookLog(logFile, HookEvent.ToolExecuteBefore);
+    expect(nonSession?.status).toBe("success");
+    expect(nonSession?.truncated).toBe(true);
+
     // Coalescing identical consecutive run does not duplicate JSONL line
-    await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: "ses_ok" }, {});
+    await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
     const logsAfterRepeat = readHookLogRecords(logFile);
-    expect(logsAfterRepeat.kind === "ok" && logsAfterRepeat.records.length).toBe(1);
+    expect(logsAfterRepeat.kind === "ok" && logsAfterRepeat.records.length).toBe(2);
 
     // Non-zero exit fails closed and ends session
     await expect(
@@ -303,5 +313,100 @@ describe("user-hooks (consolidated user-hooks engine)", () => {
     });
     await handlers.event!({ event: { type: "session.idle" } } as any);
     expect(events).toEqual(["session.idle", "event"]);
+  });
+
+  test("readSessionLatestLogs and readLatestHookLog support session-specific log retrieval", async () => {
+    const root = makeTempDir();
+    const logFile = path.join(root, "test-logs.jsonl");
+
+    // Empty or missing file
+    expect(readSessionLatestLogs(logFile, "ses_1")).toEqual(new Map());
+    expect(readSessionLatestLogs(logFile, "")).toEqual(new Map());
+
+    const recordA1 = {
+      version: 1,
+      runId: "tool.execute.before#1",
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: "/hook1.sh",
+      name: "tool-execute-before",
+      sessionID: "ses_1",
+      startedAt: 1_000,
+      finishedAt: 1_050,
+      durationMs: 50,
+      status: "failure" as const,
+      reason: "failed run 1",
+    };
+    const recordA2 = {
+      version: 1,
+      runId: "tool.execute.before#2",
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: "/hook1.sh",
+      name: "tool-execute-before",
+      sessionID: "ses_1",
+      startedAt: 2_000,
+      finishedAt: 2_050,
+      durationMs: 50,
+      status: "success" as const,
+    };
+    const recordB1 = {
+      version: 1,
+      runId: "chat.message#1",
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ChatMessage,
+      hook: "/hook2.sh",
+      name: "chat-message",
+      sessionID: "ses_1",
+      startedAt: 2_500,
+      finishedAt: 2_550,
+      durationMs: 50,
+      status: "failure" as const,
+    };
+    const recordOther = {
+      version: 1,
+      runId: "tool.execute.before#3",
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: "/hook1.sh",
+      name: "tool-execute-before",
+      sessionID: "ses_2",
+      startedAt: 3_000,
+      finishedAt: 3_050,
+      durationMs: 50,
+      status: "failure" as const,
+    };
+
+    fs.writeFileSync(
+      logFile,
+      [recordA1, recordA2, recordB1, recordOther].map((r) => JSON.stringify(r)).join("\n") + "\n",
+      "utf8",
+    );
+
+    // readSessionLatestLogs returns latest record per event for ses_1
+    const ses1Logs = readSessionLatestLogs(logFile, "ses_1");
+    expect(ses1Logs.size).toBe(2);
+    expect(ses1Logs.get(HookEvent.ToolExecuteBefore)).toEqual(recordA2);
+    expect(ses1Logs.get(HookEvent.ChatMessage)).toEqual(recordB1);
+
+    // ses_2 only has recordOther
+    const ses2Logs = readSessionLatestLogs(logFile, "ses_2");
+    expect(ses2Logs.size).toBe(1);
+    expect(ses2Logs.get(HookEvent.ToolExecuteBefore)).toEqual(recordOther);
+
+    // readLatestHookLog with sessionID
+    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, "ses_1")).toEqual(recordA2);
+    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, "ses_2")).toEqual(recordOther);
+    expect(readLatestHookLog(logFile, HookEvent.ChatMessage, 5_000, "ses_2")).toBeUndefined();
+
+    // readSessionHookLogs returns all records for that session event
+    const ses1ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, "ses_1");
+    expect(ses1ToolLogs).toEqual([recordA1, recordA2]);
+    const ses2ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, "ses_2");
+    expect(ses2ToolLogs).toEqual([recordOther]);
   });
 });

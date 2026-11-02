@@ -2,7 +2,6 @@ export const guardAgainstDestructiveActions = async (
   input: {
     tool: string;
     sessionID: string;
-    callID: string;
   },
   output: {
     args: any;
