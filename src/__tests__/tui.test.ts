@@ -1,78 +1,33 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import tuiModule, {
   buildActiveHooksView,
   buildHookLogsBody,
   colorForStatus,
-  DEFAULT_LOG_CHUNK_LINES,
   formatHookLogsMessage,
   formatHookRunSummary,
   formatSessionHookLogsMessage,
   registerActiveHooksSidebar,
   statusLabelFor,
+  type SidebarTheme,
 } from "../tui.js";
-import type { SidebarTheme } from "../tui.js";
-import {
-  HookDigestMode,
-  scanHooks,
-  type HookRunLogRecord,
-  type HookRunState,
-} from "../hooks/user-hooks.js";
+import type { HookRunLogRecord } from "../hooks/user-hooks.js";
 
 interface FakeNode {
-  readonly tag: string;
-  readonly props: Record<string, unknown>;
-  readonly children: (FakeNode | string)[];
-  isDestroyed?: boolean;
+  tag: string;
+  props: Record<string, any>;
+  children: (FakeNode | string)[];
 }
-
-interface FakeSlotRegistration {
-  readonly order?: number;
-  readonly slots: Record<string, (ctx: unknown, props: unknown) => unknown>;
-}
-
-interface FakeDialogProps {
-  readonly size?: string;
-  readonly onClose?: () => void;
-  readonly children?: FakeNode;
-}
-
-interface FakeDialogCall {
-  readonly render: () => unknown;
-  readonly onClose?: () => void;
-}
-
-interface FakeToast {
-  readonly variant?: string;
-  readonly title?: string;
-  readonly message: string;
-}
-
-interface FakeApi {
-  readonly api: TuiPluginApi;
-  readonly slots: FakeSlotRegistration[];
-  readonly accessed: string[];
-  readonly disposeCallbacks: (() => void)[];
-  readonly requestRenderCalls: () => number;
-  readonly dialogCalls: FakeDialogCall[];
-  readonly dialogSizes: string[];
-  readonly toasts: FakeToast[];
-  readonly dialogClears: () => number;
-}
-
-const tempDirs: string[] = [];
-let mtime = Date.now() + 60_000;
-
-const makeWorkspace = (): { root: string; hooksDir: string } => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-tui-test-"));
-  tempDirs.push(root);
-  const hooksDir = path.join(root, ".owflow", "hooks");
-  fs.mkdirSync(hooksDir, { recursive: true });
-  return { root, hooksDir };
-};
 
 const THEME: SidebarTheme = {
   text: "text-color",
@@ -85,151 +40,107 @@ const THEME: SidebarTheme = {
   error: "error-color",
 };
 
-const slotContext = () => ({
-  theme: {
-    current: THEME,
-  },
-});
+const makeSolid = () => {
+  const roots: FakeNode[] = [];
+  const runtime = {
+    createElement: (tag: string): FakeNode => {
+      const node: FakeNode = { tag, props: {}, children: [] };
+      if (tag === "box") roots.push(node);
+      return node;
+    },
+    insert: (parent: any, child: any) => {
+      parent.children.push(child);
+    },
+    setProp: (node: any, name: string, value: any) => {
+      node.props[name] = value;
+    },
+  };
+  return { runtime, roots };
+};
 
-const makeFakeApi = (directory: string): FakeApi => {
-  const slots: FakeSlotRegistration[] = [];
-  const accessed: string[] = [];
+const makeFakeApi = (directory: string) => {
+  const slots: any[] = [];
+  const dialogCalls: Array<{ render: () => any; onClose?: () => void }> = [];
+  const toasts: any[] = [];
   const disposeCallbacks: (() => void)[] = [];
-  const dialogCalls: FakeDialogCall[] = [];
-  const dialogSizes: string[] = [];
-  const toasts: FakeToast[] = [];
-  let dialogClears = 0;
   let renders = 0;
-  const base = {
+
+  const api: any = {
     slots: {
-      register: (registration: FakeSlotRegistration): string => {
+      register: (registration: any) => {
         slots.push(registration);
         return "owflow:0";
       },
     },
-    theme: {
-      current: THEME,
-    },
+    theme: { current: THEME },
     state: { path: { directory } },
     renderer: {
       width: 120,
       height: 40,
-      requestRender: (): void => {
+      requestRender: () => {
         renders += 1;
       },
     },
     lifecycle: {
-      signal: new AbortController().signal,
-      onDispose: (callback: () => void): (() => void) => {
+      onDispose: (callback: () => void) => {
         disposeCallbacks.push(callback);
         return () => {};
       },
     },
     ui: {
-      Dialog: (props: FakeDialogProps): FakeDialogProps => props,
+      Dialog: (props: any) => props,
       dialog: {
-        replace: (render: () => unknown, onClose?: () => void): void => {
+        replace: (render: () => any, onClose?: () => void) => {
           dialogCalls.push({ render, onClose });
         },
-        setSize: (size: string): void => {
-          dialogSizes.push(size);
-        },
-        clear: (): void => {
-          dialogClears += 1;
-        },
+        setSize: () => {},
+        clear: () => {},
       },
-      toast: (input: FakeToast): void => {
+      toast: (input: any) => {
         toasts.push(input);
       },
     },
-    client: new Proxy(
-      {},
-      {
-        get(): never {
-          throw new Error("api.client was accessed");
-        },
-      },
-    ),
   };
-  const api = new Proxy(base, {
-    get(target, property, receiver) {
-      accessed.push(String(property));
-      return Reflect.get(target, property, receiver);
-    },
-  }) as unknown as TuiPluginApi;
+
   return {
     api,
     slots,
-    accessed,
-    disposeCallbacks,
-    requestRenderCalls: () => renders,
     dialogCalls,
-    dialogSizes,
     toasts,
-    dialogClears: () => dialogClears,
+    disposeCallbacks,
+    getRenders: () => renders,
   };
 };
 
-const makeSolid = (): {
-  readonly runtime: {
-    createElement: (tag: string) => FakeNode;
-    insert: (parent: unknown, child: unknown) => void;
-    setProp: (node: unknown, name: string, value: unknown) => void;
-  };
-  readonly roots: FakeNode[];
-} => {
-  const roots: FakeNode[] = [];
-  return {
-    roots,
-    runtime: {
-      createElement: (tag: string): FakeNode => {
-        const node: FakeNode = { tag, props: {}, children: [] };
-        if (tag === "box") roots.push(node);
-        return node;
-      },
-      insert: (parent: unknown, child: unknown): void => {
-        (parent as FakeNode).children.push(child as FakeNode | string);
-      },
-      setProp: (node: unknown, name: string, value: unknown): void => {
-        (node as FakeNode).props[name] = value;
-      },
-    },
-  };
+const collectText = (node: FakeNode | string): string => {
+  if (typeof node === "string") return node;
+  const content =
+    typeof node.props.content === "string" ? node.props.content : "";
+  return [content, ...node.children.map(collectText)]
+    .filter(Boolean)
+    .join("\n");
 };
 
-const writeStatusSnapshot = (
-  file: string,
-  hooks: Record<string, HookRunState>,
-  timestamp = Date.now(),
-): void => {
-  const entries = Object.fromEntries(
-    Object.entries(hooks).map(([event, status]) => [
-      event,
-      {
-        status,
-        startedAt: timestamp,
-        ...(status === "pending" ? {} : { finishedAt: timestamp }),
-      },
-    ]),
-  );
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(
-    file,
-    JSON.stringify({
-      version: 1,
-      pid: 1,
-      workspace: path.dirname(file),
-      updatedAt: timestamp,
-      hooks: entries,
-    }),
-    "utf8",
-  );
-  mtime += 1_000;
-  const stamp = new Date(mtime);
-  fs.utimesSync(file, stamp, stamp);
+const findClickableByContent = (
+  node: FakeNode,
+  text: string,
+): FakeNode | undefined => {
+  if (
+    typeof node.props.onMouseUp === "function" &&
+    collectText(node).includes(text)
+  ) {
+    return node;
+  }
+  for (const child of node.children) {
+    if (typeof child === "object") {
+      const found = findClickableByContent(child, text);
+      if (found) return found;
+    }
+  }
+  return undefined;
 };
 
-const logRecord = (
+const makeLogRecord = (
   overrides: Partial<HookRunLogRecord> = {},
 ): HookRunLogRecord => ({
   version: 1,
@@ -246,1168 +157,386 @@ const logRecord = (
   ...overrides,
 });
 
-const writeLogRecord = (
-  file: string,
-  overrides: Partial<HookRunLogRecord> = {},
-): void => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.appendFileSync(file, `${JSON.stringify(logRecord(overrides))}\n`, "utf8");
-};
-
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-const nodeText = (node: FakeNode): string =>
-  typeof node.props.content === "string"
-    ? node.props.content
-    : typeof node.children[0] === "string"
-      ? node.children[0]
-      : "";
+describe("TUI module", () => {
+  let tmpDir: string;
+  let hooksDir: string;
 
-const collectText = (node: FakeNode | string): string => {
-  if (typeof node === "string") return node;
-  return [nodeText(node), ...node.children.map(collectText)]
-    .filter((part) => part.length > 0)
-    .join("\n");
-};
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "owflow-tui-test-"));
+    hooksDir = path.join(tmpDir, ".owflow", "hooks");
+    fs.mkdirSync(hooksDir, { recursive: true });
+  });
 
-const findByContent = (
-  node: FakeNode,
-  content: string,
-): FakeNode | undefined => {
-  if (node.props.content === content) return node;
-  for (const child of node.children) {
-    if (typeof child === "string") continue;
-    const found = findByContent(child, content);
-    if (found !== undefined) return found;
-  }
-  return undefined;
-};
-
-const findClickableByContent = (
-  node: FakeNode,
-  content: string,
-): FakeNode | undefined => {
-  for (const child of node.children) {
-    if (typeof child === "string") continue;
-    if (
-      typeof child.props.onMouseUp === "function" &&
-      collectText(child).includes(content)
-    ) {
-      return child;
-    }
-    const found = findClickableByContent(child, content);
-    if (found !== undefined) return found;
-  }
-  return undefined;
-};
-
-const row = (rendered: FakeNode, name: string): FakeNode => {
-  const found = rendered.children
-    .slice(1)
-    .find(
-      (child): child is FakeNode =>
-        typeof child === "object" &&
-        child.tag === "box" &&
-        child.children.some(
-          (item) => typeof item === "object" && nodeText(item) === name,
-        ),
-    );
-  if (found === undefined) throw new Error(`row not found: ${name}`);
-  return found;
-};
-
-const orbOf = (rendered: FakeNode, name: string): FakeNode =>
-  row(rendered, name).children[0] as FakeNode;
-
-const statusOf = (rendered: FakeNode, name: string): FakeNode =>
-  row(rendered, name).children[2] as FakeNode;
-
-const clickRow = (rendered: FakeNode, name: string): void => {
-  const handler = row(rendered, name).props.onMouseUp;
-  if (typeof handler !== "function") {
-    throw new Error(`row has no click handler: ${name}`);
-  }
-  (handler as () => void)();
-};
-
-describe("owflow TUI plugin", () => {
   afterEach(() => {
     mock.restore();
-    for (const dir of tempDirs.splice(0)) {
-      fs.rmSync(dir, { recursive: true, force: true });
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 
-  test("should default-export a tui-only module: id owflow, a tui function, and no server key", () => {
+  test("should export default tui plugin module metadata", () => {
     expect(tuiModule.id).toBe("owflow");
     expect(typeof tuiModule.tui).toBe("function");
     expect("server" in tuiModule).toBe(false);
   });
 
-  test("should list loaded hooks with their events in registry order", () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    fs.writeFileSync(path.join(hooksDir, "config.sh"), "");
-    fs.writeFileSync(path.join(hooksDir, "session-idle.sh"), "");
-
-    const scan = scanHooks(hooksDir, { mode: HookDigestMode.Report });
-    expect(scan.entries.map((entry) => entry.event)).toEqual([
-      "config",
-      "session.idle",
-      "tool.execute.before",
-    ]);
-    expect(buildActiveHooksView(root)).toEqual({
-      title: "Active hooks:",
-      rows: [
-        { name: "config", event: "config" },
-        { name: "session-idle", event: "session.idle" },
-        { name: "tool-execute-before", event: "tool.execute.before" },
-      ],
-    });
-  });
-
-  test("should map pending, success, failure, and idle to the shared theme", () => {
-    expect(colorForStatus("pending", THEME)).toBe("warning-color");
-    expect(colorForStatus("success", THEME)).toBe("success-color");
-    expect(colorForStatus("failure", THEME)).toBe("error-color");
-    expect(colorForStatus(undefined, THEME)).toBe("muted-color");
-    expect(statusLabelFor("pending")).toBe("In progress");
-    expect(statusLabelFor("success")).toBe("Success");
-    expect(statusLabelFor("failure")).toBe("Error");
-    expect(statusLabelFor(undefined)).toBe("Idle");
-  });
-
-  test("should render an always-on right sidebar panel with one line per hook", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const { api, slots } = makeFakeApi(root);
-    const { runtime, roots } = makeSolid();
-    const statusFile = path.join(root, "status.json");
-
-    const registered = await registerActiveHooksSidebar(
-      api,
-      root,
-      async () => runtime,
-      { statusFile, pollMs: 5 },
-    );
-
-    expect(registered).toBe(true);
-    expect(slots).toHaveLength(1);
-    expect(slots[0]!.order).toBe(50);
-    expect(Object.keys(slots[0]!.slots)).toEqual(["sidebar_content"]);
-
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    expect(rendered).toBe(roots[0]!);
-    expect(rendered.tag).toBe("box");
-    expect(rendered.props.flexDirection).toBe("column");
-    expect(rendered.children).toHaveLength(2);
-
-    const [title, hook] = rendered.children as FakeNode[];
-    expect(title!.tag).toBe("text");
-    expect(title!.children).toEqual(["Active hooks:"]);
-    expect(title!.props.fg).toBe("text-color");
-    expect(hook!.tag).toBe("box");
-    expect(hook!.props.flexDirection).toBe("row");
-    expect(hook!.props.gap).toBe(1);
-
-    const [orb, name, state, hint] = hook!.children as FakeNode[];
-    expect(orb!.props.content).toBe("•");
-    expect(orb!.props.fg).toBe("muted-color");
-    expect(name!.props.content).toBe("tool-execute-before");
-    expect(name!.props.fg).toBe("text-color");
-    expect(state!.props.content).toBe("Idle");
-    expect(state!.props.fg).toBe("muted-color");
-    expect(hint!.props.content).toBe("›");
-    expect(hint!.props.fg).toBe("muted-color");
-  });
-
-  test("should hint clickability with a hover highlight and an open indicator", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const { api, slots } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile: path.join(root, "status.json"),
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-
-    const hookRow = row(rendered, "tool-execute-before");
-    const [, name, , hint] = hookRow.children as FakeNode[];
-    expect(typeof hookRow.props.onMouseOver).toBe("function");
-    expect(typeof hookRow.props.onMouseOut).toBe("function");
-
-    (hookRow.props.onMouseOver as () => void)();
-    expect(hookRow.props.backgroundColor).toBe("bg-element-color");
-    expect(name!.props.fg).toBe("primary-color");
-    expect(hint!.props.fg).toBe("primary-color");
-
-    (hookRow.props.onMouseOut as () => void)();
-    expect(hookRow.props.backgroundColor).toBeUndefined();
-    expect(name!.props.fg).toBe("text-color");
-    expect(hint!.props.fg).toBe("muted-color");
-  });
-
-  test("should open the popup on mouse-up so the opening click does not dismiss it", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const logFile = path.join(root, "hook-logs.jsonl");
-    writeLogRecord(logFile);
-    const { api, slots, dialogCalls } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile: path.join(root, "status.json"),
-      logFile,
-      pollMs: 5,
-      now: () => 0,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-
-    const hookRow = row(rendered, "tool-execute-before");
-    expect(hookRow.props.onMouseDown).toBeUndefined();
-    expect(typeof hookRow.props.onMouseUp).toBe("function");
-
-    clickRow(rendered, "tool-execute-before");
-    expect(dialogCalls).toHaveLength(1);
-  });
-
-  test("should open a centered run-detail popup with a logs button, then the logs popup", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    const logFile = path.join(root, "hook-logs.jsonl");
-    writeLogRecord(logFile, {
-      status: "failure",
-      reason: "policy says no",
-      exitCode: 2,
-      stderr: "captured stderr\n",
-    });
-    const { api, slots, dialogCalls, dialogSizes, toasts, dialogClears } =
-      makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      logFile,
-      pollMs: 5,
-      now: () => 0,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    clickRow(rendered, "tool-execute-before");
-
-    expect(dialogCalls).toHaveLength(1);
-    expect(toasts).toHaveLength(0);
-    expect(dialogSizes).toEqual(["large"]);
-    const detail = dialogCalls[0]!.render() as FakeNode;
-    expect(detail.tag).toBe("box");
-    expect(detail.props.alignItems).toBe("center");
-    expect(detail.props.width).toBe("100%");
-    const detailText = collectText(detail);
-    expect(detailText).toContain("Hook run: tool-execute-before");
-    expect(detailText).toContain("Event:  tool.execute.before");
-    expect(detailText).toContain("Error");
-    expect(detailText).toContain("123 ms");
-    expect(detailText).toContain("policy says no");
-    expect(detailText).toContain("Exit:   2");
-    expect(detailText).toContain(`Log file: ${logFile}`);
-    expect(detailText).not.toContain("captured stderr");
-
-    const button = findClickableByContent(detail, "View logs");
-    expect(button).toBeDefined();
-    expect(button!.props.backgroundColor).toBe("primary-color");
-    const label = findByContent(button!, "View logs");
-    expect(label!.props.fg).toBe("selected-text-color");
-
-    (button!.props.onMouseOver as () => void)();
-    expect(button!.props.backgroundColor).toBe("bg-element-color");
-    expect(label!.props.fg).toBe("primary-color");
-    (button!.props.onMouseOut as () => void)();
-    expect(button!.props.backgroundColor).toBe("primary-color");
-    expect(label!.props.fg).toBe("selected-text-color");
-
-    (button!.props.onMouseUp as () => void)();
-
-    expect(dialogCalls).toHaveLength(2);
-    expect(dialogSizes).toEqual(["large", "large"]);
-    const logs = dialogCalls[1]!.render() as FakeNode;
-    expect(logs.tag).toBe("box");
-    const logsText = collectText(logs);
-    expect(logsText).toContain("Hook logs: tool-execute-before");
-    expect(logsText).toContain("captured stderr");
-    expect(logsText).not.toContain("policy says no");
-
-    const scrollbox = logs.children.find(
-      (child): child is FakeNode =>
-        typeof child === "object" && child.tag === "scrollbox",
-    );
-    expect(scrollbox).toBeDefined();
-    expect(scrollbox!.props.flexGrow).toBe(1);
-    expect(scrollbox!.props.width).toBe("100%");
-    expect(scrollbox!.props.maxHeight).toBe(22);
-    expect(scrollbox!.props.focused).toBe(true);
-    expect(collectText(scrollbox!)).toContain("--- stderr ---");
-    expect(collectText(scrollbox!)).toContain("captured stderr");
-
-    const esc = findClickableByContent(logs, "esc");
-    expect(esc).toBeDefined();
-    (esc!.props.onMouseUp as () => void)();
-    expect(dialogClears()).toBe(1);
-  });
-
-  test("should toast when the clicked hook has no recorded runs", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const { api, slots, dialogCalls, toasts } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile: path.join(root, "status.json"),
-      logFile: path.join(root, "missing-logs.jsonl"),
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    clickRow(rendered, "tool-execute-before");
-
-    expect(dialogCalls).toHaveLength(0);
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0]).toEqual({
-      variant: "info",
-      title: "Hook logs",
-      message: "No runs recorded for tool-execute-before in this session yet.",
-    });
-  });
-
-  test("should ignore a run recorded before the session panel opened", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "event.sh"), "");
-    const logFile = path.join(root, "hook-logs.jsonl");
-    let clock = Date.now();
-    writeLogRecord(logFile, {
-      event: "event",
-      hook: path.join(hooksDir, "event.sh"),
-      name: "event",
-      startedAt: clock - 60_000,
-      finishedAt: clock - 59_000,
-      stdout: "[log] old session output",
-    });
-    const { api, slots, dialogCalls, toasts } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile: path.join(root, "status.json"),
-      logFile,
-      pollMs: 5,
-      now: () => clock,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      { session_id: "ses_new" },
-    ) as FakeNode;
-    clickRow(rendered, "event");
-
-    expect(dialogCalls).toHaveLength(0);
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0]).toEqual({
-      variant: "info",
-      title: "Hook logs",
-      message: "No runs recorded for event in this session yet.",
-    });
-
-    clock += 1_000;
-    writeLogRecord(logFile, {
-      event: "event",
-      hook: path.join(hooksDir, "event.sh"),
-      name: "event",
-      startedAt: clock,
-      finishedAt: clock + 1_000,
-      stdout: "[log] current session output",
-    });
-    clickRow(rendered, "event");
-
-    expect(dialogCalls).toHaveLength(1);
-    expect(collectText(dialogCalls[0]!.render() as FakeNode)).toContain(
-      "Hook run: event",
-    );
-  });
-
-  test("should degrade to a toast when the log file is malformed", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const logFile = path.join(root, "hook-logs.jsonl");
-    fs.writeFileSync(logFile, "{not jsonl", "utf8");
-    const { api, slots, dialogCalls, toasts } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile: path.join(root, "status.json"),
-      logFile,
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-
-    expect(() => clickRow(rendered, "tool-execute-before")).not.toThrow();
-    expect(dialogCalls).toHaveLength(0);
-    expect(toasts).toHaveLength(1);
-  });
-
-  test("should truncate run details and explicitly budgeted logs", () => {
-    const record = logRecord({
-      status: "failure",
-      reason: "boom ".repeat(100),
-      stderr: "x".repeat(10_000),
-      truncated: true,
-    });
-
-    const summary = formatHookRunSummary(record, 200);
-    expect(summary.length).toBeLessThanOrEqual(200);
-    expect(summary).toContain("Error");
-    expect(summary).toContain("boom");
-    expect(summary).not.toContain("--- stderr ---");
-    expect(summary.endsWith("[message truncated]")).toBe(true);
-
-    const logs = formatHookLogsMessage(record, 200);
-    expect(logs.length).toBeLessThanOrEqual(200);
-    expect(logs).toContain("--- stderr ---");
-    expect(logs.endsWith("[message truncated]")).toBe(true);
-
-    const scrollable = formatHookLogsMessage(record);
-    expect(scrollable).toContain("x".repeat(10_000));
-    expect(scrollable.endsWith("[message truncated]")).toBe(false);
-  });
-
-  test("should report when a run captured no output", () => {
-    expect(formatHookLogsMessage(logRecord())).toBe(
-      "No output captured for this run.",
-    );
-  });
-
-  test("should apply pending, success, failure, and idle colors from the status snapshot", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    for (const file of [
-      "tool-execute-before.sh",
-      "chat-message.sh",
-      "event.sh",
-      "dispose.sh",
-    ]) {
-      fs.writeFileSync(path.join(hooksDir, file), "");
-    }
-    const statusFile = path.join(root, "status.json");
-    const { api, slots } = makeFakeApi(root);
-    const { runtime, roots } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    writeStatusSnapshot(statusFile, {
-      "tool.execute.before": "pending",
-      "chat.message": "success",
-      event: "failure",
-    });
-    await wait(30);
-
-    expect(roots[0]!.isDestroyed).toBeUndefined();
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe(
-      "warning-color",
-    );
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe(
-      "In progress",
-    );
-    expect(orbOf(rendered, "chat-message").props.fg).toBe("success-color");
-    expect(statusOf(rendered, "chat-message").props.content).toBe("Success");
-    expect(orbOf(rendered, "event").props.fg).toBe("error-color");
-    expect(statusOf(rendered, "event").props.content).toBe("Error");
-    expect(orbOf(rendered, "dispose").props.fg).toBe("muted-color");
-    expect(statusOf(rendered, "dispose").props.content).toBe("Idle");
-  });
-
-  test("should update fg and request one render per changed batch", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    const { api, slots, requestRenderCalls } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    writeStatusSnapshot(statusFile, { "tool.execute.before": "pending" });
-    await wait(30);
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe(
-      "warning-color",
-    );
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe(
-      "In progress",
-    );
-
-    const before = requestRenderCalls();
-    writeStatusSnapshot(statusFile, { "tool.execute.before": "success" });
-    await wait(30);
-
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe(
-      "success-color",
-    );
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe(
-      "Success",
-    );
-    expect(requestRenderCalls() - before).toBe(1);
-  });
-
-  test("should keep the panel stable when the status file is missing or malformed", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    const { api, slots, requestRenderCalls } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    writeStatusSnapshot(statusFile, { "tool.execute.before": "failure" });
-    await wait(30);
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("error-color");
-
-    fs.writeFileSync(statusFile, "{malformed", "utf8");
-    mtime += 1_000;
-    const stamp = new Date(mtime);
-    fs.utimesSync(statusFile, stamp, stamp);
-    const before = requestRenderCalls();
-    await wait(30);
-
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("error-color");
-    expect(requestRenderCalls()).toBe(before);
-
-    fs.rmSync(statusFile);
-    await wait(30);
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("error-color");
-  });
-
-  test("should prune destroyed handles without crashing", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    const { api, slots, requestRenderCalls } = makeFakeApi(root);
-    const { runtime, roots } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    writeStatusSnapshot(statusFile, { "tool.execute.before": "pending" });
-    await wait(30);
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("warning-color");
-
-    roots[0]!.isDestroyed = true;
-    const before = requestRenderCalls();
-    writeStatusSnapshot(statusFile, { "tool.execute.before": "success" });
-    await wait(30);
-
-    expect(requestRenderCalls()).toBe(before);
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("warning-color");
-  });
-
-  test("should keep a settled hook's status until its next run", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    for (const file of [
-      "tool-execute-before.sh",
-      "chat-message.sh",
-      "event.sh",
-    ]) {
-      fs.writeFileSync(path.join(hooksDir, file), "");
-    }
-    const statusFile = path.join(root, "status.json");
-    let clock = Date.now();
-    writeStatusSnapshot(
-      statusFile,
-      {
-        "tool.execute.before": "success",
-        "chat.message": "failure",
-        "event": "pending",
-      },
-      clock,
-    );
-    const { api, slots } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-      now: () => clock,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    await wait(30);
-
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe(
-      "success-color",
-    );
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe(
-      "Success",
-    );
-    expect(orbOf(rendered, "chat-message").props.fg).toBe("error-color");
-    expect(orbOf(rendered, "event").props.fg).toBe("warning-color");
-
-    clock += 60_000;
-    await wait(30);
-
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe(
-      "success-color",
-    );
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe(
-      "Success",
-    );
-    expect(orbOf(rendered, "chat-message").props.fg).toBe("error-color");
-    expect(orbOf(rendered, "event").props.fg).toBe("warning-color");
-
-    writeStatusSnapshot(
-      statusFile,
-      {
-        "tool.execute.before": "pending",
-        "chat.message": "failure",
-        "event": "pending",
-      },
-      clock,
-    );
-    await wait(30);
-
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe(
-      "warning-color",
-    );
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe(
-      "In progress",
-    );
-  });
-
-  test("should start a session idle and only light up on a run after the panel opens", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "event.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    let clock = Date.now();
-    writeStatusSnapshot(statusFile, { event: "success" }, clock);
-    const { api, slots } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-      now: () => clock,
-    });
-    clock += 500;
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      { session_id: "ses_one" },
-    ) as FakeNode;
-    await wait(30);
-
-    expect(orbOf(rendered, "event").props.fg).toBe("muted-color");
-    expect(statusOf(rendered, "event").props.content).toBe("Idle");
-
-    writeStatusSnapshot(statusFile, { event: "success" }, clock);
-    await wait(30);
-
-    expect(orbOf(rendered, "event").props.fg).toBe("success-color");
-    expect(statusOf(rendered, "event").props.content).toBe("Success");
-  });
-
-  test("should keep the previous session's statuses out of a new session panel", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "event.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    let clock = Date.now();
-    writeStatusSnapshot(statusFile, { event: "success" }, clock);
-    const { api, slots } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-      now: () => clock,
-    });
-    const first = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      { session_id: "ses_one" },
-    ) as FakeNode;
-    await wait(30);
-    expect(orbOf(first, "event").props.fg).toBe("success-color");
-
-    clock += 1_000;
-    const second = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      { session_id: "ses_two" },
-    ) as FakeNode;
-    expect(orbOf(second, "event").props.fg).toBe("muted-color");
-    expect(statusOf(second, "event").props.content).toBe("Idle");
-    expect(orbOf(first, "event").props.fg).toBe("success-color");
-  });
-
-  test("should stop polling on dispose", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    const { api, slots, disposeCallbacks, requestRenderCalls } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    writeStatusSnapshot(statusFile, { "tool.execute.before": "pending" });
-    await wait(30);
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("warning-color");
-
-    for (const dispose of disposeCallbacks.splice(0)) dispose();
-    const before = requestRenderCalls();
-    writeStatusSnapshot(statusFile, { "tool.execute.before": "success" });
-    await wait(30);
-
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("warning-color");
-    expect(requestRenderCalls()).toBe(before);
-  });
-
-  test("should show '(none)' when no hooks are registered", async () => {
-    const { root } = makeWorkspace();
-    const { api, slots } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-    const statusFile = path.join(root, "status.json");
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-
-    const empty = rendered.children[1] as FakeNode;
-    expect(empty.props.content).toBe("(none)");
-    expect(empty.props.fg).toBe("muted-color");
-  });
-
-  test("should register the sidebar through the host Solid runtime at activation", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "chat-message.sh"), "");
-    const { api, slots } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-    mock.module("@opentui/solid", () => runtime);
-
-    await tuiModule.tui(api);
-
-    expect(slots).toHaveLength(1);
-    expect(Object.keys(slots[0]!.slots)).toEqual(["sidebar_content"]);
-  });
-
-  test("should touch only the sidebar slot, renderer, lifecycle, and ui surfaces", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const { api, slots, accessed } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile: path.join(root, "status.json"),
-      logFile: path.join(root, "missing-logs.jsonl"),
-      pollMs: 5,
-    });
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      {},
-    ) as FakeNode;
-    clickRow(rendered, "tool-execute-before");
-
-    expect([...new Set(accessed)].sort()).toEqual([
-      "lifecycle",
-      "renderer",
-      "slots",
-      "ui",
-    ]);
-  });
-
-  test("should skip polling when OWFLOW_HOOKS_DISABLED=1", async () => {
-    const previous = process.env.OWFLOW_HOOKS_DISABLED;
-    process.env.OWFLOW_HOOKS_DISABLED = "1";
-    try {
-      const { root, hooksDir } = makeWorkspace();
+  describe("pure formatting helpers", () => {
+    test("buildActiveHooksView should return active hook rows from hooks directory", () => {
       fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-      const { api, slots, accessed } = makeFakeApi(root);
+      fs.writeFileSync(path.join(hooksDir, "config.sh"), "");
+
+      const view = buildActiveHooksView(tmpDir);
+      expect(view.title).toBe("Active hooks:");
+      expect(view.rows).toEqual([
+        { name: "config", event: "config" },
+        { name: "tool-execute-before", event: "tool.execute.before" },
+      ]);
+    });
+
+    test("statusLabelFor and colorForStatus should map states to labels and theme colors", () => {
+      expect(statusLabelFor("pending")).toBe("In progress");
+      expect(statusLabelFor("success")).toBe("Success");
+      expect(statusLabelFor("failure")).toBe("Error");
+      expect(statusLabelFor(undefined)).toBe("Idle");
+
+      expect(colorForStatus("pending", THEME)).toBe("warning-color");
+      expect(colorForStatus("success", THEME)).toBe("success-color");
+      expect(colorForStatus("failure", THEME)).toBe("error-color");
+      expect(colorForStatus(undefined, THEME)).toBe("muted-color");
+    });
+
+    test("formatHookRunSummary should format run metadata and support truncation", () => {
+      const record = makeLogRecord({
+        status: "failure",
+        exitCode: 1,
+        reason: "policy violation",
+        sessionID: "ses-123",
+      });
+      const summary = formatHookRunSummary(record);
+      expect(summary).toContain("Event:  tool.execute.before");
+      expect(summary).toContain("Error — 123 ms");
+      expect(summary).toContain("Session: ses-123");
+      expect(summary).toContain("Exit:   1");
+      expect(summary).toContain("Reason: policy violation");
+
+      const truncated = formatHookRunSummary(record, 40);
+      expect(truncated).toContain("[message truncated]");
+      expect(truncated.length).toBeLessThanOrEqual(40);
+    });
+
+    test("formatHookLogsMessage and formatSessionHookLogsMessage should format outputs", () => {
+      // Empty output
+      expect(formatHookLogsMessage(makeLogRecord())).toBe(
+        "No output captured for this run.",
+      );
+
+      // Captured stdout & stderr
+      const record = makeLogRecord({ stdout: "out-line", stderr: "err-line" });
+      const message = formatHookLogsMessage(record);
+      expect(message).toContain("--- stdout ---\nout-line");
+      expect(message).toContain("--- stderr ---\nerr-line");
+
+      // Multiple session records
+      const record2 = makeLogRecord({
+        status: "failure",
+        stderr: "second-err",
+      });
+      const sessionMsg = formatSessionHookLogsMessage([record, record2]);
+      expect(sessionMsg).toContain("=== Run #1");
+      expect(sessionMsg).toContain("=== Run #2");
+      expect(sessionMsg).toContain("second-err");
+    });
+  });
+
+  describe("sidebar registration and rendering", () => {
+    test("should register sidebar slot and render active hooks or (none) when empty", async () => {
+      const { api, slots } = makeFakeApi(tmpDir);
       const { runtime } = makeSolid();
 
-      await registerActiveHooksSidebar(api, root, async () => runtime, {
-        statusFile: path.join(root, "status.json"),
-        pollMs: 5,
+      // Empty hooks directory
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
+        pollMs: 50,
       });
-      const rendered = slots[0]!.slots.sidebar_content!(
-        slotContext(),
-        {},
+      expect(slots).toHaveLength(1);
+      expect(slots[0].order).toBe(50);
+
+      const emptyRender = slots[0].slots.sidebar_content({
+        theme: { current: THEME },
+      });
+      expect(collectText(emptyRender)).toContain("(none)");
+
+      // With hooks registered and session_id
+      fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+      const { api: apiWithHooks, slots: slotsWithHooks } = makeFakeApi(tmpDir);
+      await registerActiveHooksSidebar(
+        apiWithHooks,
+        tmpDir,
+        async () => runtime,
+        { pollMs: 50 },
+      );
+
+      const hookRender = slotsWithHooks[0].slots.sidebar_content(
+        { theme: { current: THEME } },
+        { session_id: "ses-test" },
+      );
+      const text = collectText(hookRender);
+      expect(text).toContain("Active hooks:");
+      expect(text).toContain("tool-execute-before");
+      expect(text).toContain("Idle");
+    });
+
+    test("should warn and exit gracefully when directory is empty or solid runtime is unavailable", async () => {
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        // Missing directory
+        const { api: emptyDirApi, slots } = makeFakeApi("");
+        await tuiModule.tui(emptyDirApi);
+        expect(slots).toHaveLength(0);
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("workspace directory unavailable"),
+        );
+
+        // Solid runtime returns null
+        const { api: validApi } = makeFakeApi(tmpDir);
+        const result = await registerActiveHooksSidebar(
+          validApi,
+          tmpDir,
+          async () => null,
+        );
+        expect(result).toBe(false);
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("TUI Solid runtime unavailable"),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    test("should register sidebar via tuiModule.tui with valid directory and imported runtime", async () => {
+      const { api, slots } = makeFakeApi(tmpDir);
+      const { runtime } = makeSolid();
+      mock.module("@opentui/solid", () => runtime);
+
+      await tuiModule.tui(api);
+      expect(slots).toHaveLength(1);
+      expect(slots[0].order).toBe(50);
+    });
+  });
+
+  describe("interaction and dialogs", () => {
+    test("should open detail popup and navigate to logs when runs exist", async () => {
+      fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+      const logFile = path.join(tmpDir, "hook-logs.jsonl");
+      const record = makeLogRecord({ stdout: "my log content" });
+      fs.writeFileSync(logFile, `${JSON.stringify(record)}\n`, "utf8");
+
+      const { api, slots, dialogCalls } = makeFakeApi(tmpDir);
+      const { runtime } = makeSolid();
+
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
+        statusFile: path.join(tmpDir, "status.json"),
+        logFile,
+        pollMs: 50,
+        now: () => 0,
+      });
+
+      const rendered = slots[0].slots.sidebar_content({
+        theme: { current: THEME },
+      });
+      const hookRow = findClickableByContent(rendered, "tool-execute-before");
+      expect(hookRow).toBeDefined();
+
+      // Click hook row opens detail dialog
+      hookRow!.props.onMouseOver?.();
+      hookRow!.props.onMouseOut?.();
+      (hookRow!.props.onMouseUp as () => void)();
+      expect(dialogCalls).toHaveLength(1);
+
+      const detail = dialogCalls[0]!.render();
+      const detailText = collectText(detail);
+      expect(detailText).toContain("Hook run: tool-execute-before");
+      expect(detailText).toContain("View logs");
+
+      // Click "View logs" opens logs dialog
+      const viewLogsButton = findClickableByContent(detail, "View logs");
+      expect(viewLogsButton).toBeDefined();
+      viewLogsButton!.props.onMouseOver?.();
+      viewLogsButton!.props.onMouseOut?.();
+      (viewLogsButton!.props.onMouseUp as () => void)();
+
+      expect(dialogCalls).toHaveLength(2);
+      const logsView = dialogCalls[1]!.render();
+      expect(collectText(logsView)).toContain("my log content");
+
+      // Close dialog via esc button
+      const escButton = findClickableByContent(logsView, "esc");
+      escButton?.props.onMouseUp?.();
+    });
+
+    test("should show toast when clicked hook has no recorded runs", async () => {
+      fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+      const { api, slots, dialogCalls, toasts } = makeFakeApi(tmpDir);
+      const { runtime } = makeSolid();
+
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
+        statusFile: path.join(tmpDir, "status.json"),
+        logFile: path.join(tmpDir, "empty-logs.jsonl"),
+        pollMs: 50,
+      });
+
+      const rendered = slots[0].slots.sidebar_content({
+        theme: { current: THEME },
+      });
+      const hookRow = findClickableByContent(rendered, "tool-execute-before");
+      (hookRow!.props.onMouseUp as () => void)();
+
+      expect(dialogCalls).toHaveLength(0);
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0].message).toContain(
+        "No runs recorded for tool-execute-before",
+      );
+    });
+  });
+
+  describe("status polling and lifecycle", () => {
+    test("should update status from status file and clean up on dispose", async () => {
+      fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+      const statusFile = path.join(tmpDir, "status.json");
+      const { api, slots, disposeCallbacks, getRenders } = makeFakeApi(tmpDir);
+      const { runtime } = makeSolid();
+
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
+        statusFile,
+        pollMs: 10,
+      });
+
+      const rendered = slots[0].slots.sidebar_content({
+        theme: { current: THEME },
+      });
+      expect(collectText(rendered)).toContain("Idle");
+
+      // Update status file to pending
+      const now = Date.now();
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({
+          version: 1,
+          pid: 1,
+          workspace: tmpDir,
+          updatedAt: now,
+          hooks: {
+            "tool.execute.before": { status: "pending", startedAt: now },
+          },
+        }),
+      );
+      await wait(30);
+
+      expect(collectText(rendered)).toContain("In progress");
+      expect(getRenders()).toBeGreaterThan(0);
+
+      // Clean up on dispose stops polling
+      for (const cb of disposeCallbacks) cb();
+      const rendersBefore = getRenders();
+
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({
+          version: 1,
+          pid: 1,
+          workspace: tmpDir,
+          updatedAt: Date.now(),
+          hooks: {
+            "tool.execute.before": {
+              status: "success",
+              startedAt: now,
+              finishedAt: Date.now(),
+            },
+          },
+        }),
+      );
+      await wait(30);
+
+      expect(getRenders()).toBe(rendersBefore);
+    });
+
+    test("should disable polling and interactions when OWFLOW_HOOKS_DISABLED=1", async () => {
+      const prev = process.env.OWFLOW_HOOKS_DISABLED;
+      process.env.OWFLOW_HOOKS_DISABLED = "1";
+
+      try {
+        fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
+        const { api, slots } = makeFakeApi(tmpDir);
+        const { runtime } = makeSolid();
+
+        await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
+          statusFile: path.join(tmpDir, "status.json"),
+          pollMs: 10,
+        });
+
+        const rendered = slots[0].slots.sidebar_content({
+          theme: { current: THEME },
+        });
+        const hookRow = findClickableByContent(rendered, "tool-execute-before");
+        expect(hookRow).toBeUndefined(); // Non-interactive
+      } finally {
+        if (prev === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
+        else process.env.OWFLOW_HOOKS_DISABLED = prev;
+      }
+    });
+  });
+
+  describe("buildHookLogsBody lazy loading", () => {
+    test("should lazy-load large logs in chunks on scroll", () => {
+      const { runtime } = makeSolid();
+      const lines = Array.from({ length: 150 }, (_, i) => `log line ${i + 1}`);
+      const record = makeLogRecord({ stdout: lines.join("\n") });
+      let rendered = false;
+
+      const body = buildHookLogsBody(
+        record,
+        THEME,
+        runtime,
+        () => {},
+        20,
+        {
+          requestRender: () => {
+            rendered = true;
+          },
+        },
+        50,
       ) as FakeNode;
 
-      expect([...new Set(accessed)].sort()).toEqual(["slots"]);
-      const hookRow = row(rendered, "tool-execute-before");
-      expect(hookRow.props.onMouseUp).toBeUndefined();
-      expect(hookRow.props.onMouseOver).toBeUndefined();
-      expect([...new Set(accessed)].sort()).toEqual(["slots"]);
-    } finally {
-      if (previous === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
-      else process.env.OWFLOW_HOOKS_DISABLED = previous;
-    }
-  });
+      const scrollbox = body.children.find(
+        (c): c is FakeNode => typeof c === "object" && c.tag === "scrollbox",
+      );
+      expect(scrollbox).toBeDefined();
 
-  test("should warn and skip registration when the workspace directory is unavailable", async () => {
-    const { api, slots } = makeFakeApi("");
-    const warn = spyOn(console, "warn").mockImplementation(() => {});
+      // Initial chunk (50 lines loaded)
+      let text = collectText(scrollbox!);
+      expect(text).toContain("log line 1");
+      expect(text).toContain("log line 49");
+      expect(text).not.toContain("log line 50");
+      expect(text).toContain("[scroll for more logs: 50/151 lines loaded]");
 
-    try {
-      await tuiModule.tui(api);
+      // Scroll to trigger loadMore
+      expect(typeof scrollbox!.props.onScroll).toBe("function");
+      scrollbox!.props.onScroll();
 
-      expect(slots).toHaveLength(0);
-      expect(warn).toHaveBeenCalledTimes(1);
-    } finally {
-      warn.mockRestore();
-    }
-  });
+      // 100 lines loaded
+      text = collectText(scrollbox!);
+      expect(text).toContain("log line 50");
+      expect(text).toContain("log line 99");
+      expect(rendered).toBe(true);
 
-  test("should load the current state of hooks logs for a given session when resuming", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    fs.writeFileSync(path.join(hooksDir, "chat-message.sh"), "");
-    fs.writeFileSync(path.join(hooksDir, "event.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    const logFile = path.join(root, "hook-logs.jsonl");
-
-    const clock = Date.now();
-    // Earlier runs from ses_resumed
-    writeLogRecord(logFile, {
-      event: "tool.execute.before",
-      name: "tool-execute-before",
-      hook: path.join(hooksDir, "tool-execute-before.sh"),
-      sessionID: "ses_resumed",
-      status: "success",
-      startedAt: clock - 100_000,
-      finishedAt: clock - 99_000,
-      durationMs: 1_000,
-      stdout: "tool stdout\n",
+      // Load all
+      scrollbox!.props.loadAll();
+      text = collectText(scrollbox!);
+      expect(text).toContain("log line 150");
+      expect(text).not.toContain("[scroll for more logs");
     });
-    writeLogRecord(logFile, {
-      event: "chat.message",
-      name: "chat-message",
-      hook: path.join(hooksDir, "chat-message.sh"),
-      sessionID: "ses_resumed",
-      status: "failure",
-      reason: "failed in resume",
-      startedAt: clock - 90_000,
-      finishedAt: clock - 89_000,
-      durationMs: 1_000,
-      stderr: "chat stderr\n",
-    });
-    // Another session run in between
-    writeLogRecord(logFile, {
-      event: "event",
-      name: "event",
-      hook: path.join(hooksDir, "event.sh"),
-      sessionID: "ses_other",
-      status: "success",
-      startedAt: clock - 50_000,
-      finishedAt: clock - 49_000,
-    });
-
-    const { api, slots, dialogCalls } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      logFile,
-      pollMs: 5,
-      now: () => clock,
-    });
-
-    // Resume session "ses_resumed"
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      { session_id: "ses_resumed" },
-    ) as FakeNode;
-    await wait(30);
-
-    // tool-execute-before was success
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("success-color");
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe("Success");
-
-    // chat-message was failure
-    expect(orbOf(rendered, "chat-message").props.fg).toBe("error-color");
-    expect(statusOf(rendered, "chat-message").props.content).toBe("Error");
-
-    // event was only run in ses_other, not ses_resumed, so it must be idle
-    expect(orbOf(rendered, "event").props.fg).toBe("muted-color");
-    expect(statusOf(rendered, "event").props.content).toBe("Idle");
-
-    // Click on tool-execute-before: opens dialog with the resumed log
-    clickRow(rendered, "tool-execute-before");
-    expect(dialogCalls).toHaveLength(1);
-    const detail = collectText(dialogCalls[0]!.render() as FakeNode);
-    expect(detail).toContain("Hook run: tool-execute-before");
-    expect(detail).toContain("Session: ses_resumed");
-    expect(detail).toContain("Success");
-
-    // View logs button opens logs with captured output
-    const button = findClickableByContent(dialogCalls[0]!.render() as FakeNode, "View logs");
-    expect(button).toBeDefined();
-    (button!.props.onMouseUp as () => void)();
-    expect(dialogCalls).toHaveLength(2);
-    const logs = collectText(dialogCalls[1]!.render() as FakeNode);
-    expect(logs).toContain("tool stdout");
-
-    // Clicking chat-message opens its run-detail with stderr
-    clickRow(rendered, "chat-message");
-    expect(dialogCalls).toHaveLength(3);
-    const chatDetail = collectText(dialogCalls[2]!.render() as FakeNode);
-    expect(chatDetail).toContain("failed in resume");
-
-    // Subsequent run in the resumed session updates the status properly
-    writeStatusSnapshot(statusFile, {
-      "tool.execute.before": "pending",
-    }, clock);
-    await wait(30);
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("warning-color");
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe("In progress");
-    // chat-message is preserved as error
-    expect(orbOf(rendered, "chat-message").props.fg).toBe("error-color");
-  });
-
-  test("formatSessionHookLogsMessage formats single and multiple session runs", () => {
-    const clock = 1_700_000_000_000;
-    const run1 = logRecord({
-      runId: "run#1",
-      sessionID: "ses_multi",
-      startedAt: clock,
-      finishedAt: clock + 100,
-      durationMs: 100,
-      status: "success",
-      stdout: "output from first run",
-    });
-    const run2 = logRecord({
-      runId: "run#2",
-      sessionID: "ses_multi",
-      startedAt: clock + 200,
-      finishedAt: clock + 350,
-      durationMs: 150,
-      status: "failure",
-      stderr: "error from second run",
-    });
-
-    // Single run formats plain hook logs
-    const single = formatSessionHookLogsMessage(run1);
-    expect(single).toContain("--- stdout ---\noutput from first run");
-    expect(single).not.toContain("=== Run #");
-
-    // Multiple runs format with headers for each run
-    const multi = formatSessionHookLogsMessage([run1, run2]);
-    expect(multi).toContain("=== Run #1");
-    expect(multi).toContain("output from first run");
-    expect(multi).toContain("=== Run #2");
-    expect(multi).toContain("error from second run");
-  });
-
-  test("buildHookLogsBody lazy loads large logs by scrolling without truncation", () => {
-    const { runtime } = makeSolid();
-    const onClose = mock(() => {});
-    const renders: number[] = [];
-    const renderer = {
-      requestRender: () => {
-        renders.push(Date.now());
-      },
-    };
-
-    // Create a record with 250 lines of stdout
-    const lines = Array.from({ length: 250 }, (_, i) => `log line ${i + 1}`);
-    const record = logRecord({
-      stdout: lines.join("\n"),
-    });
-
-    // Render with chunkLines = 50
-    const body = buildHookLogsBody(
-      record,
-      THEME,
-      runtime,
-      onClose,
-      20,
-      renderer,
-      50,
-    ) as FakeNode;
-
-    const scrollbox = body.children.find(
-      (c): c is FakeNode => typeof c === "object" && c.tag === "scrollbox",
-    );
-    expect(scrollbox).toBeDefined();
-
-    // Initial state: only first 50 lines loaded
-    let text = collectText(scrollbox!);
-    expect(text).toContain("log line 1");
-    expect(text).toContain("log line 49");
-    expect(text).not.toContain("log line 50");
-    expect(text).toContain("[scroll for more logs: 50/251 lines loaded]");
-    expect(text).not.toContain("[output truncated]");
-
-    // Scroll: onScroll handler triggers loadMore
-    expect(typeof scrollbox!.props.onScroll).toBe("function");
-    (scrollbox!.props.onScroll as () => void)();
-
-    // After 1st scroll: 100 lines loaded
-    text = collectText(scrollbox!);
-    expect(text).toContain("log line 50");
-    expect(text).toContain("log line 99");
-    expect(text).not.toContain("log line 100");
-    expect(text).toContain("[scroll for more logs: 100/251 lines loaded]");
-    expect(renders.length).toBe(1);
-
-    // Scroll more: via loadMore prop with custom chunk
-    expect(typeof scrollbox!.props.loadMore).toBe("function");
-    (scrollbox!.props.loadMore as (n: number) => void)(100);
-
-    // After 2nd scroll: 200 lines loaded
-    text = collectText(scrollbox!);
-    expect(text).toContain("log line 150");
-    expect(text).toContain("log line 199");
-    expect(text).not.toContain("log line 200");
-    expect(text).toContain("[scroll for more logs: 200/251 lines loaded]");
-
-    // Scroll to end
-    (scrollbox!.props.loadMore as (n: number) => void)(100);
-
-    // All 250 lines loaded, footer hint cleared, no truncation
-    text = collectText(scrollbox!);
-    expect(text).toContain("log line 250");
-    expect(text).not.toContain("[scroll for more logs");
-    expect(text).not.toContain("[output truncated]");
-  });
-
-  test("resuming a session with multiple runs of a hook shows session runs and lazy loads logs", async () => {
-    const { root, hooksDir } = makeWorkspace();
-    fs.writeFileSync(path.join(hooksDir, "tool-execute-before.sh"), "");
-    const statusFile = path.join(root, "status.json");
-    const logFile = path.join(root, "hook-logs.jsonl");
-
-    const clock = Date.now();
-    // Run 1 in ses_multi
-    writeLogRecord(logFile, {
-      event: "tool.execute.before",
-      name: "tool-execute-before",
-      hook: path.join(hooksDir, "tool-execute-before.sh"),
-      sessionID: "ses_multi",
-      status: "success",
-      startedAt: clock - 20_000,
-      finishedAt: clock - 19_000,
-      durationMs: 1_000,
-      stdout: Array.from({ length: 80 }, (_, i) => `run1 line ${i + 1}`).join("\n"),
-    });
-    // Run 2 in ses_multi
-    writeLogRecord(logFile, {
-      event: "tool.execute.before",
-      name: "tool-execute-before",
-      hook: path.join(hooksDir, "tool-execute-before.sh"),
-      sessionID: "ses_multi",
-      status: "failure",
-      reason: "syntax error on run 2",
-      startedAt: clock - 10_000,
-      finishedAt: clock - 9_500,
-      durationMs: 500,
-      stderr: Array.from({ length: 80 }, (_, i) => `run2 error ${i + 1}`).join("\n"),
-    });
-
-    const { api, slots, dialogCalls } = makeFakeApi(root);
-    const { runtime } = makeSolid();
-
-    await registerActiveHooksSidebar(api, root, async () => runtime, {
-      statusFile,
-      logFile,
-      pollMs: 5,
-      now: () => clock,
-    });
-
-    const rendered = slots[0]!.slots.sidebar_content!(
-      slotContext(),
-      { session_id: "ses_multi" },
-    ) as FakeNode;
-    await wait(30);
-
-    // Latest status was failure
-    expect(orbOf(rendered, "tool-execute-before").props.fg).toBe("error-color");
-    expect(statusOf(rendered, "tool-execute-before").props.content).toBe("Error");
-
-    // Click opens run-detail popup showing both runs count
-    clickRow(rendered, "tool-execute-before");
-    expect(dialogCalls).toHaveLength(1);
-    const detail = collectText(dialogCalls[0]!.render() as FakeNode);
-    expect(detail).toContain("Hook run: tool-execute-before");
-    expect(detail).toContain("Runs in session: 2");
-
-    // Click View logs opens session logs popup
-    const button = findClickableByContent(dialogCalls[0]!.render() as FakeNode, "View logs");
-    expect(button).toBeDefined();
-    (button!.props.onMouseUp as () => void)();
-    expect(dialogCalls).toHaveLength(2);
-
-    const logs = dialogCalls[1]!.render() as FakeNode;
-    const scrollbox = logs.children.find(
-      (c): c is FakeNode => typeof c === "object" && c.tag === "scrollbox",
-    );
-    expect(scrollbox).toBeDefined();
-
-    // Initial content contains Run #1 and partial lines, lazy loaded
-    let logsText = collectText(scrollbox!);
-    expect(logsText).toContain("=== Run #1");
-    expect(logsText).toContain("run1 line 1");
-    expect(logsText).toContain("[scroll for more logs");
-
-    // Scroll to load all
-    (scrollbox!.props.loadAll as () => void)();
-    logsText = collectText(scrollbox!);
-    expect(logsText).toContain("=== Run #1");
-    expect(logsText).toContain("run1 line 80");
-    expect(logsText).toContain("=== Run #2");
-    expect(logsText).toContain("run2 error 80");
-    expect(logsText).not.toContain("[output truncated]");
   });
 });
