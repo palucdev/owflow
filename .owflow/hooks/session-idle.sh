@@ -9,4 +9,5 @@ if git diff --quiet HEAD -- src ':!src/__tests__' package.json README.md LICENSE
 fi
 
 bun run type-check
+bun run prettify
 bun run build
