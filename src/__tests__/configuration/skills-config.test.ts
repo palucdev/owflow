@@ -1,13 +1,13 @@
-import { describe, expect, test } from "bun:test";
-import path from "node:path";
-import { configureSkills } from "../../configuration/skills-config.js";
-import { PLUGIN_ROOT } from "../../utils/plugin-info.js";
-import type { OpenCodeConfig } from "../../types/opencode-types.js";
+import { describe, expect, test } from 'bun:test';
+import path from 'node:path';
+import { configureSkills } from '../../configuration/skills-config.js';
+import { PLUGIN_ROOT } from '../../utils/plugin-info.js';
+import type { OpenCodeConfig } from '../../types/opencode-types.js';
 
-describe("configureSkills", () => {
-  const expectedSkillsDir = path.join(PLUGIN_ROOT, "skills");
+describe('configureSkills', () => {
+  const expectedSkillsDir = path.join(PLUGIN_ROOT, 'skills');
 
-  test("should initialize skills and skills.paths when skills is undefined", () => {
+  test('should initialize skills and skills.paths when skills is undefined', () => {
     const config = {} as OpenCodeConfig;
     configureSkills(config);
 
@@ -15,15 +15,15 @@ describe("configureSkills", () => {
     expect(config.skills.paths).toEqual([expectedSkillsDir]);
   });
 
-  test("should initialize skills.paths when skills object exists but skills.paths is undefined", () => {
+  test('should initialize skills.paths when skills object exists but skills.paths is undefined', () => {
     const config = { skills: {} } as OpenCodeConfig;
     configureSkills(config);
 
     expect(config.skills.paths).toEqual([expectedSkillsDir]);
   });
 
-  test("should append skills directory to existing paths list without modifying existing entries", () => {
-    const existingPath = "/custom/skills/path";
+  test('should append skills directory to existing paths list without modifying existing entries', () => {
+    const existingPath = '/custom/skills/path';
     const config = {
       skills: {
         paths: [existingPath],
@@ -35,7 +35,7 @@ describe("configureSkills", () => {
     expect(config.skills.paths).toEqual([existingPath, expectedSkillsDir]);
   });
 
-  test("should not add duplicate skills directory if it is already present in skills.paths", () => {
+  test('should not add duplicate skills directory if it is already present in skills.paths', () => {
     const config = {
       skills: {
         paths: [expectedSkillsDir],

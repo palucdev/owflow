@@ -1,14 +1,7 @@
 #!/usr/bin/env bun
-import {
-  renderJson,
-  renderTable,
-  scanHooks,
-} from "../hooks/user-hooks.js";
-import {
-  HookDigestMode,
-  type HookReportInput,
-} from "../types/hook-types.js";
-import { hooksDirectory } from "../utils/workflow-paths.js";
+import { renderJson, renderTable, scanHooks } from '../hooks/user-hooks.js';
+import { HookDigestMode, type HookReportInput } from '../types/hook-types.js';
+import { hooksDirectory } from '../utils/workflow-paths.js';
 
 export interface ShowHooksOptions {
   readonly cwd?: string;
@@ -27,7 +20,7 @@ export const runShowHooks = (options: ShowHooksOptions = {}): number => {
     failures: scan.failures,
   };
 
-  log(argv.includes("--json") ? renderJson(input) : renderTable(input));
+  log(argv.includes('--json') ? renderJson(input) : renderTable(input));
   return scan.failures.length > 0 ? 1 : 0;
 };
 

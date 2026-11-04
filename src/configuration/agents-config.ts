@@ -1,6 +1,6 @@
-import type { OpenCodeConfig } from "../types/opencode-types.js";
-import { loadMarkdownDir } from "../utils/file-util.js";
-import matter from "gray-matter";
+import type { OpenCodeConfig } from '../types/opencode-types.js';
+import { loadMarkdownDir } from '../utils/file-util.js';
+import matter from 'gray-matter';
 
 /**
  * Resolves model aliases to the configured small_model value.
@@ -10,20 +10,17 @@ import matter from "gray-matter";
  * @param {string} smallModel - The small_model from OpenCode config
  * @returns {string|undefined} - Resolved model value or undefined
  */
-const resolveModelAlias = (
-  modelValue: string,
-  smallModel: string,
-): string | undefined => {
+const resolveModelAlias = (modelValue: string, smallModel: string): string | undefined => {
   // Aliases that should map to small_model
   const SMALL_MODEL_ALIASES = [
-    "haiku", // Claude Code alias
-    "gpt-4o-mini", // OpenAI small model
-    "small", // Generic alias
-    "fast", // Generic alias
+    'haiku', // Claude Code alias
+    'gpt-4o-mini', // OpenAI small model
+    'small', // Generic alias
+    'fast', // Generic alias
   ];
 
   // If no model specified or it's 'inherit', return undefined (let OpenCode decide)
-  if (!modelValue || modelValue === "inherit") {
+  if (!modelValue || modelValue === 'inherit') {
     return undefined;
   }
 
@@ -33,9 +30,7 @@ const resolveModelAlias = (
       return smallModel;
     }
     // If no small_model configured, return undefined (inherit)
-    console.warn(
-      `[owflow] Agent uses '${modelValue}' but no small_model configured in opencode.json - falling back to inherit`,
-    );
+    console.warn(`[owflow] Agent uses '${modelValue}' but no small_model configured in opencode.json - falling back to inherit`);
     return undefined;
   }
 
@@ -43,10 +38,7 @@ const resolveModelAlias = (
   return modelValue;
 };
 
-const prepareAgent = (
-  { data, content }: matter.GrayMatterFile<string>,
-  smallModel: string,
-) => {
+const prepareAgent = ({ data, content }: matter.GrayMatterFile<string>, smallModel: string) => {
   return {
     prompt: content,
     ...(data.description && { description: data.description }),
@@ -58,16 +50,13 @@ const prepareAgent = (
     ...(data.mode && { mode: data.mode }),
     // Add skills array if present
     ...(data.skills && Array.isArray(data.skills) && { skills: data.skills }),
-    ...(data.hidden === "true" && { hidden: true }),
+    ...(data.hidden === 'true' && { hidden: true }),
   };
 };
 
-export const configureAgents = (
-  config: OpenCodeConfig,
-  smallModel: string,
-): void => {
+export const configureAgents = (config: OpenCodeConfig, smallModel: string): void => {
   config.agent = config.agent || {};
-  for (const markdown of loadMarkdownDir("agents")) {
+  for (const markdown of loadMarkdownDir('agents')) {
     const name = markdown.data.name;
     if (!name) continue;
     // Don't overwrite agents the user has explicitly configured
@@ -76,9 +65,7 @@ export const configureAgents = (
     try {
       config.agent[name] = prepareAgent(markdown, smallModel);
     } catch (error) {
-      console.warn(
-        `[owflow] Failed to register agent '${name}': ${(error as Error).message}`,
-      );
+      console.warn(`[owflow] Failed to register agent '${name}': ${(error as Error).message}`);
     }
   }
 };

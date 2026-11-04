@@ -6,7 +6,6 @@
   "trailingComma": "all",
   "bracketSpacing": true,
   "arrowParens": "always",
-  "parser": "typescript",
   "proseWrap": "preserve",
   "printWidth": 150
 }
