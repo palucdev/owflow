@@ -17,7 +17,8 @@ import { guardAgainstDestructiveActions } from './hooks/before-tool.js';
 import { configureSkills } from './configuration/skills-config.js';
 import { configureCommands } from './configuration/commands-config.js';
 import { configureAgents } from './configuration/agents-config.js';
-import { createDispatchHandlers, initializeHooksWrapper, renderSnapshot } from './hooks/user-hooks.js';
+import { createDispatchHandlers, initializeHooksWrapper } from './hooks/hooks-wrapper.js';
+import { renderSnapshot } from './hooks/user-hooks.js';
 import { HookEvent, type HookReportInput } from './types/hook-types.js';
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling

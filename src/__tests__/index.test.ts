@@ -7,8 +7,8 @@ import * as agentsConfig from '../configuration/agents-config.js';
 import * as commandsConfig from '../configuration/commands-config.js';
 import * as skillsConfig from '../configuration/skills-config.js';
 import * as beforeTool from '../hooks/before-tool.js';
+import * as hooksWrapperModule from '../hooks/hooks-wrapper.js';
 import * as sessionCompaction from '../hooks/session-compaction.js';
-import * as userHooksModule from '../hooks/user-hooks.js';
 import OwflowPlugin from '../index.js';
 import { fork_task } from '../tools/fork_task.js';
 import { verify_template } from '../tools/verify_template.js';
@@ -190,7 +190,7 @@ describe('OwflowPlugin', () => {
         },
       };
 
-      const wrapperSpy = spyOn(userHooksModule, 'initializeHooksWrapper').mockImplementation(async (_dir, endSession) => ({
+      const wrapperSpy = spyOn(hooksWrapperModule, 'initializeHooksWrapper').mockImplementation(async (_dir, endSession) => ({
         dispatch: async (_event, input: any) => {
           if (endSession && input?.sessionID) await endSession(input.sessionID);
           throw new Error('Blocked: gate check failed');
@@ -222,7 +222,7 @@ describe('OwflowPlugin', () => {
 
     test('should call user dispose and cleanup on dispose', async () => {
       let wrapperDisposed = false;
-      const wrapperSpy = spyOn(userHooksModule, 'initializeHooksWrapper').mockResolvedValue({
+      const wrapperSpy = spyOn(hooksWrapperModule, 'initializeHooksWrapper').mockResolvedValue({
         dispatch: async () => {},
         snapshot: { entries: [] },
         dispose: () => {
