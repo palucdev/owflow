@@ -14,15 +14,12 @@ import {
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
-import { resolveHooksLogFile, resolveHooksStatusFile, scanHooks } from './user-hooks.js';
-
-/* ── Execution Constants ─────────────────────────────────────────────────── */
+import { resolveHooksLogFile, resolveHooksStatusFile } from './hook-logs.js';
+import { scanHooks } from './hooks-discovery.js';
 
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
 export const MAX_CAPTURE_BYTES = 16 * 1024;
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
-
-/* ── Stdin & Context Serialization ───────────────────────────────────────── */
 
 const IDENTITY_KEYS = ['id', 'sessionID', 'messageID', 'partID', 'callID', 'providerID', 'type', 'name', 'tool'];
 
@@ -79,8 +76,6 @@ const capStream = (text: string, isSession = false): { text: string; truncated: 
   };
 };
 
-/* ── Runtime Status Persistence ──────────────────────────────────────────── */
-
 // shortcut: synchronous writeFileSync per hook state transition without trailing debounce or .tmp rename;
 // ceiling: >100 hook fires/sec causing tmp file contention or partial reads;
 // upgrade: 50ms trailing debounce with write-to-tmp-and-rename.
@@ -100,8 +95,6 @@ const writeStatusFile = (file: string, workspace: string, hooks: ReadonlyMap<str
     // Best-effort status persistence never affects hook execution.
   }
 };
-
-/* ── Wrapper Initialization & Process Lifecycle ──────────────────────────── */
 
 export const initializeHooksWrapper = async (
   directory: string,
@@ -334,8 +327,6 @@ export const initializeHooksWrapper = async (
     },
   };
 };
-
-/* ── OpenCode Hook Adapters & Dispatch Handlers ─────────────────────────── */
 
 export const PASSTHROUGH_EVENTS = [
   HookEvent.ToolExecuteAfter,

@@ -1,4 +1,5 @@
-import { renderJson, renderTable, scanHooks } from '../hooks/user-hooks.js';
+import { scanHooks } from '../hooks/hooks-discovery.js';
+import { renderJson, renderTable } from '../hooks/hooks-reporting.js';
 import { HookDigestMode, HookRunResult, type HookReportInput } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
 

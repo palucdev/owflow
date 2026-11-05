@@ -1,4 +1,4 @@
-import type { HookRunLogRecord } from '../../hooks/user-hooks.js';
+import type { HookRunLogRecord } from '../../hooks/hook-logs.js';
 import type { SidebarTheme } from '../../tui/primitives.js';
 
 export interface FakeNode {

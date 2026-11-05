@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runShowHooks } from '../../cli/show-hooks.js';
-import { EFFECTIVE_AFTER_RESTART, HookDigestMode, renderJson, renderTable, scanHooks, type HookReportInput } from '../../hooks/user-hooks.js';
+import { scanHooks } from '../../hooks/hooks-discovery.js';
+import { EFFECTIVE_AFTER_RESTART, renderJson, renderTable } from '../../hooks/hooks-reporting.js';
+import { HookDigestMode, type HookReportInput } from '../../types/hook-types.js';
 
 describe('owflow-hooks CLI', () => {
   const tempDirs: string[] = [];

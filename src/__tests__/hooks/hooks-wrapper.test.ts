@@ -10,7 +10,7 @@ import {
   MAX_CAPTURE_BYTES,
   MAX_LOG_FILE_BYTES,
 } from '../../hooks/hooks-wrapper.js';
-import { readHookLogRecords, readLatestHookLog } from '../../hooks/user-hooks.js';
+import { readHookLogRecords, readLatestHookLog } from '../../hooks/hook-logs.js';
 import { HookEvent } from '../../types/hook-types.js';
 
 describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
@@ -115,18 +115,39 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     const root = makeTempDir();
     const hooksDir = path.join(root, '.owflow', 'hooks');
     fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\ncat >/dev/null\nexec sleep 5\n');
+    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
 
+    let exitResolver: (code: number) => void;
+    const exitPromise = new Promise<number>((resolve) => {
+      exitResolver = resolve;
+    });
+
+    const mockProc = {
+      pid: 12345,
+      kill: spyOn({ kill: () => {} }, 'kill').mockImplementation(() => {
+        exitResolver(143);
+      }),
+      exited: exitPromise,
+      stdout: new Response('').body,
+      stderr: new Response('').body,
+      signalCode: null,
+    };
+
+    const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
     const prevTimeout = process.env[HOOK_TIMEOUT_ENV];
-    process.env[HOOK_TIMEOUT_ENV] = '30';
+    process.env[HOOK_TIMEOUT_ENV] = '20';
+    const keepAlive = setInterval(() => {}, 5);
     try {
       const wrapper = await initializeHooksWrapper(root, undefined, {
         statusFile: path.join(root, 's.json'),
         logFile: path.join(root, 'l.jsonl'),
       });
-      await expect(wrapper.dispatch(HookEvent.Config, {})).rejects.toThrow(/timed out after 30ms/);
+      await expect(wrapper.dispatch(HookEvent.Config, {})).rejects.toThrow(/timed out after 20ms/);
+      expect(mockProc.kill).toHaveBeenCalled();
       wrapper.dispose();
     } finally {
+      clearInterval(keepAlive);
+      spawnSpy.mockRestore();
       if (prevTimeout === undefined) delete process.env[HOOK_TIMEOUT_ENV];
       else process.env[HOOK_TIMEOUT_ENV] = prevTimeout;
     }
@@ -174,18 +195,45 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     const root = makeTempDir();
     const hooksDir = path.join(root, '.owflow', 'hooks');
     fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexec sleep 10\n');
+    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
 
-    const statusFile = path.join(root, 'status.json');
-    const logFile = path.join(root, 'logs.jsonl');
+    let exitResolver: (code: number) => void;
+    const exitPromise = new Promise<number>((resolve) => {
+      exitResolver = resolve;
+    });
 
-    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
-    const dispatchPromise = wrapper.dispatch(HookEvent.Config, {});
-    // Give child process time to spawn
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const mockProc = {
+      pid: 12345,
+      kill: spyOn({ kill: () => {} }, 'kill').mockImplementation(() => {
+        mockProc.signalCode = 'SIGTERM';
+        exitResolver(143);
+      }),
+      exited: exitPromise,
+      stdout: new Response('').body,
+      stderr: new Response('').body,
+      signalCode: null as string | null,
+    };
 
-    wrapper.dispose();
-    await dispatchPromise.catch(() => {});
+    const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
+    try {
+      const wrapper = await initializeHooksWrapper(root, undefined, {
+        statusFile: path.join(root, 'status.json'),
+        logFile: path.join(root, 'logs.jsonl'),
+      });
+      const dispatchPromise = wrapper.dispatch(HookEvent.Config, {});
+      expect(mockProc.kill).not.toHaveBeenCalled();
+
+      wrapper.dispose();
+      expect(mockProc.kill).toHaveBeenCalledTimes(1);
+
+      await expect(dispatchPromise).rejects.toThrow(/process terminated by signal SIGTERM/);
+
+      // Subsequent dispose calls are safe and do not re-kill
+      wrapper.dispose();
+      expect(mockProc.kill).toHaveBeenCalledTimes(1);
+    } finally {
+      spawnSpy.mockRestore();
+    }
   });
 
   test('createDispatchHandlers fans out host events and serializes concurrent runs', async () => {

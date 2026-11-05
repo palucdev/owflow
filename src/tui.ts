@@ -6,7 +6,7 @@ import {
   readSessionLatestLogs,
   resolveHooksLogFile,
   resolveHooksStatusFile,
-} from './hooks/user-hooks.js';
+} from './hooks/hook-logs.js';
 import type { HookEventName, HookRunLogRecord, HookRunState, HookRuntimeEntry, HookStatusReadResult } from './types/hook-types.js';
 import { DEFAULT_LOG_CHUNK_LINES, buildHookLogsBody, buildHookRunDetailBody, openHookLogPopup } from './tui/hook-dialogs.js';
 import {

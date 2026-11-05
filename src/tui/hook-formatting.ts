@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { scanHooks } from '../hooks/user-hooks.js';
+import { scanHooks } from '../hooks/hooks-discovery.js';
 import { HookDigestMode, type HookEventName, type HookRunLogRecord, type HookRunState } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
 import type { SidebarTheme } from './primitives.js';

@@ -18,8 +18,8 @@ import { configureSkills } from './configuration/skills-config.js';
 import { configureCommands } from './configuration/commands-config.js';
 import { configureAgents } from './configuration/agents-config.js';
 import { createDispatchHandlers, initializeHooksWrapper } from './hooks/hooks-wrapper.js';
-import { renderSnapshot } from './hooks/user-hooks.js';
 import { HookEvent, type HookReportInput } from './types/hook-types.js';
+import { renderSnapshot } from './hooks/hooks-reporting.js';
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 
@@ -90,6 +90,7 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
           if (oldest !== undefined) agentBySession.delete(oldest);
         }
       } catch {
+        endSession;
         // ignore
       }
       // Dispatch deliberately outside the swallowing catch so gate throws
