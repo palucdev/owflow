@@ -15,7 +15,7 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 ### Plugin Entry & Lifecycle
 - **Location**: `src/index.ts`, `src/hooks/`
 - **Purpose**: Wire all capabilities into the OpenCode config/hooks lifecycle
-- **Key Files**: `src/index.ts` (`OwflowPlugin`), `src/hooks/before-tool.ts` (blocks destructive bash commands for non-whitelisted agents), `src/hooks/session-compaction.ts` (post-compaction state re-read reminder)
+- **Key Files**: `src/index.ts` (`OwflowPlugin`), `src/hooks/before-tool.ts` (blocks destructive bash commands for non-whitelisted agents), `src/hooks/session-compaction.ts` (post-compaction state re-read reminder), `src/hooks/hooks-wrapper.ts` (subprocess execution and lifecycle dispatch), `src/hooks/hooks-discovery.ts` (discovery and validation), `src/hooks/hooks-reporting.ts` (startup banner snapshot), `src/hooks/hook-logs.ts` (runtime log files and readers)
 
 ### Configuration Layer
 - **Location**: `src/configuration/`
@@ -159,7 +159,7 @@ sequenceDiagram
 ## External Integrations
 - **OpenCode host runtime** — plugin config, hooks, tools, skill/agent/command registration
 - **npm registry** — distribution of the `owflow` package
-- **GitHub / Codeberg remotes** — source hosting (GitHub Actions CI added 2026-10-08; Codeberg runner pending)
+- **GitHub / Codeberg remotes** — source hosting
 - No databases, third-party APIs, or network services at runtime
 
 ## Database Schema

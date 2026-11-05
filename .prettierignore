@@ -1,0 +1,24 @@
+dist
+node_modules
+coverage
+bun.lock
+bun.lockb
+.owflow/tasks
+
+# Ignore everything outside src/
+/*
+!/src/
+
+# Inside src/, ignore everything by default
+/src/**
+# Allow directory traversal inside src/
+!/src/**/
+
+# Allow only .ts and .json files inside src/
+!/src/**/*.ts
+!/src/**/*.json
+
+# Preserved ignores inside src/
+src/__tests__/fixtures/**
+
+

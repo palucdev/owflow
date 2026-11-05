@@ -3,26 +3,48 @@
  * Registers skills/agents/commands via OpenCode's JS event system.
  */
 
-import type { Plugin } from "@opencode-ai/plugin";
+import type { Hooks, Plugin } from '@opencode-ai/plugin';
 
-import path from "node:path";
-import fs from "node:fs";
+import path from 'node:path';
+import fs from 'node:fs';
 
-import { PLUGIN_VERSION } from "./utils/plugin-info.js";
-import type { OpenCodeConfig } from "./types/opencode-types.js";
-import { verify_template } from "./tools/verify_template.js";
-import { fork_task } from "./tools/fork_task.js";
-import { rereadOrchestratorState } from "./hooks/session-compaction.js";
-import { guardAgainstDestructiveActions } from "./hooks/before-tool.js";
-import { configureSkills } from "./configuration/skills-config.js";
-import { configureCommands } from "./configuration/commands-config.js";
-import { configureAgents } from "./configuration/agents-config.js";
+import { PLUGIN_VERSION } from './utils/plugin-info.js';
+import type { OpenCodeConfig } from './types/opencode-types.js';
+import { verify_template } from './tools/verify_template.js';
+import { fork_task } from './tools/fork_task.js';
+import { rereadOrchestratorState } from './hooks/session-compaction.js';
+import { guardAgainstDestructiveActions } from './hooks/before-tool.js';
+import { configureSkills } from './configuration/skills-config.js';
+import { configureCommands } from './configuration/commands-config.js';
+import { configureAgents } from './configuration/agents-config.js';
+import { createDispatchHandlers, initializeHooksWrapper } from './hooks/hooks-wrapper.js';
+import { HookEvent, type HookReportInput } from './types/hook-types.js';
+import { renderSnapshot } from './hooks/hooks-reporting.js';
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 
-const OwflowPlugin: Plugin = async ({ $, directory }) => {
-  const agentBySession = new Map();
-  return {
+const MAX_TRACKED_SESSIONS = 256;
+
+const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
+  const agentBySession = new Map<string, string>();
+  const hooksDisabled = process.env.OWFLOW_HOOKS_DISABLED === '1';
+
+  if (hooksDisabled) {
+    console.log('[owflow] User hooks disabled (OWFLOW_HOOKS_DISABLED=1); built-in hooks remain active.');
+  }
+  const endSession = async (sessionID: string): Promise<void> => {
+    if (typeof client?.session?.abort !== 'function') return;
+    try {
+      await client.session.abort({ path: { id: sessionID } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[owflow] failed to end session ${sessionID} after a gate hook failed: ${message}`);
+    }
+  };
+  const wrapper = hooksDisabled ? undefined : await initializeHooksWrapper(directory, endSession);
+  const snapshot: HookReportInput = wrapper?.snapshot ?? { entries: [], bypassed: true };
+
+  const hooks: Hooks = {
     tool: {
       verify_template,
       fork_task,
@@ -31,61 +53,78 @@ const OwflowPlugin: Plugin = async ({ $, directory }) => {
      * Register owflow's skills, commands, and agents so OpenCode discovers
      * them without requiring manual config file edits.
      */
-    config: async (config: unknown) => {
-      console.log(
-        `[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`,
-      );
+    [HookEvent.Config]: async (config: unknown) => {
+      console.log(`[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`);
+      for (const line of renderSnapshot(snapshot)) console.log(line);
       let typedConfig = config as OpenCodeConfig;
-
-      // Get small_model config for alias resolution
-      // Try from config parameter first, fallback to reading opencode.json
-      let smallModel = typedConfig.small_model ?? "";
-
-      if (!smallModel) {
-        try {
-          // Check project-level opencode.json
-          const projectConfigPath = path.join(directory, "opencode.json");
-          if (fs.existsSync(projectConfigPath)) {
-            const rawConfig = fs.readFileSync(projectConfigPath, "utf8");
-            const opencodeConfig = JSON.parse(rawConfig);
-            smallModel = opencodeConfig.small_model;
-          }
-        } catch (error) {
-          console.warn(
-            `Couldn't read or parse opencode.json config - small_model remains undefined`,
-          );
-        }
-      }
 
       configureSkills(typedConfig);
       configureCommands(typedConfig);
-      configureAgents(typedConfig, smallModel);
+      configureAgents(typedConfig);
 
       config = typedConfig;
-      console.log(
-        `[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`,
-      );
+
+      // User scripts run after built-in config mutations; failing closed on rejection.
+      if (wrapper !== undefined) {
+        await wrapper.dispatch(HookEvent.Config, typedConfig);
+      }
+
+      console.log(`[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`);
     },
 
-    "experimental.session.compacting": async (input, output) => {
+    [HookEvent.ExperimentalSessionCompacting]: async (input, output) => {
       await rereadOrchestratorState(directory, output);
+      if (wrapper !== undefined) {
+        await wrapper.dispatch(HookEvent.ExperimentalSessionCompacting, input, output);
+      }
     },
 
-    "chat.message": async (input, _output) => {
+    [HookEvent.ChatMessage]: async (input, output) => {
       try {
-        agentBySession.set(input.sessionID, input.agent ?? "main");
+        if (agentBySession.has(input.sessionID)) {
+          agentBySession.delete(input.sessionID);
+        }
+        agentBySession.set(input.sessionID, input.agent ?? 'main');
+        while (agentBySession.size > MAX_TRACKED_SESSIONS) {
+          const oldest = agentBySession.keys().next().value;
+          if (oldest !== undefined) agentBySession.delete(oldest);
+        }
       } catch {
+        endSession;
         // ignore
       }
+      // Dispatch deliberately outside the swallowing catch so gate throws
+      // propagate even when the platform's input object misbehaves.
+      if (wrapper !== undefined) {
+        await wrapper.dispatch(HookEvent.ChatMessage, input, output);
+      }
     },
 
-    "tool.execute.before": async (input, output) => {
+    [HookEvent.ToolExecuteBefore]: async (input, output) => {
       try {
         await guardAgainstDestructiveActions(input, output, agentBySession);
+        if (wrapper !== undefined) {
+          await wrapper.dispatch(HookEvent.ToolExecuteBefore, input, output);
+        }
       } catch (e) {
-        // Re-throw only intentional blocks; swallow unexpected errors
-        if ((e as Error).message?.startsWith("Blocked:")) throw e;
+        // Re-throw only intentional blocks; log and swallow unexpected errors
+        if ((e as Error).message?.startsWith('Blocked:')) throw e;
+        const message = e instanceof Error ? e.message : String(e);
+        console.warn(`[owflow] hooks: unexpected error in tool.execute.before (failing open): ${message}`);
       }
+    },
+  };
+
+  if (wrapper === undefined) return hooks;
+  const dispatchHandlers = createDispatchHandlers(wrapper.dispatch);
+  const userDispose = dispatchHandlers.dispose;
+  return {
+    ...hooks,
+    ...dispatchHandlers,
+    dispose: async () => {
+      await userDispose?.();
+      wrapper.dispose();
+      agentBySession.clear();
     },
   };
 };

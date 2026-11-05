@@ -1,0 +1,58 @@
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import tuiModule, { registerActiveHooksSidebar } from '../tui.js';
+import { makeFakeApi, makeSolid } from './tui/primitives.js';
+
+describe('TUI module', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'owflow-tui-test-'));
+    fs.mkdirSync(path.join(tmpDir, '.owflow', 'hooks'), { recursive: true });
+  });
+
+  afterEach(() => {
+    mock.restore();
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('should export default tui plugin module metadata', () => {
+    expect(tuiModule.id).toBe('owflow');
+    expect(typeof tuiModule.tui).toBe('function');
+    expect('server' in tuiModule).toBe(false);
+  });
+
+  test('should warn and exit gracefully when directory is empty or solid runtime is unavailable', async () => {
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      // Missing directory
+      const { api: emptyDirApi, slots } = makeFakeApi('');
+      await tuiModule.tui(emptyDirApi);
+      expect(slots).toHaveLength(0);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('workspace directory unavailable'));
+
+      // Solid runtime returns null
+      const { api: validApi } = makeFakeApi(tmpDir);
+      const result = await registerActiveHooksSidebar(validApi, tmpDir, async () => null);
+      expect(result).toBe(false);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('TUI Solid runtime unavailable'));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('should register sidebar via tuiModule.tui with valid directory and imported runtime', async () => {
+    const { api, slots } = makeFakeApi(tmpDir);
+    const { runtime } = makeSolid();
+    mock.module('@opentui/solid', () => runtime);
+
+    await tuiModule.tui(api);
+    expect(slots).toHaveLength(1);
+    expect(slots[0].order).toBe(50);
+  });
+});

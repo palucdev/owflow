@@ -41,7 +41,7 @@ owflow/
 ### Prerequisites
 
 - [Opencode](https://opencode.ai/) CLI installed and configured
-- [Node.js](https://nodejs.org/) >= 25
+- [Bun](https://bun.sh/) >= 1.3 (used by OpenCode and the `owflow-hooks` CLI)
 
 ### Installation
 
@@ -229,6 +229,158 @@ This is the key differentiator. Owflow doesn't just run workflows - it learns yo
 Standards live in `.owflow/docs/standards/` and are indexed in `.owflow/docs/INDEX.md`.
 
 **Important**: Do not use plan mode with workflows (see [Best Practices](#best-practices) below).
+
+## User Hooks
+
+Extend OpenCode's lifecycle with your project's own scripts. Drop hook scripts into `.owflow/hooks/` and owflow dispatches them through its hook handlers - no plugin code required.
+
+### File Placement and Naming Rules
+
+- **Where to place files**: Place all hook scripts directly inside `.owflow/hooks/` at the root of your project (e.g., `<project-root>/.owflow/hooks/tool-execute-before.sh`). Discovery is flat (one directory level only, no subdirectories).
+- **How to name files**: Name each file `<kebab-case-event>.<ext>`, where the lowercase kebab-case stem (`[a-z0-9]+(-[a-z0-9]+)*`) maps directly to the dotted hook or event name by replacing `-` with `.` (for example, `tool-execute-before.sh` → `tool.execute.before`, `session-idle.ps1` → `session.idle`).
+- **Supported extensions**: Use `.sh` (executed via `bash`) or `.ps1` (executed via `pwsh` / `powershell.exe`).
+- **One file per hook**: Each hook name may exist in **exactly one** format (`.sh` or `.ps1` - never both), and `.owflow/hooks/` must not contain any non-hook files (no READMEs, subdirectories, dotfiles, or log files).
+
+| Extension | Interpreter | Transport |
+| --------- | ----------- | --------- |
+| `.sh` | subprocess via `bash` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
+| `.ps1` | subprocess via `pwsh`/`powershell.exe` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
+
+**All hooks are gate hooks** governed by universal fail-closed semantics (16 lifecycle events and 32 host events) using the standard **git-hooks contract**:
+- **Input (`stdin`)**: JSON `{ event, session?: { sessionID }, context }`.
+- **Output (`exit code` + `stdout`/`stderr`)**: Exit `0` succeeds; any non-zero exit rejects the operation with a `Blocked:` error (using `stderr` or `stdout` as the reason) and terminates the active session. Missing interpreters fail closed at fire time.
+
+### Available Lifecycle Hooks (16)
+
+Lifecycle hooks attach directly to OpenCode's plugin hook points:
+
+| Event Name | Script File Name (`.sh` or `.ps1`) | Point of Execution |
+| ---------- | ---------------------------------- | ------------------ |
+| `config` | `config.<ext>` | Fires once during plugin initialization after owflow registers its skills, commands, and agents into the OpenCode configuration. |
+| `chat.message` | `chat-message.<ext>` | Fires when a user submits a chat message in a session, before the model processes the turn. |
+| `chat.params` | `chat-params.<ext>` | Fires when model generation parameters (such as temperature, topP, or provider options) are prepared for a chat request. |
+| `chat.headers` | `chat-headers.<ext>` | Fires when HTTP headers are assembled for an outgoing model provider request. |
+| `command.execute.before` | `command-execute-before.<ext>` | Fires immediately before a slash command is executed. |
+| `tool.definition` | `tool-definition.<ext>` | Fires when a tool's schema and description are being resolved for presentation to the model. |
+| `tool.execute.before` | `tool-execute-before.<ext>` | Fires immediately before a tool call executes, right after owflow's built-in destructive-command guard passes. |
+| `tool.execute.after` | `tool-execute-after.<ext>` | Fires immediately after a tool call finishes executing and produces its result. |
+| `shell.env` | `shell-env.<ext>` | Fires when environment variables are being constructed for a shell execution context. |
+| `experimental.chat.messages.transform` | `experimental-chat-messages-transform.<ext>` | Fires before the conversation message history is sent to the model for a turn. |
+| `experimental.chat.system.transform` | `experimental-chat-system-transform.<ext>` | Fires when the system prompt is being assembled before a model request. |
+| `experimental.session.compacting` | `experimental-session-compacting.<ext>` | Fires when a session's context window is being compacted, right after owflow injects its orchestrator-state reminder. |
+| `experimental.compaction.autocontinue` | `experimental-compaction-autocontinue.<ext>` | Fires during context compaction when determining whether the session should automatically continue its turn. |
+| `experimental.text.complete` | `experimental-text-complete.<ext>` | Fires when the model finishes generating a text response segment. |
+| `event` | `event.<ext>` | Catch-all hook that fires on every event emitted on the OpenCode event bus, after any matching host-event hook runs. |
+| `dispose` | `dispose.<ext>` | Fires when the plugin instance is being shut down and disposed. |
+
+### Available Host Events (32)
+
+Host events are emitted on OpenCode's event bus and routed through the `event` hook handler when `event.type` matches:
+
+| Event Name | Script File Name (`.sh` or `.ps1`) | Point of Execution |
+| ---------- | ---------------------------------- | ------------------ |
+| `command.executed` | `command-executed.<ext>` | Fires after a slash command has finished executing. |
+| `file.edited` | `file-edited.<ext>` | Fires when a file in the workspace is modified by a tool or editor operation. |
+| `file.watcher.updated` | `file-watcher-updated.<ext>` | Fires when the workspace filesystem watcher detects a file creation, change, or deletion. |
+| `installation.update-available` | `installation-update-available.<ext>` | Listed in the host event table for when a newer OpenCode version is detected (note: because stem derivation maps all `-` to `.`, only the catch-all `event.<ext>` hook can observe this event). |
+| `installation.updated` | `installation-updated.<ext>` | Fires after the OpenCode installation has been upgraded to a new version. |
+| `lsp.client.diagnostics` | `lsp-client-diagnostics.<ext>` | Fires when a Language Server Protocol (LSP) client publishes updated diagnostics for workspace files. |
+| `lsp.updated` | `lsp-updated.<ext>` | Fires when the status or configuration of connected LSP servers changes. |
+| `message.part.removed` | `message-part-removed.<ext>` | Fires when a streaming or recorded content part is removed from a chat message. |
+| `message.part.updated` | `message-part-updated.<ext>` | Fires when a content part of a chat message (such as text, reasoning, or a tool call) is created or updated. |
+| `message.removed` | `message-removed.<ext>` | Fires when a message is deleted from a session's conversation history. |
+| `message.updated` | `message-updated.<ext>` | Fires when a chat message's metadata or state is created or updated in a session. |
+| `permission.replied` | `permission-replied.<ext>` | Fires when the user responds (approve or deny) to a runtime permission prompt. |
+| `permission.updated` | `permission-updated.<ext>` | Fires when a permission request or rule state is created or updated. |
+| `pty.created` | `pty-created.<ext>` | Fires when a new pseudo-terminal (PTY) session is spawned. |
+| `pty.deleted` | `pty-deleted.<ext>` | Fires when a pseudo-terminal (PTY) session is removed and cleaned up. |
+| `pty.exited` | `pty-exited.<ext>` | Fires when the underlying process inside a pseudo-terminal (PTY) session exits. |
+| `pty.updated` | `pty-updated.<ext>` | Fires when a pseudo-terminal (PTY) session's state, title, or dimensions change. |
+| `server.connected` | `server-connected.<ext>` | Fires when a client establishes a connection to the OpenCode server. |
+| `server.instance.disposed` | `server-instance-disposed.<ext>` | Fires when an OpenCode server instance for a workspace is torn down and disposed. |
+| `session.compacted` | `session-compacted.<ext>` | Fires after a session's conversation history has finished compacting. |
+| `session.created` | `session-created.<ext>` | Fires when a new OpenCode chat session is created. |
+| `session.deleted` | `session-deleted.<ext>` | Fires when an existing OpenCode chat session is deleted. |
+| `session.diff` | `session-diff.<ext>` | Fires when the file diff summary for a session is computed or updated. |
+| `session.error` | `session-error.<ext>` | Fires when an unhandled error occurs during session execution. |
+| `session.idle` | `session-idle.<ext>` | Fires when a session finishes processing its current turn and transitions to the idle state. |
+| `session.status` | `session-status.<ext>` | Fires whenever a session transitions between runtime states (such as busy, idle, or retrying). |
+| `session.updated` | `session-updated.<ext>` | Fires when a session's metadata (such as title, sharing state, or timestamps) is updated. |
+| `todo.updated` | `todo-updated.<ext>` | Fires when the session's todo list is created or modified via `todowrite`. |
+| `tui.command.execute` | `tui-command-execute.<ext>` | Fires when a UI command is triggered inside the OpenCode TUI. |
+| `tui.prompt.append` | `tui-prompt-append.<ext>` | Fires when text is programmatically appended to the TUI prompt input box. |
+| `tui.toast.show` | `tui-toast-show.<ext>` | Fires when a toast notification is displayed in the OpenCode TUI. |
+| `vcs.branch.updated` | `vcs-branch-updated.<ext>` | Fires when the active version-control (Git) branch changes in the workspace. |
+
+**Excluded names**: `permission.ask`, `tool`, `auth`, `provider`, and `experimental.provider.small_model` are reserved OpenCode plugin surfaces and cannot be hooked via `.owflow/hooks/` (naming a script after them fails startup validation).
+
+### Example hook in both formats
+
+The same logging hook - it records the event, session, tool, and command from stdin - written in each supported format. Save **one** of these as `.owflow/hooks/tool-execute-before.<ext>`; the same hook name may not exist in two formats.
+
+Scripts may log to stdout or stderr; both are captured automatically and shown in the TUI logs popup. Their working directory is the project root. Keep ad-hoc log files outside `.owflow/hooks/` - the strict digest allows only hook scripts there.
+
+**Bash** (`.owflow/hooks/tool-execute-before.sh`, uses `jq`):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+envelope="$(cat)"
+event="$(jq -r '.event // "unknown"' <<<"$envelope")"
+session="$(jq -r '.session.sessionID // "unknown"' <<<"$envelope")"
+tool="$(jq -r '.context.tool // "?"' <<<"$envelope")"
+command="$(jq -r '.context.args.command // ""' <<<"$envelope")"
+
+printf '%s [example-hook] %s session=%s tool=%s command=%s\n' \
+  "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$event" "$session" "$tool" "$command" >> .owflow/hook-events.log
+```
+
+**PowerShell** (`.owflow/hooks/tool-execute-before.ps1`):
+
+```powershell
+$ErrorActionPreference = "Stop"
+
+$envelope = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$context = $envelope.context
+$session = if ($envelope.session.sessionID) { $envelope.session.sessionID } else { "unknown" }
+$stamp = Get-Date -Format o
+
+$line = "$stamp [example-hook] $($envelope.event) session=$session tool=$($context.tool) command=$($context.args.command)"
+Add-Content -Path .owflow/hook-events.log -Value $line
+```
+
+> **Strict digest - important**: `.owflow/hooks/` may contain **only** hook scripts, and each hook name may appear in **exactly one** format (`.sh` or `.ps1` - never two files with the same stem). Any other entry - a directory, a `.md` readme, a dotfile - is a fatal registration error that drops the entire owflow plugin (including the destructive-command guard) until you fix or remove the file. Keep notes and fixtures elsewhere.
+
+Hooks are digested once at startup: **restart OpenCode to reload** after adding, editing, or removing a script (there is no watcher). Registration is fail-fast - a broken gate hook blocks the operation when it fires, it is never silently skipped; a `failed` gate also ends the current session. To start with user hooks disabled, set `OWFLOW_HOOKS_DISABLED=1`; the two built-in hooks (destructive-command guard and post-compaction reminder) remain active. To cap how long any single hook subprocess may run before being killed and treated as `failed`, set `OWFLOW_HOOK_TIMEOUT_MS=<milliseconds>` (default: untimed); in-flight hook subprocesses are also terminated automatically when the plugin disposes. To roll back to the previous release at any time, pin `"plugin": ["owflow@0.6.1"]` in `opencode.json` and restart OpenCode.
+
+**Trust model**: scripts are the host project's own code, executed with the user's full privileges, with inherited environment, no name/path validation, no default timeout (`OWFLOW_HOOK_TIMEOUT_MS` is opt-in), and no output cap on the hook process itself — the git-hooks/husky convention; the bypass and timeout switches are the operator controls. Runtime logs (below) are a bounded local diagnostic record, not a tamper-evident audit trail, and never include the dispatch envelope, prompt text, or tool arguments.
+
+**Visibility surfaces** (the loaded hook set is "effective after next restart"; TUI runtime colors are live):
+
+- Startup: the `[owflow]` banner logs every registered hook (`path -> event interpreter - status`), invalid entries, and the bypass state
+- CLI: `owflow-hooks` prints a table (or `--json`), scanning `./.owflow/hooks/` relative to the current directory; it exits 1 when invalid entries are found. The CLI runs on `bun` (same runtime as OpenCode), so it needs `bun` on your PATH
+- TUI: an always-on **Active hooks** panel in the right-hand sidebar lists every loaded hook by name - no command, session, message, or model turn required. Each row uses a colored status orb (like the MCP status in OpenCode): grey before the hook has fired, yellow while a hook is running, green after a successful fire, and red after a failed, blocked, or unavailable-interpreter run; a settled outcome stays until that hook fires again. Every hook reports `In progress` while its code runs. Only a silent successful catch-all `event` run clears that pending state without recording an outcome, returning the row to its previous state (or `Idle`), so the high-frequency `event` hook does not leave a terminal trace; event-named hooks (`session-idle`, ...) and the one-shot `config`/`dispose` hooks record silent successes too. A fresh session starts with every row `Idle` and lights up on a real fire, while resuming an existing session loads the recorded state of the hook logs for that session. The current state follows the hook name in muted grey as `Idle`, `In progress`, `Success`, or `Error`. A trailing `›` marks each row as openable, and hovering a row highlights it and tints its name. The dispatcher writes a single overwritten JSON snapshot to OpenCode's tmp directory (`owflow-hooks-<workspace-hash>.json` inside `os.tmpdir()/opencode/`) - one file per workspace, no per-run files, last writer wins. The file is a diagnostic bridge for the TUI; hook scripts and the `owflow-hooks/1` contract are unchanged. Set `OWFLOW_HOOKS_STATUS_FILE` only to override the path for tests or manual debugging.
+- TUI runtime logs: clicking a hook row opens a centered **run-detail popup** for that hook's latest settled run in the current session - status, duration, reason, exit code or signal, session, and total runs in the session (4,000-character budget; captured streams are omitted here). Its **View logs** button opens a second popup with the captured output across runs in the session: `--- stderr ---` first, then `--- stdout ---` (a valid `owflow-hooks/1` result envelope is parsed and excluded; all other stdout text is displayed). Session hook logs are not truncated; instead, large outputs are lazy-loaded in chunks as you scroll through the viewport. An empty capture shows `No output captured for this run.`. A successful event-named or `config`/`dispose` run is recorded even when it captured nothing (green `Success` row, `No output captured for this run.` in the logs popup); only a silent successful catch-all `event` run is a no-op. Runs that started before a fresh session's panel opened are ignored (showing an info toast instead of replaying a previous session's record), whereas resuming an existing session loads that session's recorded runs so details and captured logs remain viewable. The popup reads the log file at click time, so it works independently of the live status poll.
+
+**Runtime logs**: each hook fire is considered for an append-only JSONL file in the same tmp directory (`owflow-hook-logs-<workspace-hash>.jsonl`) - any hook run, or a catch-all `event` run that captured output or non-ok outcome. Only a silent successful catch-all `event` run is a no-op and appends nothing. Consecutive runs with identical event, hook, session, status, outcome, reason, exit code, signal, and captured output are coalesced into the first line, so a persistent failure or an unchanged repeated output cannot flood the file; a changed outcome or capture starts a new line. Hooks get their `stdout`, `stderr`, exit code, and signal captured automatically; a valid `owflow-hooks/1` result envelope is parsed from stdout and omitted from the captured log, while all other stdout text is stored as the `stdout` field. Captured hook output is never forwarded to OpenCode's process output - the log file and the TUI popup are its only surfaces. Session hook logs are stored in full without truncation and lazy-loaded by scrolling in the TUI; non-session runs remain capped at 16 KB per stream. The file is capped at 4 MB with a single `.1` rotation. Set `OWFLOW_HOOK_LOGS_FILE` only to override the path for tests or manual debugging. Logs may contain sensitive hook output - owflow performs no redaction - so treat the file like any other local diagnostic artifact. Older records that still carry `runnerClass` or `errorStack` remain readable.
+
+The CLI and TUI scans are **digest-only** - they validate names, extensions, and event derivations. Discovery is structural for every script, so the CLI, TUI, and startup banner report the same would-load set; no script is imported or executed.
+
+PowerShell (`.ps1`) is verified against the same subprocess contract as `.sh` (envelope in, result JSON out, fail-closed mapping). The CLI and the startup banner remain the unconditional visibility fallbacks outside the TUI.
+
+## Environment Variables
+
+You can configure owflow and its hook runtime behavior using the following environment variables:
+
+| Variable | Values / Type | Default | Description |
+| -------- | ------------- | ------- | ----------- |
+| `OWFLOW_HOOKS_DISABLED` | `1` or unset | unset | **Bypass user hooks.** When set to `1`, disables loading, validating, and executing user hooks from `.owflow/hooks/`. Built-in hooks (destructive-command guard and post-compaction reminder) remain active. Disables active hooks status polling and log popups in the TUI. Useful as an emergency bypass if a hook script is broken or fails strict validation. |
+| `OWFLOW_HOOK_TIMEOUT_MS` | Positive integer (ms) | unset (untimed) | **Per-hook execution timeout.** Maximum wall-clock time in milliseconds that a single user hook subprocess (`.sh` or `.ps1`) may run before being terminated and treated as failed. If a gate hook times out, the active session is aborted. |
+| `OWFLOW_HOOKS_STATUS_FILE` | File path | `os.tmpdir()/opencode/owflow-hooks-<hash>.json` | **Hook status snapshot path override.** Overrides the location of the single-snapshot JSON file used by the dispatcher to communicate live hook states (`Idle`, `In progress`, `Success`, `Error`) to the TUI Active hooks sidebar panel. Intended for tests and manual debugging. |
+| `OWFLOW_HOOK_LOGS_FILE` | File path | `os.tmpdir()/opencode/owflow-hook-logs-<hash>.jsonl` | **Hook runtime log file path override.** Overrides the append-only JSONL log file where hook run records (exit code, signal, duration, captured `stdout`/`stderr`) are saved and read by the TUI log viewer popup. Intended for tests and manual debugging. |
+
+> **Subprocess Environment**: User hook scripts run with inherited environment variables from OpenCode, meaning standard system variables (such as `PATH`, `TMPDIR`, and any credentials or project variables like `GH_TOKEN`) are available within your scripts.
 
 ## Beta Channel
 

@@ -1,7 +1,6 @@
 ---
 name: code-reviewer
 description: Automated code quality, security, and performance analysis. Analyzes code for complexity, duplication, security vulnerabilities, performance issues, and best practices compliance. Can run standalone (via command) or as part of implementation verification. Provides actionable findings categorized by severity. Read-only - reports issues without fixing. Does not interact with users.
-model: inherit
 color: orange
 mode: subagent
 hidden: true

@@ -1,7 +1,6 @@
 ---
 name: production-readiness-checker
 description: Automated production deployment readiness verification. Analyzes configuration management, monitoring setup, error handling, performance scalability, security hardening, and deployment considerations. Provides GO/NO-GO deployment recommendation with categorized blockers and concerns. Read-only - reports issues without fixing. Does not interact with users.
-model: inherit
 color: red
 mode: subagent
 hidden: true
