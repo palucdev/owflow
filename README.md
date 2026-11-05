@@ -234,7 +234,12 @@ Standards live in `.owflow/docs/standards/` and are indexed in `.owflow/docs/IND
 
 Extend OpenCode's lifecycle with your project's own scripts. Drop hook scripts into `.owflow/hooks/` and owflow dispatches them through its hook handlers - no plugin code required.
 
-Script names map to events: the kebab-case filename stem becomes the dotted event name (`tool-execute-before.sh` → `tool.execute.before`). A stem may also name a v1 host event (`session-idle.sh` → `session.idle`); those hooks fire when OpenCode emits that event type. The extension selects the interpreter:
+### File Placement and Naming Rules
+
+- **Where to place files**: Place all hook scripts directly inside `.owflow/hooks/` at the root of your project (e.g., `<project-root>/.owflow/hooks/tool-execute-before.sh`). Discovery is flat (one directory level only, no subdirectories).
+- **How to name files**: Name each file `<kebab-case-event>.<ext>`, where the lowercase kebab-case stem (`[a-z0-9]+(-[a-z0-9]+)*`) maps directly to the dotted hook or event name by replacing `-` with `.` (for example, `tool-execute-before.sh` → `tool.execute.before`, `session-idle.ps1` → `session.idle`).
+- **Supported extensions**: Use `.sh` (executed via `bash`) or `.ps1` (executed via `pwsh` / `powershell.exe`).
+- **One file per hook**: Each hook name may exist in **exactly one** format (`.sh` or `.ps1` - never both), and `.owflow/hooks/` must not contain any non-hook files (no READMEs, subdirectories, dotfiles, or log files).
 
 | Extension | Interpreter | Transport |
 | --------- | ----------- | --------- |
@@ -244,6 +249,70 @@ Script names map to events: the kebab-case filename stem becomes the dotted even
 **All hooks are gate hooks** governed by universal fail-closed semantics (16 lifecycle events and 32 host events) using the standard **git-hooks contract**:
 - **Input (`stdin`)**: JSON `{ event, session?: { sessionID }, context }`.
 - **Output (`exit code` + `stdout`/`stderr`)**: Exit `0` succeeds; any non-zero exit rejects the operation with a `Blocked:` error (using `stderr` or `stdout` as the reason) and terminates the active session. Missing interpreters fail closed at fire time.
+
+### Available Lifecycle Hooks (16)
+
+Lifecycle hooks attach directly to OpenCode's plugin hook points:
+
+| Event Name | Script File Name (`.sh` or `.ps1`) | Point of Execution |
+| ---------- | ---------------------------------- | ------------------ |
+| `config` | `config.<ext>` | Fires once during plugin initialization after owflow registers its skills, commands, and agents into the OpenCode configuration. |
+| `chat.message` | `chat-message.<ext>` | Fires when a user submits a chat message in a session, before the model processes the turn. |
+| `chat.params` | `chat-params.<ext>` | Fires when model generation parameters (such as temperature, topP, or provider options) are prepared for a chat request. |
+| `chat.headers` | `chat-headers.<ext>` | Fires when HTTP headers are assembled for an outgoing model provider request. |
+| `command.execute.before` | `command-execute-before.<ext>` | Fires immediately before a slash command is executed. |
+| `tool.definition` | `tool-definition.<ext>` | Fires when a tool's schema and description are being resolved for presentation to the model. |
+| `tool.execute.before` | `tool-execute-before.<ext>` | Fires immediately before a tool call executes, right after owflow's built-in destructive-command guard passes. |
+| `tool.execute.after` | `tool-execute-after.<ext>` | Fires immediately after a tool call finishes executing and produces its result. |
+| `shell.env` | `shell-env.<ext>` | Fires when environment variables are being constructed for a shell execution context. |
+| `experimental.chat.messages.transform` | `experimental-chat-messages-transform.<ext>` | Fires before the conversation message history is sent to the model for a turn. |
+| `experimental.chat.system.transform` | `experimental-chat-system-transform.<ext>` | Fires when the system prompt is being assembled before a model request. |
+| `experimental.session.compacting` | `experimental-session-compacting.<ext>` | Fires when a session's context window is being compacted, right after owflow injects its orchestrator-state reminder. |
+| `experimental.compaction.autocontinue` | `experimental-compaction-autocontinue.<ext>` | Fires during context compaction when determining whether the session should automatically continue its turn. |
+| `experimental.text.complete` | `experimental-text-complete.<ext>` | Fires when the model finishes generating a text response segment. |
+| `event` | `event.<ext>` | Catch-all hook that fires on every event emitted on the OpenCode event bus, after any matching host-event hook runs. |
+| `dispose` | `dispose.<ext>` | Fires when the plugin instance is being shut down and disposed. |
+
+### Available Host Events (32)
+
+Host events are emitted on OpenCode's event bus and routed through the `event` hook handler when `event.type` matches:
+
+| Event Name | Script File Name (`.sh` or `.ps1`) | Point of Execution |
+| ---------- | ---------------------------------- | ------------------ |
+| `command.executed` | `command-executed.<ext>` | Fires after a slash command has finished executing. |
+| `file.edited` | `file-edited.<ext>` | Fires when a file in the workspace is modified by a tool or editor operation. |
+| `file.watcher.updated` | `file-watcher-updated.<ext>` | Fires when the workspace filesystem watcher detects a file creation, change, or deletion. |
+| `installation.update-available` | `installation-update-available.<ext>` | Listed in the host event table for when a newer OpenCode version is detected (note: because stem derivation maps all `-` to `.`, only the catch-all `event.<ext>` hook can observe this event). |
+| `installation.updated` | `installation-updated.<ext>` | Fires after the OpenCode installation has been upgraded to a new version. |
+| `lsp.client.diagnostics` | `lsp-client-diagnostics.<ext>` | Fires when a Language Server Protocol (LSP) client publishes updated diagnostics for workspace files. |
+| `lsp.updated` | `lsp-updated.<ext>` | Fires when the status or configuration of connected LSP servers changes. |
+| `message.part.removed` | `message-part-removed.<ext>` | Fires when a streaming or recorded content part is removed from a chat message. |
+| `message.part.updated` | `message-part-updated.<ext>` | Fires when a content part of a chat message (such as text, reasoning, or a tool call) is created or updated. |
+| `message.removed` | `message-removed.<ext>` | Fires when a message is deleted from a session's conversation history. |
+| `message.updated` | `message-updated.<ext>` | Fires when a chat message's metadata or state is created or updated in a session. |
+| `permission.replied` | `permission-replied.<ext>` | Fires when the user responds (approve or deny) to a runtime permission prompt. |
+| `permission.updated` | `permission-updated.<ext>` | Fires when a permission request or rule state is created or updated. |
+| `pty.created` | `pty-created.<ext>` | Fires when a new pseudo-terminal (PTY) session is spawned. |
+| `pty.deleted` | `pty-deleted.<ext>` | Fires when a pseudo-terminal (PTY) session is removed and cleaned up. |
+| `pty.exited` | `pty-exited.<ext>` | Fires when the underlying process inside a pseudo-terminal (PTY) session exits. |
+| `pty.updated` | `pty-updated.<ext>` | Fires when a pseudo-terminal (PTY) session's state, title, or dimensions change. |
+| `server.connected` | `server-connected.<ext>` | Fires when a client establishes a connection to the OpenCode server. |
+| `server.instance.disposed` | `server-instance-disposed.<ext>` | Fires when an OpenCode server instance for a workspace is torn down and disposed. |
+| `session.compacted` | `session-compacted.<ext>` | Fires after a session's conversation history has finished compacting. |
+| `session.created` | `session-created.<ext>` | Fires when a new OpenCode chat session is created. |
+| `session.deleted` | `session-deleted.<ext>` | Fires when an existing OpenCode chat session is deleted. |
+| `session.diff` | `session-diff.<ext>` | Fires when the file diff summary for a session is computed or updated. |
+| `session.error` | `session-error.<ext>` | Fires when an unhandled error occurs during session execution. |
+| `session.idle` | `session-idle.<ext>` | Fires when a session finishes processing its current turn and transitions to the idle state. |
+| `session.status` | `session-status.<ext>` | Fires whenever a session transitions between runtime states (such as busy, idle, or retrying). |
+| `session.updated` | `session-updated.<ext>` | Fires when a session's metadata (such as title, sharing state, or timestamps) is updated. |
+| `todo.updated` | `todo-updated.<ext>` | Fires when the session's todo list is created or modified via `todowrite`. |
+| `tui.command.execute` | `tui-command-execute.<ext>` | Fires when a UI command is triggered inside the OpenCode TUI. |
+| `tui.prompt.append` | `tui-prompt-append.<ext>` | Fires when text is programmatically appended to the TUI prompt input box. |
+| `tui.toast.show` | `tui-toast-show.<ext>` | Fires when a toast notification is displayed in the OpenCode TUI. |
+| `vcs.branch.updated` | `vcs-branch-updated.<ext>` | Fires when the active version-control (Git) branch changes in the workspace. |
+
+**Excluded names**: `permission.ask`, `tool`, `auth`, `provider`, and `experimental.provider.small_model` are reserved OpenCode plugin surfaces and cannot be hooked via `.owflow/hooks/` (naming a script after them fails startup validation).
 
 ### Example hook in both formats
 
