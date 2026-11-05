@@ -20,19 +20,19 @@ Located in `.owflow/docs/project/`
 
 ### Vision (`project/vision.md`)
 
-Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status (v0.7.0, pre-1.0, solo-maintained MIT), package surface (51 skills, 23 subagents, 52 commands), test posture (297 tests across 18 suites, ~97.8% line / ~98.7% function coverage), 6–12 month goals (grow workflow features, deterministic gates, registration smoke test, CI), and evolution to four decomposed workflows (development 0.3.0, research 0.4.2, migration 0.5.0, performance 0.6.0) sharing dispatcher + subskill + `goal-*` architecture.
+Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status, package surface (skills, subagents, commands), test posture (80%+ coverage), 6–12 month goals (grow workflow features, deterministic gates, CI), and evolution to dispatcher + subskill + `goal-*` architecture.
 
 ### Roadmap (`project/roadmap.md`)
 
-v0.7.0 feature inventory (4 workflows, 51 skills, 23 subagents, 52 commands, 2 custom tools, user hooks wrapper) with recent-update history; high-priority plans (OpenCode v2 port, deterministic entry-gate checks, new workflow capabilities); medium-priority plans (CI, CONTRIBUTING, internals docs; type declarations and performance-command docs parity resolved); technical debt (`.gitattributes`/formatter, agent frontmatter consistency; dual lockfiles and hook hardening resolved); and future considerations (ADR records, generated docs counts, skill-corpus scaling).
+Feature inventory with recent-update history; high-priority plans; medium-priority plans; technical debt; and future considerations;
 
 ### Tech Stack (`project/tech-stack.md`)
 
-Languages (TypeScript 5 strict ESM with `.d.ts` declarations; markdown + YAML frontmatter product surface: 51 skills, ~13.3K lines), Bun/Node tooling (single `bun.lock`), three runtime dependencies, build & runtime flow diagram, testing (bun:test, 297 tests across 18 suites, coverage ≥ 0.8), dist payload (189 files), version management, and absent infrastructure (no CI, DB, or containers).
+Languages, Bun/Node tooling, runtime dependencies, build & runtime flow diagram, testing (bun:test, coverage ≥ 0.8), dist payload, version management, and infrastructure.
 
 ### Architecture (`project/architecture.md`)
 
-Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown-defined workflow engine with per-task state machine — all four workflows decomposed (dispatcher + subskills + autonomous `goal-*` wrapper) with per-workflow slug counts (development 13, migration 10, performance 9, research 8); layered system structure, distribution/context diagram, data flow, and invocation sequence diagram.
+Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown-defined workflow engine with per-task state machine with per-workflow slugs; layered system structure, distribution/context diagram, data flow, and invocation sequence diagram.
 
 ### User Hooks (`project/user-hooks.md`)
 
@@ -62,7 +62,7 @@ TypeScript specifics: `strict` with `noFallthroughCasesInSwitch`/`noImplicitOver
 
 #### Commenting (`standards/global/commenting.md`)
 
-Sparse (~10% of lines) rationale-only comments, no TODO/FIXME/HACK markers, no commented-out code.
+Sparse rationale-only comments, no TODO/FIXME/HACK markers, no commented-out code.
 
 ---
 
@@ -152,5 +152,5 @@ Single release gate (`bun run build`: clean `dist/`, type-check, tests, then cop
 
 ---
 
-**Last Generated**: 2026-10-12
-**Maintained by**: Documentation Manager skill
+**Last Generated**: 2026-11-05
+**Maintained by**: Documentation Manager skill + Repo owner

@@ -31,6 +31,7 @@ import {
   scanHooks,
   STATUS_FILE_ENV,
   TABLE_COLUMNS,
+  type HookRunLogRecord,
 } from '../../hooks/user-hooks.js';
 
 describe('user-hooks (consolidated user-hooks engine)', () => {
@@ -274,23 +275,23 @@ describe('user-hooks (consolidated user-hooks engine)', () => {
     // readSessionLatestLogs returns latest record per event for ses_1
     const ses1Logs = readSessionLatestLogs(logFile, 'ses_1');
     expect(ses1Logs.size).toBe(2);
-    expect(ses1Logs.get(HookEvent.ToolExecuteBefore)).toEqual(recordA2);
-    expect(ses1Logs.get(HookEvent.ChatMessage)).toEqual(recordB1);
+    expect(ses1Logs.get(HookEvent.ToolExecuteBefore)).toEqual(recordA2 as HookRunLogRecord);
+    expect(ses1Logs.get(HookEvent.ChatMessage)).toEqual(recordB1 as HookRunLogRecord);
 
     // ses_2 only has recordOther
     const ses2Logs = readSessionLatestLogs(logFile, 'ses_2');
     expect(ses2Logs.size).toBe(1);
-    expect(ses2Logs.get(HookEvent.ToolExecuteBefore)).toEqual(recordOther);
+    expect(ses2Logs.get(HookEvent.ToolExecuteBefore)).toEqual(recordOther as HookRunLogRecord);
 
     // readLatestHookLog with sessionID
-    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, 'ses_1')).toEqual(recordA2);
-    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, 'ses_2')).toEqual(recordOther);
+    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, 'ses_1')).toEqual(recordA2 as HookRunLogRecord);
+    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, 'ses_2')).toEqual(recordOther as HookRunLogRecord);
     expect(readLatestHookLog(logFile, HookEvent.ChatMessage, 5_000, 'ses_2')).toBeUndefined();
 
     // readSessionHookLogs returns all records for that session event
     const ses1ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_1');
-    expect(ses1ToolLogs).toEqual([recordA1, recordA2]);
+    expect(ses1ToolLogs).toEqual([recordA1, recordA2] as HookRunLogRecord[]);
     const ses2ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_2');
-    expect(ses2ToolLogs).toEqual([recordOther]);
+    expect(ses2ToolLogs).toEqual([recordOther] as HookRunLogRecord[]);
   });
 });

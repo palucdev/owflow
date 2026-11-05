@@ -58,27 +58,9 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
       for (const line of renderSnapshot(snapshot)) console.log(line);
       let typedConfig = config as OpenCodeConfig;
 
-      // Get small_model config for alias resolution
-      // Try from config parameter first, fallback to reading opencode.json
-      let smallModel = typedConfig.small_model ?? '';
-
-      if (!smallModel) {
-        try {
-          // Check project-level opencode.json
-          const projectConfigPath = path.join(directory, 'opencode.json');
-          if (fs.existsSync(projectConfigPath)) {
-            const rawConfig = fs.readFileSync(projectConfigPath, 'utf8');
-            const opencodeConfig = JSON.parse(rawConfig);
-            smallModel = opencodeConfig.small_model;
-          }
-        } catch (error) {
-          console.warn(`Couldn't read or parse opencode.json config - small_model remains undefined`);
-        }
-      }
-
       configureSkills(typedConfig);
       configureCommands(typedConfig);
-      configureAgents(typedConfig, smallModel);
+      configureAgents(typedConfig);
 
       config = typedConfig;
 

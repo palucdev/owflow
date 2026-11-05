@@ -51,7 +51,7 @@ describe('OwflowPlugin', () => {
   });
 
   describe('config hook', () => {
-    test('should configure skills, commands, and agents with small_model from config', async () => {
+    test('should configure skills, commands, and agents from config', async () => {
       const skillsSpy = spyOn(skillsConfig, 'configureSkills').mockImplementation(() => {});
       const commandsSpy = spyOn(commandsConfig, 'configureCommands').mockImplementation(() => {});
       const agentsSpy = spyOn(agentsConfig, 'configureAgents').mockImplementation(() => {});
@@ -59,43 +59,18 @@ describe('OwflowPlugin', () => {
 
       try {
         const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
-        const inputConfig = { small_model: 'test-haiku' };
+        const inputConfig = {};
 
         await plugin.config!(inputConfig as any);
 
         expect(skillsSpy).toHaveBeenCalledWith(inputConfig as any);
         expect(commandsSpy).toHaveBeenCalledWith(inputConfig as any);
-        expect(agentsSpy).toHaveBeenCalledWith(inputConfig as any, 'test-haiku');
+        expect(agentsSpy).toHaveBeenCalledWith(inputConfig as any);
       } finally {
         skillsSpy.mockRestore();
         commandsSpy.mockRestore();
         agentsSpy.mockRestore();
         consoleLogSpy.mockRestore();
-      }
-    });
-
-    test('should read small_model from project opencode.json as fallback, and handle invalid JSON', async () => {
-      const opencodeJsonPath = path.join(tmpDir, 'opencode.json');
-      fs.writeFileSync(opencodeJsonPath, JSON.stringify({ small_model: 'file-haiku' }), 'utf8');
-
-      const agentsSpy = spyOn(agentsConfig, 'configureAgents').mockImplementation(() => {});
-      const consoleLogSpy = spyOn(console, 'log').mockImplementation(() => {});
-      const consoleWarnSpy = spyOn(console, 'warn').mockImplementation(() => {});
-
-      try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
-        await plugin.config!({} as any);
-        expect(agentsSpy).toHaveBeenCalledWith(expect.any(Object), 'file-haiku');
-
-        // Invalid JSON warning
-        fs.writeFileSync(opencodeJsonPath, 'invalid-json{', 'utf8');
-        await plugin.config!({} as any);
-        expect(consoleWarnSpy).toHaveBeenCalledWith("Couldn't read or parse opencode.json config - small_model remains undefined");
-        expect(agentsSpy).toHaveBeenCalledWith(expect.any(Object), '');
-      } finally {
-        agentsSpy.mockRestore();
-        consoleLogSpy.mockRestore();
-        consoleWarnSpy.mockRestore();
       }
     });
   });

@@ -10,7 +10,7 @@
 
 ### High Priority
 
-- [ ] **OpenCode v2 support** — port the plugin to the V2 plugin API (`Plugin.define` + `setup(ctx)`, domain hooks and transforms) while keeping the V1 entrypoint working for `^1.18.x`; verify hooks, both custom tools, and registration end-to-end on V2. The user hooks wrapper (0.7.0) already ships its execution core behind an internal platform-agnostic seam (`run(entry, envelope) → Outcome`, zero `Plugin`/`Hooks`/`PluginInput` references under `src/hooks-wrapper/`); the staged port targets `@opencode/plugin` 2.0.x (not the `1.18.x` preview), in the order entrypoint/registration → hook subset → transforms → unsupported declarations, gated on pinning 2.0.x and resolving the research's pending unknowns
+- [ ] **OpenCode v2 support** — port the plugin to the V2 plugin API while keeping the V1 entrypoint working for `^1.18.x`; verify hooks, both custom tools, and registration end-to-end on V2. The user hooks wrapper (0.7.0) already ships its execution core behind an internal platform-agnostic seam; the staged port targets `@opencode/plugin` 2.0.x (not the `1.18.x` preview), in the order entrypoint/registration → hook subset → transforms → unsupported declarations, gated on pinning 2.0.x and resolving the research's pending unknowns
 - [ ] **Deterministic entry-gate checks** — implement the state-query script + lifecycle hook noted as the future direction in the orchestrator framework docs; today entry-gate prerequisite checks are agent-executed prose and can be skipped or misread
 - [ ] **New workflow capabilities** — continue growing the feature set per project goal: extend quick lanes, deepen subskill composition, and add richer standards automation
 

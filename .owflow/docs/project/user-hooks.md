@@ -11,7 +11,7 @@ owflow exposes OpenCode's lifecycle events to the host project as git-style scri
 - A stem may also name a v1 **host event** (`HOST_EVENT_NAMES`, 32 events), firing when the single `event` hook receives that type (`session-idle.sh` → `session.idle`).
 - Each hook name may appear **exactly once**, in one format (`.sh` via `bash`, or `.ps1` via `pwsh`/`powershell.exe`). Any non-regular file, unroutable extension, ill-formed stem, duplicate stem, or unknown/excluded event fails the strict startup digest loudly with a recovery `Hint:`.
 
-## Git-Hooks Contract
+## Hooks Contract
 
 All 16 lifecycle events and 32 host events are fail-closed gate hooks:
 

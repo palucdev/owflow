@@ -6,7 +6,7 @@ import * as fileUtil from '../../utils/file-util.js';
 describe('configureAgents', () => {
   test('should initialize config.agent object when agent is undefined', () => {
     const config = {} as OpenCodeConfig;
-    configureAgents(config, 'haiku');
+    configureAgents(config);
 
     expect(config.agent).toBeDefined();
     expect(typeof config.agent).toBe('object');
@@ -14,7 +14,7 @@ describe('configureAgents', () => {
 
   test('should populate config.agent with markdown files from agents directory', () => {
     const config = {} as OpenCodeConfig;
-    configureAgents(config, 'haiku');
+    configureAgents(config);
 
     // Real agents directory should load some agents
     expect(Object.keys(config.agent).length).toBeGreaterThan(0);
@@ -43,7 +43,7 @@ describe('configureAgents', () => {
     ] as any);
 
     try {
-      configureAgents(config, 'haiku');
+      configureAgents(config);
 
       expect(config.agent['existing-agent']).toEqual(customAgent);
       expect(config.agent['new-agent']).toEqual({
@@ -65,7 +65,7 @@ describe('configureAgents', () => {
 
     try {
       const config = {} as OpenCodeConfig;
-      configureAgents(config, 'haiku');
+      configureAgents(config);
 
       expect(Object.keys(config.agent).length).toBe(0);
     } finally {
@@ -100,7 +100,7 @@ describe('configureAgents', () => {
 
     try {
       const config = {} as OpenCodeConfig;
-      configureAgents(config, 'haiku');
+      configureAgents(config);
 
       expect(config.agent['agent-full']).toEqual({
         prompt: 'Agent full prompt',
@@ -116,71 +116,6 @@ describe('configureAgents', () => {
       });
     } finally {
       spy.mockRestore();
-    }
-  });
-
-  test('should resolve small model aliases correctly when smallModel is provided', () => {
-    const mockMarkdownFiles = [
-      {
-        data: { name: 'haiku-agent', model: 'haiku' },
-        content: 'Haiku prompt',
-      },
-      {
-        data: { name: 'mini-agent', model: 'gpt-4o-mini' },
-        content: 'Mini prompt',
-      },
-      {
-        data: { name: 'small-agent', model: 'SMALL' },
-        content: 'Small prompt',
-      },
-      {
-        data: { name: 'fast-agent', model: 'fast' },
-        content: 'Fast prompt',
-      },
-    ];
-
-    const spy = spyOn(fileUtil, 'loadMarkdownDir').mockReturnValue(mockMarkdownFiles as any);
-
-    try {
-      const config = {} as OpenCodeConfig;
-      configureAgents(config, 'configured-small-model');
-
-      expect(config.agent['haiku-agent'].model).toBe('configured-small-model');
-      expect(config.agent['mini-agent'].model).toBe('configured-small-model');
-      expect(config.agent['small-agent'].model).toBe('configured-small-model');
-      expect(config.agent['fast-agent'].model).toBe('configured-small-model');
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  test('should handle small model alias when smallModel is empty and log warning', () => {
-    const mockMarkdownFiles = [
-      {
-        data: { name: 'alias-agent', model: 'haiku' },
-        content: 'Alias prompt',
-      },
-      {
-        data: { name: 'inherit-agent', model: 'inherit' },
-        content: 'Inherit prompt',
-      },
-    ];
-
-    const spy = spyOn(fileUtil, 'loadMarkdownDir').mockReturnValue(mockMarkdownFiles as any);
-    const consoleWarnSpy = spyOn(console, 'warn').mockImplementation(() => {});
-
-    try {
-      const config = {} as OpenCodeConfig;
-      configureAgents(config, '');
-
-      expect(config.agent['alias-agent'].model).toBeUndefined();
-      expect(config.agent['inherit-agent'].model).toBeUndefined();
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        "[owflow] Agent uses 'haiku' but no small_model configured in opencode.json - falling back to inherit",
-      );
-    } finally {
-      spy.mockRestore();
-      consoleWarnSpy.mockRestore();
     }
   });
 
@@ -200,7 +135,7 @@ describe('configureAgents', () => {
 
     try {
       const config = {} as OpenCodeConfig;
-      configureAgents(config, 'haiku');
+      configureAgents(config);
 
       expect(config.agent['faulty-agent']).toBeUndefined();
       expect(consoleWarnSpy).toHaveBeenCalledWith("[owflow] Failed to register agent 'faulty-agent': Second access error");

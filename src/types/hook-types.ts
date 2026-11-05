@@ -1,5 +1,3 @@
-/* ── Events & Types ───────────────────────────────────────────────────────── */
-
 export enum HookEvent {
   ToolExecuteBefore = 'tool.execute.before',
   ToolExecuteAfter = 'tool.execute.after',
@@ -161,4 +159,9 @@ export interface HooksWrapper {
 export interface HooksWrapperOptions {
   readonly statusFile?: string;
   readonly logFile?: string;
+}
+
+export enum HookRunResult {
+  SUCCESS = 0,
+  ERROR = 1,
 }

@@ -31,8 +31,8 @@ None. No server framework, HTTP API, or long-running service. The only runtime f
 
 ### Testing
 
-- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`; 297 tests across 18 suites with 19 YAML fixtures
-- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored); currently ~97.8% line / ~98.7% function coverage
+- **`bun:test`** — `describe`/`test`/`expect`, `spyOn` module mocking, `beforeEach`/`afterEach`.
+- **Bun coverage** — enabled in `bunfig.toml` (text + lcov reporters, threshold 0.8, `dist` and tests ignored).
 
 ## Database
 
@@ -119,7 +119,7 @@ Minimal dependency surface is a deliberate design principle — 3 runtime depend
 
 ## Version Management
 
-Semver in `package.json` (currently `0.7.0`, pre-1.0). `CHANGELOG.md` follows Keep a Changelog and records releases from 0.1.0 (2026-05-10) through 0.7.0 (2026-10-29). Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
+Semver in `package.json`. `CHANGELOG.md` follows Keep a Changelog and records releases. Version is exposed to the plugin at runtime via `src/utils/plugin-info.ts` (read from `package.json` with an `unknown` fallback).
 
 ## Migration Path (for legacy projects)
 
@@ -127,5 +127,5 @@ Not applicable — modern stack throughout (Bun >= 1.3, TypeScript 5, Node >= 22
 
 ---
 
-_Last Updated_: 2026-10-29
+_Last Updated_: 2026-11-05
 _Auto-detected_: languages, versions, dependencies, build/test tooling, absence of CI/linting/containers, distribution model — all from repository inspection
