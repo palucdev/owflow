@@ -11,7 +11,7 @@ import {
   MAX_LOG_FILE_BYTES,
 } from '../../hooks/hooks-wrapper.js';
 import { readHookLogRecords, readLatestHookLog } from '../../hooks/hook-logs.js';
-import { HookEvent } from '../../types/hook-types.js';
+import { HookEvent, HookRunState } from '../../types/hook-types.js';
 
 describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
   const tempDirs: string[] = [];
@@ -82,7 +82,7 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     // Session hook run is NOT truncated
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_ok' }, {});
     const latestOk = readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, Number.NEGATIVE_INFINITY, 'ses_ok');
-    expect(latestOk?.status).toBe('success');
+    expect(latestOk?.status).toBe(HookRunState.SUCCESS);
     expect(latestOk?.truncated).toBeUndefined();
     expect(latestOk?.stdout?.length).toBeGreaterThan(MAX_CAPTURE_BYTES);
     expect(latestOk?.stderr).toBe('warn line\n');
@@ -91,7 +91,7 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     // Non-session hook run caps at MAX_CAPTURE_BYTES and is marked truncated
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
     const nonSession = readLatestHookLog(logFile, HookEvent.ToolExecuteBefore);
-    expect(nonSession?.status).toBe('success');
+    expect(nonSession?.status).toBe(HookRunState.SUCCESS);
     expect(nonSession?.truncated).toBe(true);
 
     // Coalescing identical consecutive run does not duplicate JSONL line

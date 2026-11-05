@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { scanHooks } from '../hooks/hooks-discovery.js';
-import { HookDigestMode, type HookEventName, type HookRunLogRecord, type HookRunState } from '../types/hook-types.js';
+import { HookDigestMode, HookRunState, type HookEventName, type HookRunLogRecord } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
 import type { SidebarTheme } from './primitives.js';
 
@@ -28,11 +28,31 @@ export const buildActiveHooksView = (directory: string): ActiveHooksView => {
   };
 };
 
-export const statusLabelFor = (status: HookRunState | undefined): string =>
-  status === 'pending' ? 'In progress' : status === 'success' ? 'Success' : status === 'failure' ? 'Error' : 'Idle';
+export const statusLabelFor = (status: HookRunState | undefined): string => {
+  switch (status) {
+    case HookRunState.PENDING:
+      return 'In progress';
+    case HookRunState.SUCCESS:
+      return 'Success';
+    case HookRunState.FAILURE:
+      return 'Error';
+    default:
+      return 'Idle';
+  }
+};
 
-export const colorForStatus = (status: HookRunState | undefined, theme: SidebarTheme): unknown =>
-  status === 'pending' ? theme.warning : status === 'success' ? theme.success : status === 'failure' ? theme.error : theme.textMuted;
+export const colorForStatus = (status: HookRunState | undefined, theme: SidebarTheme): unknown => {
+  switch (status) {
+    case HookRunState.PENDING:
+      return theme.warning;
+    case HookRunState.SUCCESS:
+      return theme.success;
+    case HookRunState.FAILURE:
+      return theme.error;
+    default:
+      return theme.textMuted;
+  }
+};
 
 const truncateMessage = (message: string, maxChars: number): string => {
   if (message.length <= maxChars) return message;
@@ -43,7 +63,7 @@ const truncateMessage = (message: string, maxChars: number): string => {
 export const formatHookRunSummary = (record: HookRunLogRecord, maxChars = RUN_SUMMARY_MAX_CHARS): string => {
   const lines = [
     `Event:  ${record.event}`,
-    `Status: ${record.status === 'success' ? 'Success' : 'Error'} — ${record.durationMs} ms`,
+    `Status: ${record.status === HookRunState.SUCCESS ? 'Success' : 'Error'} — ${record.durationMs} ms`,
     `Time:   ${new Date(record.finishedAt).toISOString()}`,
     ...(record.sessionID !== undefined ? [`Session: ${record.sessionID}`] : []),
     ...(record.exitCode !== undefined ? [`Exit:   ${record.exitCode ?? 'none'}`] : []),

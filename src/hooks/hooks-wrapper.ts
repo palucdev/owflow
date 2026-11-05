@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Hooks } from '@opencode-ai/plugin';
 import {
   HookEvent,
+  HookRunState,
   isHostEventName,
   type DispatchableEvent,
   type Dispatcher,
@@ -166,7 +167,7 @@ export const initializeHooksWrapper = async (
         const label = entry.interpreter.resolved ?? entry.interpreter.expected;
         const reason = `${label} is not available`;
         statuses.set(event, {
-          status: 'failure',
+          status: HookRunState.FAILURE,
           startedAt,
           finishedAt: startedAt,
           durationMs: 0,
@@ -186,7 +187,7 @@ export const initializeHooksWrapper = async (
           startedAt,
           finishedAt: startedAt,
           durationMs: 0,
-          status: 'failure',
+          status: HookRunState.FAILURE,
           reason,
         });
         await abortSession(sessionID, entry.path);
@@ -198,7 +199,7 @@ export const initializeHooksWrapper = async (
 
       const previousStatus = statuses.get(event);
       statuses.set(event, {
-        status: 'pending',
+        status: HookRunState.PENDING,
         startedAt,
         ...(sessionID ? { sessionID } : {}),
       });
@@ -274,7 +275,7 @@ export const initializeHooksWrapper = async (
           : err.text.trim() || out.text.trim() || (signal ? `process terminated by signal ${signal}` : `process exited with code ${exitCode}`);
 
       statuses.set(event, {
-        status: ok ? 'success' : 'failure',
+        status: ok ? HookRunState.SUCCESS : HookRunState.FAILURE,
         startedAt,
         finishedAt,
         durationMs,
@@ -295,7 +296,7 @@ export const initializeHooksWrapper = async (
         startedAt,
         finishedAt,
         durationMs,
-        status: ok ? 'success' : 'failure',
+        status: ok ? HookRunState.SUCCESS : HookRunState.FAILURE,
         exitCode,
         ...(signal ? { signal } : {}),
         ...(reason ? { reason } : {}),

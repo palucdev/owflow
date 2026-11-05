@@ -11,6 +11,7 @@ import {
   statusLabelFor,
 } from '../../tui/hook-formatting.js';
 import { THEME, makeLogRecord } from './primitives.js';
+import { HookRunState } from '../../types/hook-types.js';
 
 describe('TUI hook-formatting', () => {
   let tmpDir: string;
@@ -41,20 +42,20 @@ describe('TUI hook-formatting', () => {
   });
 
   test('statusLabelFor and colorForStatus should map states to labels and theme colors', () => {
-    expect(statusLabelFor('pending')).toBe('In progress');
-    expect(statusLabelFor('success')).toBe('Success');
-    expect(statusLabelFor('failure')).toBe('Error');
+    expect(statusLabelFor(HookRunState.PENDING)).toBe('In progress');
+    expect(statusLabelFor(HookRunState.SUCCESS)).toBe('Success');
+    expect(statusLabelFor(HookRunState.FAILURE)).toBe('Error');
     expect(statusLabelFor(undefined)).toBe('Idle');
 
-    expect(colorForStatus('pending', THEME)).toBe('warning-color');
-    expect(colorForStatus('success', THEME)).toBe('success-color');
-    expect(colorForStatus('failure', THEME)).toBe('error-color');
+    expect(colorForStatus(HookRunState.PENDING, THEME)).toBe('warning-color');
+    expect(colorForStatus(HookRunState.SUCCESS, THEME)).toBe('success-color');
+    expect(colorForStatus(HookRunState.FAILURE, THEME)).toBe('error-color');
     expect(colorForStatus(undefined, THEME)).toBe('muted-color');
   });
 
   test('formatHookRunSummary should format run metadata and support truncation', () => {
     const record = makeLogRecord({
-      status: 'failure',
+      status: HookRunState.FAILURE,
       exitCode: 1,
       reason: 'policy violation',
       sessionID: 'ses-123',
@@ -83,7 +84,7 @@ describe('TUI hook-formatting', () => {
 
     // Multiple session records
     const record2 = makeLogRecord({
-      status: 'failure',
+      status: HookRunState.FAILURE,
       stderr: 'second-err',
     });
     const sessionMsg = formatSessionHookLogsMessage([record, record2]);

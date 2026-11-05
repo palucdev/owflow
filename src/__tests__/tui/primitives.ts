@@ -1,4 +1,4 @@
-import type { HookRunLogRecord } from '../../hooks/hook-logs.js';
+import { HookRunState, type HookRunLogRecord } from '../../hooks/hook-logs.js';
 import type { SidebarTheme } from '../../tui/primitives.js';
 
 export interface FakeNode {
@@ -120,7 +120,7 @@ export const makeLogRecord = (overrides: Partial<HookRunLogRecord> = {}): HookRu
   startedAt: 1_000,
   finishedAt: 1_123,
   durationMs: 123,
-  status: 'success',
+  status: HookRunState.SUCCESS,
   ...overrides,
 });
 

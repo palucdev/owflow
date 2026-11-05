@@ -95,7 +95,11 @@ export interface HookScan {
   readonly failures: readonly HookValidationFailure[];
 }
 
-export type HookRunState = 'pending' | 'success' | 'failure';
+export enum HookRunState {
+  PENDING = 'pending',
+  SUCCESS = 'success',
+  FAILURE = 'failure',
+}
 
 export interface HookRuntimeEntry {
   readonly status: HookRunState;
@@ -128,7 +132,7 @@ export interface HookRunLogRecord {
   readonly startedAt: number;
   readonly finishedAt: number;
   readonly durationMs: number;
-  readonly status: 'success' | 'failure';
+  readonly status: HookRunState;
   readonly exitCode?: number | null;
   readonly signal?: string | null;
   readonly reason?: string;
