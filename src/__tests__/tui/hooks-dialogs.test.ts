@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import * as hookLogs from '../../hooks/hooks-logs.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
-import { buildHookLogsBody } from '../../tui/hook-dialogs.js';
+import { buildHookLogsBody } from '../../tui/hooks-dialogs.js';
 import { THEME, collectText, findClickableByContent, makeFakeApi, makeLogRecord, makeSolid, type FakeNode } from './primitives.js';
 
 describe('TUI hook-dialogs', () => {
@@ -17,6 +18,7 @@ describe('TUI hook-dialogs', () => {
   });
 
   afterEach(() => {
+    mock.restore();
     if (fs.existsSync(tmpDir)) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -29,15 +31,14 @@ describe('TUI hook-dialogs', () => {
       const record = makeLogRecord({ stdout: 'my log content' });
       fs.writeFileSync(logFile, `${JSON.stringify(record)}\n`, 'utf8');
 
+      spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(path.join(tmpDir, 'status.json'));
+      spyOn(hookLogs, 'resolveHooksLogFile').mockReturnValue(logFile);
+      spyOn(Date, 'now').mockReturnValue(0);
+
       const { api, slots, dialogCalls } = makeFakeApi(tmpDir);
       const { runtime } = makeSolid();
 
-      await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
-        statusFile: path.join(tmpDir, 'status.json'),
-        logFile,
-        pollMs: 50,
-        now: () => 0,
-      });
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
 
       const rendered = slots[0].slots.sidebar_content({
         theme: { current: THEME },
@@ -77,11 +78,10 @@ describe('TUI hook-dialogs', () => {
       const { api, slots, dialogCalls, toasts } = makeFakeApi(tmpDir);
       const { runtime } = makeSolid();
 
-      await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
-        statusFile: path.join(tmpDir, 'status.json'),
-        logFile: path.join(tmpDir, 'empty-logs.jsonl'),
-        pollMs: 50,
-      });
+      spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(path.join(tmpDir, 'status.json'));
+      spyOn(hookLogs, 'resolveHooksLogFile').mockReturnValue(path.join(tmpDir, 'empty-logs.jsonl'));
+
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
 
       const rendered = slots[0].slots.sidebar_content({
         theme: { current: THEME },

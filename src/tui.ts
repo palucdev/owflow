@@ -1,14 +1,8 @@
 import fs from 'node:fs';
 import type { TuiPluginApi, TuiPluginModule } from '@opencode-ai/plugin/tui';
-import {
-  readHookStatusSnapshot,
-  readSessionHookLogs,
-  readSessionLatestLogs,
-  resolveHooksLogFile,
-  resolveHooksStatusFile,
-} from './hooks/hook-logs.js';
-import type { HookEventName, HookRunLogRecord, HookRunState, HookRuntimeEntry, HookStatusReadResult } from './types/hook-types.js';
-import { DEFAULT_LOG_CHUNK_LINES, buildHookLogsBody, buildHookRunDetailBody, openHookLogPopup } from './tui/hook-dialogs.js';
+import { readHookStatusSnapshot, readSessionLatestLogs, resolveHooksLogFile, resolveHooksStatusFile } from './hooks/hooks-logs.js';
+import type { HookRunState, HookRuntimeEntry } from './types/hook-types.js';
+import { DEFAULT_LOG_CHUNK_LINES, buildHookLogsBody, buildHookRunDetailBody, openHookLogPopup } from './tui/hooks-dialogs.js';
 import {
   buildActiveHooksView,
   colorForStatus,
@@ -18,7 +12,7 @@ import {
   statusLabelFor,
   type ActiveHookRow,
   type ActiveHooksView,
-} from './tui/hook-formatting.js';
+} from './tui/hooks-formatting.js';
 import { materializeSidebar, type SidebarRenderHandle } from './tui/hooks-sidebar.js';
 import { loadSolidRuntime, type SidebarTheme, type SolidRuntime } from './tui/primitives.js';
 
@@ -42,21 +36,10 @@ export {
 const SIDEBAR_SLOT = 'sidebar_content';
 const DEFAULT_STATUS_POLL_MS = 200;
 
-export interface ActiveHooksSidebarOptions {
-  readonly statusFile?: string;
-  readonly logFile?: string;
-  readonly readSnapshot?: (file: string) => HookStatusReadResult;
-  readonly readSessionLogs?: (file: string, sessionID: string) => Map<string, HookRunLogRecord>;
-  readonly readSessionHookLogs?: (file: string, event: HookEventName, since?: number, sessionID?: string) => readonly HookRunLogRecord[];
-  readonly pollMs?: number;
-  readonly now?: () => number;
-}
-
 export const registerActiveHooksSidebar = async (
   api: TuiPluginApi,
   directory: string,
   loadSolid: () => Promise<SolidRuntime | null> = loadSolidRuntime,
-  options: ActiveHooksSidebarOptions = {},
 ): Promise<boolean> => {
   const solid = await loadSolid();
   if (solid === null) {
@@ -65,12 +48,8 @@ export const registerActiveHooksSidebar = async (
   }
 
   const view = buildActiveHooksView(directory);
-  const statusFile = options.statusFile ?? resolveHooksStatusFile(directory);
-  const logFile = options.logFile ?? resolveHooksLogFile(directory);
-  const readSnapshot = options.readSnapshot ?? readHookStatusSnapshot;
-  const readSessionLogs = options.readSessionLogs ?? readSessionLatestLogs;
-  const readSessionLogsList = options.readSessionHookLogs ?? readSessionHookLogs;
-  const now = options.now ?? Date.now;
+  const statusFile = resolveHooksStatusFile(directory);
+  const logFile = resolveHooksLogFile(directory);
   const handles: SidebarRenderHandle[] = [];
   let statuses = new Map<string, HookRuntimeEntry>();
   let lastMtime: number | undefined;
@@ -84,7 +63,7 @@ export const registerActiveHooksSidebar = async (
         const stat = fs.statSync(statusFile);
         if (stat.isFile() && lastMtime !== stat.mtimeMs) {
           lastMtime = stat.mtimeMs;
-          const result = readSnapshot(statusFile);
+          const result = readHookStatusSnapshot(statusFile);
           if (result.kind === 'ok') {
             statuses = new Map(Object.entries(result.snapshot.hooks));
           }
@@ -106,7 +85,7 @@ export const registerActiveHooksSidebar = async (
       }
     };
 
-    const timer = setInterval(tick, options.pollMs ?? DEFAULT_STATUS_POLL_MS);
+    const timer = setInterval(tick, DEFAULT_STATUS_POLL_MS);
     (timer as { unref?: () => void }).unref?.();
     api.lifecycle.onDispose(() => clearInterval(timer));
   }
@@ -117,11 +96,11 @@ export const registerActiveHooksSidebar = async (
       [SIDEBAR_SLOT]: (ctx: { readonly theme: { readonly current: SidebarTheme } }, props?: { readonly session_id?: string }) => {
         const sessionID = props?.session_id;
         const key = sessionID ?? '';
-        const notBefore = sessionEpochs.get(key) ?? (sessionEpochs.set(key, now()), sessionEpochs.get(key)!);
+        const notBefore = sessionEpochs.get(key) ?? (sessionEpochs.set(key, Date.now()), sessionEpochs.get(key)!);
         const initialStates = new Map<string, HookRunState>();
         if (sessionID !== undefined && sessionID.length > 0) {
           try {
-            const sessionLogs = readSessionLogs(logFile, sessionID);
+            const sessionLogs = readSessionLatestLogs(logFile, sessionID);
             for (const [event, rec] of sessionLogs) {
               initialStates.set(event, rec.status);
             }
@@ -133,7 +112,7 @@ export const registerActiveHooksSidebar = async (
           solid,
           (row, theme) => {
             if (pollingEnabled) {
-              openHookLogPopup(api, solid, logFile, readSessionLogsList, row, theme, notBefore, sessionID);
+              openHookLogPopup(api, solid, logFile, row, theme, notBefore, sessionID);
             }
           },
           () => api.renderer.requestRender(),

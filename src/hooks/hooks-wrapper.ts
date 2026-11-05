@@ -15,7 +15,7 @@ import {
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
-import { resolveHooksLogFile, resolveHooksStatusFile } from './hook-logs.js';
+import { resolveHooksLogFile, resolveHooksStatusFile } from './hooks-logs.js';
 import { scanHooks } from './hooks-discovery.js';
 
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';

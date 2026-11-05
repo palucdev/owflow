@@ -1,4 +1,4 @@
-import { HookRunState, type HookRunLogRecord } from '../../hooks/hook-logs.js';
+import { HookRunState, type HookRunLogRecord } from '../../hooks/hooks-logs.js';
 import type { SidebarTheme } from '../../tui/primitives.js';
 
 export interface FakeNode {

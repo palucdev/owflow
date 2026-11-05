@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import * as hookLogs from '../../hooks/hooks-logs.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
 import { THEME, collectText, findClickableByContent, makeFakeApi, makeSolid, wait } from './primitives.js';
+import type { TimerHandler } from 'bun';
 
 describe('TUI hooks-sidebar', () => {
   let tmpDir: string;
@@ -16,6 +18,7 @@ describe('TUI hooks-sidebar', () => {
   });
 
   afterEach(() => {
+    mock.restore();
     if (fs.existsSync(tmpDir)) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -26,9 +29,7 @@ describe('TUI hooks-sidebar', () => {
     const { runtime } = makeSolid();
 
     // Empty hooks directory
-    await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
-      pollMs: 50,
-    });
+    await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
     expect(slots).toHaveLength(1);
     expect(slots[0].order).toBe(50);
 
@@ -40,7 +41,7 @@ describe('TUI hooks-sidebar', () => {
     // With hooks registered and session_id
     fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
     const { api: apiWithHooks, slots: slotsWithHooks } = makeFakeApi(tmpDir);
-    await registerActiveHooksSidebar(apiWithHooks, tmpDir, async () => runtime, { pollMs: 50 });
+    await registerActiveHooksSidebar(apiWithHooks, tmpDir, async () => runtime);
 
     const hookRender = slotsWithHooks[0].slots.sidebar_content({ theme: { current: THEME } }, { session_id: 'ses-test' });
     const text = collectText(hookRender);
@@ -56,10 +57,11 @@ describe('TUI hooks-sidebar', () => {
       const { api, slots, disposeCallbacks, getRenders } = makeFakeApi(tmpDir);
       const { runtime } = makeSolid();
 
-      await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
-        statusFile,
-        pollMs: 10,
-      });
+      const realSetInterval = globalThis.setInterval;
+      spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(statusFile);
+      spyOn(globalThis, 'setInterval').mockImplementation(((fn: TimerHandler) => realSetInterval(fn, 10)) as typeof setInterval);
+
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
 
       const rendered = slots[0].slots.sidebar_content({
         theme: { current: THEME },
@@ -119,10 +121,9 @@ describe('TUI hooks-sidebar', () => {
         const { api, slots } = makeFakeApi(tmpDir);
         const { runtime } = makeSolid();
 
-        await registerActiveHooksSidebar(api, tmpDir, async () => runtime, {
-          statusFile: path.join(tmpDir, 'status.json'),
-          pollMs: 10,
-        });
+        spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(path.join(tmpDir, 'status.json'));
+
+        await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
 
         const rendered = slots[0].slots.sidebar_content({
           theme: { current: THEME },

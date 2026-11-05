@@ -10,7 +10,7 @@ import {
   MAX_CAPTURE_BYTES,
   MAX_LOG_FILE_BYTES,
 } from '../../hooks/hooks-wrapper.js';
-import { readHookLogRecords, readLatestHookLog } from '../../hooks/hook-logs.js';
+import { readHookLogRecords, readLatestHookLog } from '../../hooks/hooks-logs.js';
 import { HookEvent, HookRunState } from '../../types/hook-types.js';
 
 describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {

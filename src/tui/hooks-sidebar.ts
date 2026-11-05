@@ -1,5 +1,5 @@
 import type { HookRunState, HookRuntimeEntry } from '../types/hook-types.js';
-import { colorForStatus, statusLabelFor, type ActiveHookRow, type ActiveHooksView } from './hook-formatting.js';
+import { colorForStatus, statusLabelFor, type ActiveHookRow, type ActiveHooksView } from './hooks-formatting.js';
 import { el, txt, type SidebarTheme, type SolidRuntime } from './primitives.js';
 
 const EMPTY_HOOKS_NAME = '(none)';

@@ -13,7 +13,7 @@ import {
   resolveHooksStatusFile,
   STATUS_FILE_ENV,
   type HookRunLogRecord,
-} from '../../hooks/hook-logs.js';
+} from '../../hooks/hooks-logs.js';
 import { HookEvent } from '../../types/hook-types.js';
 
 describe('hook-logs (status and log file readers and resolvers)', () => {

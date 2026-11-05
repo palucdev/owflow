@@ -1,7 +1,8 @@
 import type { TuiPluginApi } from '@opencode-ai/plugin/tui';
 import type { HookEventName, HookRunLogRecord } from '../types/hook-types.js';
-import { formatHookRunSummary, formatSessionHookLogsMessage, type ActiveHookRow } from './hook-formatting.js';
+import { formatHookRunSummary, formatSessionHookLogsMessage, type ActiveHookRow } from './hooks-formatting.js';
 import { el, txt, type SidebarTheme, type SolidElement, type SolidRuntime } from './primitives.js';
+import { readSessionHookLogs } from '../hooks/hooks-logs.js';
 
 const SHOW_LOGS_LABEL = 'View logs';
 const DETAIL_DIALOG_SIZE = 'large';
@@ -137,7 +138,6 @@ export const openHookLogPopup = (
   api: TuiPluginApi,
   solid: SolidRuntime,
   logFile: string,
-  readSessionLogsList: (file: string, event: HookEventName, since?: number, sessionID?: string) => readonly HookRunLogRecord[],
   row: ActiveHookRow,
   theme: SidebarTheme,
   notBefore: number,
@@ -145,7 +145,7 @@ export const openHookLogPopup = (
 ): void => {
   let records: readonly HookRunLogRecord[] = [];
   try {
-    records = readSessionLogsList(logFile, row.event, notBefore, sessionID);
+    records = readSessionHookLogs(logFile, row.event, notBefore, sessionID);
   } catch {}
   try {
     if (records.length === 0) {

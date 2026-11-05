@@ -9,7 +9,7 @@ import {
   formatHookRunSummary,
   formatSessionHookLogsMessage,
   statusLabelFor,
-} from '../../tui/hook-formatting.js';
+} from '../../tui/hooks-formatting.js';
 import { THEME, makeLogRecord } from './primitives.js';
 import { HookRunState } from '../../types/hook-types.js';
 
