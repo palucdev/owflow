@@ -20,7 +20,7 @@
 
 ### Technical Debt
 
-- [ ] **Agent frontmatter consistency** — `src/agents/project-analyzer.md` lacks the `model: inherit` field present on the other 22 agents
+- [x] **Agent frontmatter consistency** — all 23 agents omit the `model` field to inherit the session model consistently (aligned with `src/agents/project-analyzer.md`)
 
 ## Future Considerations
 

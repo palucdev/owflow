@@ -1,7 +1,6 @@
 ---
 name: implementation-completeness-checker
 description: Verifies implementation completeness across three dimensions - plan completion with code spot-checks, standards compliance with active reasoning from INDEX.md, and documentation completeness (work-log, spec alignment). Read-only analysis that reports findings without fixing. Does not interact with users.
-model: inherit
 color: yellow
 mode: subagent
 hidden: true

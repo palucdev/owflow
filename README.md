@@ -369,6 +369,19 @@ The CLI and TUI scans are **digest-only** - they validate names, extensions, and
 
 PowerShell (`.ps1`) is verified against the same subprocess contract as `.sh` (envelope in, result JSON out, fail-closed mapping). The CLI and the startup banner remain the unconditional visibility fallbacks outside the TUI.
 
+## Environment Variables
+
+You can configure owflow and its hook runtime behavior using the following environment variables:
+
+| Variable | Values / Type | Default | Description |
+| -------- | ------------- | ------- | ----------- |
+| `OWFLOW_HOOKS_DISABLED` | `1` or unset | unset | **Bypass user hooks.** When set to `1`, disables loading, validating, and executing user hooks from `.owflow/hooks/`. Built-in hooks (destructive-command guard and post-compaction reminder) remain active. Disables active hooks status polling and log popups in the TUI. Useful as an emergency bypass if a hook script is broken or fails strict validation. |
+| `OWFLOW_HOOK_TIMEOUT_MS` | Positive integer (ms) | unset (untimed) | **Per-hook execution timeout.** Maximum wall-clock time in milliseconds that a single user hook subprocess (`.sh` or `.ps1`) may run before being terminated and treated as failed. If a gate hook times out, the active session is aborted. |
+| `OWFLOW_HOOKS_STATUS_FILE` | File path | `os.tmpdir()/opencode/owflow-hooks-<hash>.json` | **Hook status snapshot path override.** Overrides the location of the single-snapshot JSON file used by the dispatcher to communicate live hook states (`Idle`, `In progress`, `Success`, `Error`) to the TUI Active hooks sidebar panel. Intended for tests and manual debugging. |
+| `OWFLOW_HOOK_LOGS_FILE` | File path | `os.tmpdir()/opencode/owflow-hook-logs-<hash>.jsonl` | **Hook runtime log file path override.** Overrides the append-only JSONL log file where hook run records (exit code, signal, duration, captured `stdout`/`stderr`) are saved and read by the TUI log viewer popup. Intended for tests and manual debugging. |
+
+> **Subprocess Environment**: User hook scripts run with inherited environment variables from OpenCode, meaning standard system variables (such as `PATH`, `TMPDIR`, and any credentials or project variables like `GH_TOKEN`) are available within your scripts.
+
 ## Beta Channel
 
 Want to try experimental features before they hit stable? Install from the beta channel:

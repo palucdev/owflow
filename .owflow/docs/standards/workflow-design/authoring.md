@@ -4,7 +4,7 @@
 Every SKILL.md declares `name` (always `owflow:`-prefixed), `description`, and `user-invocable`; user-facing skills add `argument-hint`, internal engines set `user-invocable: false`. The `owflow:` prefix is deliberate (OpenCode does not auto-namespace plugin skills) — never rename skills to match folder names.
 
 ### Agent Frontmatter Contract
-Every agent declares `name`, `description`, `mode: subagent`, and `hidden: true`; use `model: inherit` and include a display color. Agents are hidden from users and model selection is inherited.
+Every agent declares `name`, `description`, `mode: subagent`, and `hidden: true`, and includes a display color. The `model` field is omitted so OpenCode inherits the active session model; agents are hidden from users.
 
 ### Thin Command Wrappers over Skills
 Slash commands are thin wrappers: user-facing guidance lives in commands, orchestration logic lives in SKILL.md. Synthesized wrappers hold no workflow logic; maintained commands (`work`, `reviews-*`) own only routing/argument logic. Edit the source file — never duplicate content.

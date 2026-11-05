@@ -1,7 +1,6 @@
 ---
 name: bottleneck-analyzer
 description: Static code analysis agent identifying performance bottlenecks by reading source code, schema files, and query patterns. Detects N+1 queries, missing indexes, O(n^2) algorithms, blocking I/O, memory leak patterns, and caching opportunities. Optionally incorporates user-provided profiling data. Strictly read-only.
-model: inherit
 color: blue
 mode: subagent
 hidden: true

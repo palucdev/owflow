@@ -112,7 +112,7 @@ Category overview: custom project workflow-design standards category (no built-i
 
 #### Skill, Agent, and Command Authoring (`standards/workflow-design/authoring.md`)
 
-SKILL.md frontmatter/naming contract (always `owflow:`-prefixed, `user-invocable` flags), agent frontmatter contract (`mode: subagent`, `hidden: true`, inherited model), thin command wrappers over skills, runtime synthesis of slash commands from invocable skill frontmatter (`argument-hint` is documentation-only; behavior-changing flags are restated in skill bodies), anti-duplication and single source of truth, documentation length targets, references that guide rather than implement (<10-line examples), reference file placement, HR-separated agent bodies with YAML result blocks, and structured workflow/step documentation.
+SKILL.md frontmatter/naming contract (always `owflow:`-prefixed, `user-invocable` flags), agent frontmatter contract (`mode: subagent`, `hidden: true`, omitted model for session inheritance), thin command wrappers over skills, runtime synthesis of slash commands from invocable skill frontmatter (`argument-hint` is documentation-only; behavior-changing flags are restated in skill bodies), anti-duplication and single source of truth, documentation length targets, references that guide rather than implement (<10-line examples), reference file placement, HR-separated agent bodies with YAML result blocks, and structured workflow/step documentation.
 
 #### State Management and Gates (`standards/workflow-design/state-and-gates.md`)
 
