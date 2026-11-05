@@ -13,11 +13,13 @@ owflow exposes OpenCode's lifecycle events to the host project as git-style scri
 
 ## Hooks Contract
 
-All 16 lifecycle events and 32 host events are fail-closed gate hooks:
+All 16 lifecycle events and 32 host events are fail-closed hooks:
 
 - **Input (`stdin`)**: JSON object `{ event, session?: { sessionID }, context }`. Host class instances inside `context` are stripped to identity keys (`id`, `sessionID`, `messageID`, `partID`, `callID`, `providerID`, `type`, `name`, `tool`).
 - **Success (`exit 0`)**: Operation continues; `stdout` and `stderr` are captured into the workspace JSONL runtime log (`owflow-hook-logs-<hash>.jsonl`, 4 MB rotation). Session hook logs are captured in full without truncation and lazy-loaded by scrolling in the TUI logs popup (non-session runs remain capped at 16 KB per stream). Silent successful runs of the catch-all `event` hook are treated as no-ops so hot bus events do not flood logs or TUI status.
-- **Failure (`exit != 0`, signal, timeout, or missing interpreter)**: Fails closed with `Blocked: <stderr || stdout || exit reason>. Hint: ...` and aborts the active session.
+- **Failure (`exit != 0`, signal, timeout, or missing interpreter)**:
+  - **Lifecycle Gate Hooks** (`DISPATCHABLE_EVENTS` excluding `event`, e.g., `tool.execute.before`, `chat.message`, `command.execute.before`): Fail closed with `Blocked: <stderr || stdout || exit reason>. Hint: ...` and abort the active session (`client.session.abort`).
+  - **Reactive Host Events & Catch-All `event`** (`HOST_EVENT_NAMES` such as `session.idle`, `session.status`, `file.edited`, and `event`): Record failure status in the TUI sidebar and JSONL log and reject with `Blocked: ...`, but **never** call `client.session.abort` (preventing `session.idle` re-emission feedback loops).
 
 ## Controls & Visibility
 

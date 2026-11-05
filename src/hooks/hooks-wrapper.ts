@@ -22,6 +22,10 @@ export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
 export const MAX_CAPTURE_BYTES = 16 * 1024;
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
 
+// Reactive host events (e.g. session.idle) and the catch-all event hook notify after state transitions;
+// aborting a session on session.idle forces OpenCode back to idle and re-emits session.idle in a tight loop.
+export const canAbortSessionForEvent = (event: HookEventName): boolean => !isHostEventName(event) && event !== HookEvent.Event;
+
 const IDENTITY_KEYS = ['id', 'sessionID', 'messageID', 'partID', 'callID', 'providerID', 'type', 'name', 'tool'];
 
 // shortcut: JSON.stringify replacer strips class-instance internals to id/name/type/sessionID instead of a recursive AST projector;
@@ -140,8 +144,8 @@ export const initializeHooksWrapper = async (
     }
   };
 
-  const abortSession = async (sessionID: string | undefined, scriptPath: string): Promise<void> => {
-    if (!endSession || !sessionID) return;
+  const abortSession = async (event: HookEventName, sessionID: string | undefined, scriptPath: string): Promise<void> => {
+    if (!endSession || !sessionID || !canAbortSessionForEvent(event)) return;
     try {
       await endSession(sessionID);
     } catch (error) {
@@ -190,7 +194,7 @@ export const initializeHooksWrapper = async (
           status: HookRunState.FAILURE,
           reason,
         });
-        await abortSession(sessionID, entry.path);
+        await abortSession(event, sessionID, entry.path);
         throw new Error(
           `Blocked: hook ${entry.path} cannot run: the ${label} interpreter is not available. ` +
             `Hint: install ${label} and restart OpenCode, or remove the script to stop failing closed.`,
@@ -306,10 +310,11 @@ export const initializeHooksWrapper = async (
       });
 
       if (!ok) {
-        await abortSession(sessionID, entry.path);
+        await abortSession(event, sessionID, entry.path);
         const body = reason?.startsWith('Blocked:') ? reason : `Blocked: ${reason || `hook ${entry.path} failed`}`;
+        const failPosture = canAbortSessionForEvent(event) ? 'failure ends the current session; fail closed' : 'failure recorded; fail closed';
         throw new Error(
-          `${body.endsWith('.') ? body : `${body}.`} Hint: fix the failing script ${entry.path} (failure ends the current session; fail closed), or remove it and restart OpenCode to proceed.`,
+          `${body.endsWith('.') ? body : `${body}.`} Hint: fix the failing script ${entry.path} (${failPosture}), or remove it and restart OpenCode to proceed.`,
         );
       }
     }

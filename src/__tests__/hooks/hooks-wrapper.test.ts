@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   buildStdinPayload,
+  canAbortSessionForEvent,
   createDispatchHandlers,
   HOOK_TIMEOUT_ENV,
   initializeHooksWrapper,
@@ -243,5 +244,80 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     });
     await handlers.event!({ event: { type: 'session.idle' } } as any);
     expect(events).toEqual(['session.idle', 'event']);
+  });
+
+  test('should only allow session abort for active lifecycle gate events, not reactive host events or catch-all event', () => {
+    expect(canAbortSessionForEvent(HookEvent.ToolExecuteBefore)).toBe(true);
+    expect(canAbortSessionForEvent(HookEvent.ChatMessage)).toBe(true);
+    expect(canAbortSessionForEvent(HookEvent.CommandExecuteBefore)).toBe(true);
+    expect(canAbortSessionForEvent(HookEvent.Config)).toBe(true);
+
+    expect(canAbortSessionForEvent('session.idle')).toBe(false);
+    expect(canAbortSessionForEvent('session.status')).toBe(false);
+    expect(canAbortSessionForEvent('session.error')).toBe(false);
+    expect(canAbortSessionForEvent('file.edited')).toBe(false);
+    expect(canAbortSessionForEvent(HookEvent.Event)).toBe(false);
+  });
+
+  test('should not call endSession when session.idle fails or lacks an interpreter', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'session-idle.sh'), '#!/usr/bin/env bash\necho "test failed" >&2\nexit 1\n');
+    fs.writeFileSync(path.join(hooksDir, 'chat-message.sh'), '#!/usr/bin/env bash\necho "gate failed" >&2\nexit 1\n');
+
+    const statusFile = path.join(root, 'status.json');
+    const logFile = path.join(root, 'logs.jsonl');
+    const ended: string[] = [];
+
+    const wrapper = await initializeHooksWrapper(
+      root,
+      (id) => {
+        ended.push(id);
+      },
+      { statusFile, logFile },
+    );
+
+    await expect(wrapper.dispatch('session.idle', { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_1' } } })).rejects.toThrow(
+      /Blocked: test failed\. Hint: fix the failing script .* \(failure recorded; fail closed\)/,
+    );
+
+    expect(ended).toEqual([]);
+    const snapshot = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+    expect(snapshot.hooks['session.idle']?.status).toBe(HookRunState.FAILURE);
+    expect(snapshot.hooks['session.idle']?.reason).toBe('test failed');
+
+    const latestIdleLog = readLatestHookLog(logFile, 'session.idle', Number.NEGATIVE_INFINITY, 'ses_idle_1');
+    expect(latestIdleLog?.status).toBe(HookRunState.FAILURE);
+    expect(latestIdleLog?.reason).toBe('test failed');
+    wrapper.dispose();
+
+    // Missing interpreter on session.idle does not call endSession, while chat.message does
+    const whichSpy = spyOn(Bun, 'which').mockReturnValue(null);
+    try {
+      const noInterpWrapper = await initializeHooksWrapper(
+        root,
+        (id) => {
+          ended.push(id);
+        },
+        {
+          statusFile: path.join(root, 'status-no-interp.json'),
+          logFile: path.join(root, 'logs-no-interp.jsonl'),
+        },
+      );
+
+      await expect(
+        noInterpWrapper.dispatch('session.idle', { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_no_bash' } } }),
+      ).rejects.toThrow(/bash interpreter is not available/);
+      expect(ended).toEqual([]);
+
+      await expect(noInterpWrapper.dispatch(HookEvent.ChatMessage, { sessionID: 'ses_chat_no_bash' })).rejects.toThrow(
+        /bash interpreter is not available/,
+      );
+      expect(ended).toEqual(['ses_chat_no_bash']);
+      noInterpWrapper.dispose();
+    } finally {
+      whichSpy.mockRestore();
+    }
   });
 });
