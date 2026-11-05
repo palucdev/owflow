@@ -14,9 +14,6 @@
       "default": "./dist/tui.js"
     }
   },
-  "bin": {
-    "owflow-hooks": "dist/cli/show-hooks.js"
-  },
   "types": "dist/index.d.ts",
   "files": [
     "dist",
