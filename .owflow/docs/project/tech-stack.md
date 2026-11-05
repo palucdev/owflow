@@ -8,7 +8,7 @@ This document describes the technology choices and rationale for owflow, an Open
 
 ### TypeScript 5 (peer `^5`)
 
-- **Usage**: ~100% of source code (`src/`, 25 modules)
+- **Usage**: ~100% of source code (`src/`, 24 modules)
 - **Rationale**: The OpenCode plugin API is typed; strict typing protects a logic-heavy registration and state-machine layer; declarations (`dist/index.d.ts`, `dist/tui.d.ts`) are emitted alongside ESM JavaScript
 - **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `declaration`, `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
 
@@ -40,7 +40,7 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
 
 ## Build Tools & Package Management
 
-- **Bun** (`bunfig.toml`, `bun.lock`) — dev, build, test, and CLI runtime
+- **Bun** (`bunfig.toml`, `bun.lock`) — dev, build, and test runtime
 - **`bun tsc`** — type-check and emit ESM JavaScript + `.d.ts` declarations to `dist/`
 - **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS, `.d.ts` declarations, and html-renderer assets — 189 files total in the payload)
 - **npm** — publish path only (`prepack` runs the full build as a publish guard); `package-lock.json` has been removed, leaving `bun.lock` as the single lockfile

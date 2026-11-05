@@ -2,7 +2,7 @@
 
 ## Overview
 
-owflow exposes OpenCode's lifecycle events to the host project as git-style script hooks. Every regular file in `<project>/.owflow/hooks/` is validated at plugin initialization and dispatched through owflow's hook handlers — first the built-in destructive-command guard, then the project's scripts. Discovery, validation, reporting, and log readers live in `src/hooks/user-hooks.ts`, with process execution, status/log writing, and dispatch wrapping in `src/hooks/hooks-wrapper.ts`; `src/cli/show-hooks.ts` (CLI) and `src/tui.ts` (TUI) provide standalone surfaces.
+owflow exposes OpenCode's lifecycle events to the host project as git-style script hooks. Every regular file in `<project>/.owflow/hooks/` is validated at plugin initialization and dispatched through owflow's hook handlers — first the built-in destructive-command guard, then the project's scripts. Discovery and validation live in `src/hooks/hooks-discovery.ts`, reporting in `src/hooks/hooks-reporting.ts`, and runtime log readers in `src/hooks/hook-logs.ts`, with process execution, status/log writing, and dispatch wrapping in `src/hooks/hooks-wrapper.ts`; the TUI (`src/tui.ts`) provides the interactive surface.
 
 ## Discovery and Naming
 
@@ -23,5 +23,4 @@ All 16 lifecycle events and 32 host events are fail-closed gate hooks:
 
 - `OWFLOW_HOOKS_DISABLED=1`: bypasses user hooks (built-in destructive-command guard and compaction reminder stay active).
 - `OWFLOW_HOOK_TIMEOUT_MS=<ms>`: opt-in per-hook execution timeout.
-- `owflow-hooks` CLI (`src/cli/show-hooks.ts`): prints the table or `--json` report and exits `1` on invalid entries.
 - TUI **Active hooks** sidebar (`src/tui.ts`): polls `owflow-hooks-<hash>.json` for live status orbs (`Idle`, `In progress`, `Success`, `Error`) and opens session run details + captured `stderr`/`stdout` on click with lazy-loaded scrolling.
