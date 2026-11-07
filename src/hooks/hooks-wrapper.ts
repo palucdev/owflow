@@ -21,6 +21,16 @@ import { scanHooks } from './hooks-discovery.js';
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
 export const MAX_CAPTURE_BYTES = 16 * 1024;
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
+export const ABORT_COOLDOWN_MS = 2_000;
+export const CIRCUIT_BREAKER_THRESHOLD = 4;
+export const CIRCUIT_BREAKER_RAPID_GAP_MS = 500;
+export const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
+
+interface CircuitBreakerEntry {
+  rapidFailures: number;
+  lastFinishedAt: number;
+  trippedUntil: number;
+}
 
 // Reactive host events (e.g. session.idle) and the catch-all event hook notify after state transitions;
 // aborting a session on session.idle forces OpenCode back to idle and re-emits session.idle in a tight loop.
@@ -112,6 +122,8 @@ export const initializeHooksWrapper = async (
   const logFile = options.logFile ?? resolveHooksLogFile(directory);
   const statuses = new Map<string, HookRuntimeEntry>();
   const activeProcs = new Set<ReturnType<typeof Bun.spawn>>();
+  const abortingSessions = new Map<string, number>();
+  const breakers = new Map<string, CircuitBreakerEntry>();
   let runCounter = 0;
   let lastLogKey: string | undefined;
 
@@ -146,6 +158,10 @@ export const initializeHooksWrapper = async (
 
   const abortSession = async (event: HookEventName, sessionID: string | undefined, scriptPath: string): Promise<void> => {
     if (!endSession || !sessionID || !canAbortSessionForEvent(event)) return;
+    const now = Date.now();
+    const lastAbort = abortingSessions.get(sessionID);
+    if (lastAbort !== undefined && now - lastAbort < ABORT_COOLDOWN_MS) return;
+    abortingSessions.set(sessionID, now);
     try {
       await endSession(sessionID);
     } catch (error) {
@@ -155,10 +171,14 @@ export const initializeHooksWrapper = async (
   };
 
   const dispatch: Dispatcher = async (event, input, output) => {
+    const sessionID = sessionIDFrom(input);
+    if (event === HookEvent.ChatMessage && sessionID) {
+      abortingSessions.delete(sessionID);
+    }
+
     const hooks = byEvent.get(event);
     if (!hooks || hooks.length === 0) return;
 
-    const sessionID = sessionIDFrom(input);
     const stdinText = buildStdinPayload(event, input, output, sessionID);
 
     for (const entry of hooks) {
@@ -166,6 +186,36 @@ export const initializeHooksWrapper = async (
       const runId = `${event}#${runCounter}`;
       const startedAt = Date.now();
       const name = path.basename(entry.path, path.extname(entry.path));
+      const breakerKey = `${event}::${entry.path}::${sessionID ?? 'global'}`;
+      const breaker = breakers.get(breakerKey);
+      if (breaker && startedAt < breaker.trippedUntil) {
+        const reason = `Circuit breaker active for ${entry.path} after ${CIRCUIT_BREAKER_THRESHOLD} rapid consecutive failures (cooldown until ${new Date(breaker.trippedUntil).toISOString()})`;
+        statuses.set(event, {
+          status: HookRunState.FAILURE,
+          startedAt,
+          finishedAt: startedAt,
+          durationMs: 0,
+          reason,
+          ...(sessionID ? { sessionID } : {}),
+        });
+        writeStatusFile(statusFile, directory, statuses);
+        appendLog({
+          version: 1,
+          runId,
+          pid: process.pid,
+          workspace: directory,
+          event,
+          hook: entry.path,
+          name,
+          ...(sessionID ? { sessionID } : {}),
+          startedAt,
+          finishedAt: startedAt,
+          durationMs: 0,
+          status: HookRunState.FAILURE,
+          reason,
+        });
+        throw new Error(`Blocked: ${reason}. Hint: fix ${entry.path} or wait for cooldown.`);
+      }
 
       if (!entry.interpreter.available || !entry.interpreter.resolved) {
         const label = entry.interpreter.resolved ?? entry.interpreter.expected;
@@ -263,6 +313,27 @@ export const initializeHooksWrapper = async (
       const truncated = out.truncated || err.truncated;
       const signal = proc.signalCode ?? null;
       const ok = !timedOut && exitCode === 0 && signal === null;
+
+      if (ok) {
+        breakers.delete(breakerKey);
+      } else {
+        const prev = breakers.get(breakerKey);
+        const isRapid = prev !== undefined && startedAt - prev.lastFinishedAt <= CIRCUIT_BREAKER_RAPID_GAP_MS;
+        const rapidFailures = isRapid ? prev.rapidFailures + 1 : 1;
+        const trippedUntil = rapidFailures >= CIRCUIT_BREAKER_THRESHOLD ? finishedAt + CIRCUIT_BREAKER_COOLDOWN_MS : 0;
+
+        breakers.set(breakerKey, {
+          rapidFailures,
+          lastFinishedAt: finishedAt,
+          trippedUntil,
+        });
+
+        if (trippedUntil > 0) {
+          console.warn(
+            `[owflow] hooks: circuit breaker tripped for ${entry.path} on event "${event}" after ${rapidFailures} rapid failures; pausing for ${CIRCUIT_BREAKER_COOLDOWN_MS}ms.`,
+          );
+        }
+      }
 
       // Silent successful catch-all `event` runs leave no status/log trace so hot bus events don't flood.
       if (ok && event === HookEvent.Event && !out.text.trim() && !err.text.trim()) {
@@ -368,7 +439,7 @@ export const createDispatchHandlers = (dispatch: Dispatcher): Hooks => {
     ...handlers,
     [HookEvent.Event]: async (input: unknown) => {
       const type = (input as { event?: { type?: unknown } } | undefined)?.event?.type;
-      if (typeof type === 'string' && isHostEventName(type)) {
+      if (typeof type === 'string' && isHostEventName(type) && !chains.has(type)) {
         await runSerialized(type, () => dispatch(type, input));
       }
       await runSerialized(HookEvent.Event, () => dispatch(HookEvent.Event, input));

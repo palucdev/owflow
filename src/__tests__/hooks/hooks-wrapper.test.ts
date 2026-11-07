@@ -3,8 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  ABORT_COOLDOWN_MS,
   buildStdinPayload,
   canAbortSessionForEvent,
+  CIRCUIT_BREAKER_COOLDOWN_MS,
+  CIRCUIT_BREAKER_RAPID_GAP_MS,
+  CIRCUIT_BREAKER_THRESHOLD,
   createDispatchHandlers,
   HOOK_TIMEOUT_ENV,
   initializeHooksWrapper,
@@ -237,13 +241,31 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     }
   });
 
-  test('createDispatchHandlers fans out host events and serializes concurrent runs', async () => {
+  test('createDispatchHandlers fans out host events, serializes catch-all event runs, and drops duplicate in-flight host events', async () => {
     const events: string[] = [];
+    let releaseIdle!: () => void;
+    const idleBarrier = new Promise<void>((resolve) => {
+      releaseIdle = resolve;
+    });
+
     const handlers = createDispatchHandlers(async (event) => {
       events.push(event);
+      if (event === 'session.idle') {
+        await idleBarrier;
+      }
     });
-    await handlers.event!({ event: { type: 'session.idle' } } as any);
-    expect(events).toEqual(['session.idle', 'event']);
+
+    const first = handlers.event!({ event: { type: 'session.idle' } } as any);
+    // Emit two duplicate session.idle events while the first is still in-flight
+    const second = handlers.event!({ event: { type: 'session.idle' } } as any);
+    const third = handlers.event!({ event: { type: 'session.idle' } } as any);
+
+    releaseIdle();
+    await Promise.all([first, second, third]);
+
+    // Only one session.idle dispatch ran; duplicates while in-flight were dropped
+    expect(events.filter((e) => e === 'session.idle')).toEqual(['session.idle']);
+    expect(events.filter((e) => e === 'event')).toEqual(['event', 'event', 'event']);
   });
 
   test('should only allow session abort for active lifecycle gate events, not reactive host events or catch-all event', () => {
@@ -318,6 +340,79 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
       noInterpWrapper.dispose();
     } finally {
       whichSpy.mockRestore();
+    }
+  });
+
+  test('should deduplicate endSession calls per session within cooldown window and reset on chat.message', async () => {
+    expect(ABORT_COOLDOWN_MS).toBe(2_000);
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\necho "tool gate failed" >&2\nexit 1\n');
+    fs.writeFileSync(path.join(hooksDir, 'command-execute-before.sh'), '#!/usr/bin/env bash\necho "cmd gate failed" >&2\nexit 1\n');
+
+    const ended: string[] = [];
+    const wrapper = await initializeHooksWrapper(
+      root,
+      (id) => {
+        ended.push(id);
+      },
+      {
+        statusFile: path.join(root, 'status.json'),
+        logFile: path.join(root, 'logs.jsonl'),
+      },
+    );
+
+    await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/tool gate failed/);
+    await expect(wrapper.dispatch(HookEvent.CommandExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/cmd gate failed/);
+    expect(ended).toEqual(['ses_dedup']);
+
+    // A new chat.message turn clears the session abort cooldown even when no chat-message hook exists
+    await wrapper.dispatch(HookEvent.ChatMessage, { sessionID: 'ses_dedup' }, {});
+    await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/tool gate failed/);
+    expect(ended).toEqual(['ses_dedup', 'ses_dedup']);
+
+    wrapper.dispose();
+  });
+
+  test('should trip circuit breaker after 4 rapid consecutive failures and suppress spawns during cooldown', async () => {
+    expect(CIRCUIT_BREAKER_THRESHOLD).toBe(4);
+    expect(CIRCUIT_BREAKER_RAPID_GAP_MS).toBe(500);
+    expect(CIRCUIT_BREAKER_COOLDOWN_MS).toBe(30_000);
+
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'session-idle.sh'), '#!/usr/bin/env bash\necho "check failed" >&2\nexit 1\n');
+
+    const statusFile = path.join(root, 'status.json');
+    const logFile = path.join(root, 'logs.jsonl');
+    const spawnSpy = spyOn(Bun, 'spawn');
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+      const payload = { event: { type: 'session.idle', properties: { sessionID: 'ses_cb' } } };
+
+      for (let i = 0; i < CIRCUIT_BREAKER_THRESHOLD; i += 1) {
+        await expect(wrapper.dispatch('session.idle', payload)).rejects.toThrow(/Blocked: check failed\./);
+      }
+
+      expect(spawnSpy).toHaveBeenCalledTimes(CIRCUIT_BREAKER_THRESHOLD);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('circuit breaker tripped'));
+
+      // 5th rapid attempt is blocked before spawning a subprocess
+      await expect(wrapper.dispatch('session.idle', payload)).rejects.toThrow(/Blocked: Circuit breaker active for .*session-idle\.sh/);
+      expect(spawnSpy).toHaveBeenCalledTimes(CIRCUIT_BREAKER_THRESHOLD);
+
+      const snapshot = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+      expect(snapshot.hooks['session.idle']?.status).toBe(HookRunState.FAILURE);
+      expect(snapshot.hooks['session.idle']?.reason).toContain('Circuit breaker active');
+
+      wrapper.dispose();
+    } finally {
+      spawnSpy.mockRestore();
+      warnSpy.mockRestore();
     }
   });
 });
