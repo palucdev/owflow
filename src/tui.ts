@@ -112,7 +112,7 @@ export const registerActiveHooksSidebar = async (
           solid,
           (row, theme) => {
             if (pollingEnabled) {
-              openHookLogPopup(api, solid, logFile, row, theme, notBefore, sessionID);
+              openHookLogPopup(api, solid, logFile, row, theme, notBefore, sessionID, statusFile, statuses.get(row.event));
             }
           },
           () => api.renderer.requestRender(),

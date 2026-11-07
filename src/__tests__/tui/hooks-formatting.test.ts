@@ -67,6 +67,9 @@ describe('TUI hook-formatting', () => {
     expect(summary).toContain('Exit:   1');
     expect(summary).toContain('Reason: policy violation');
 
+    const pendingSummary = formatHookRunSummary(makeLogRecord({ status: HookRunState.PENDING, durationMs: 45 }));
+    expect(pendingSummary).toContain('Status: In progress — 45 ms');
+
     const truncated = formatHookRunSummary(record, 40);
     expect(truncated).toContain('[message truncated]');
     expect(truncated.length).toBeLessThanOrEqual(40);
@@ -82,14 +85,21 @@ describe('TUI hook-formatting', () => {
     expect(message).toContain('--- stdout ---\nout-line');
     expect(message).toContain('--- stderr ---\nerr-line');
 
-    // Multiple session records
+    // Multiple session records including pending
     const record2 = makeLogRecord({
       status: HookRunState.FAILURE,
       stderr: 'second-err',
     });
-    const sessionMsg = formatSessionHookLogsMessage([record, record2]);
+    const record3 = makeLogRecord({
+      status: HookRunState.PENDING,
+      stdout: 'pending-out',
+    });
+    const sessionMsg = formatSessionHookLogsMessage([record, record2, record3]);
     expect(sessionMsg).toContain('=== Run #1');
     expect(sessionMsg).toContain('=== Run #2');
+    expect(sessionMsg).toContain('=== Run #3');
+    expect(sessionMsg).toContain('In progress');
     expect(sessionMsg).toContain('second-err');
+    expect(sessionMsg).toContain('pending-out');
   });
 });

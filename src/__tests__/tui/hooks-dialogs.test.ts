@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import * as hookLogs from '../../hooks/hooks-logs.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
-import { buildHookLogsBody } from '../../tui/hooks-dialogs.js';
+import { buildHookLogsBody, buildHookRunDetailBody } from '../../tui/hooks-dialogs.js';
+import { HookRunState } from '../../types/hook-types.js';
 import { THEME, collectText, findClickableByContent, makeFakeApi, makeLogRecord, makeSolid, type FakeNode } from './primitives.js';
 
 describe('TUI hook-dialogs', () => {
@@ -93,9 +94,106 @@ describe('TUI hook-dialogs', () => {
       expect(toasts).toHaveLength(1);
       expect(toasts[0].message).toContain('No runs recorded for tool-execute-before');
     });
+
+    test('should open popup and view logs when hook is In progress', async () => {
+      fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
+      const statusFile = path.join(tmpDir, 'status.json');
+      const logFile = path.join(tmpDir, 'empty-logs.jsonl');
+      const now = Date.now();
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({
+          version: 1,
+          pid: 1,
+          workspace: tmpDir,
+          updatedAt: now,
+          hooks: {
+            'tool.execute.before': {
+              status: 'pending',
+              startedAt: now,
+              stdout: 'in-progress stdout line 1\nin-progress stdout line 2',
+              stderr: 'in-progress stderr line 1',
+            },
+          },
+        }),
+        'utf8',
+      );
+
+      spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(statusFile);
+      spyOn(hookLogs, 'resolveHooksLogFile').mockReturnValue(logFile);
+
+      const { api, slots, dialogCalls, toasts } = makeFakeApi(tmpDir);
+      const { runtime } = makeSolid();
+
+      await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
+
+      const rendered = slots[0].slots.sidebar_content({
+        theme: { current: THEME },
+      });
+      const hookRow = findClickableByContent(rendered, 'tool-execute-before');
+      expect(hookRow).toBeDefined();
+
+      (hookRow!.props.onMouseUp as () => void)();
+      expect(toasts).toHaveLength(0);
+      expect(dialogCalls).toHaveLength(1);
+
+      const detail = dialogCalls[0]!.render() as FakeNode;
+      const detailText = collectText(detail);
+      expect(detailText).toContain('Hook run: tool-execute-before');
+      expect(detailText).toContain('Status: In progress');
+      expect(detail.children.some((c) => typeof c === 'object' && c.tag === 'scrollbox')).toBe(true);
+
+      const viewLogsButton = findClickableByContent(detail, 'View logs');
+      expect(viewLogsButton).toBeDefined();
+      (viewLogsButton!.props.onMouseUp as () => void)();
+
+      expect(dialogCalls).toHaveLength(2);
+      const logsView = dialogCalls[1]!.render() as FakeNode;
+      const logsText = collectText(logsView);
+      expect(logsText).toContain('in-progress stdout line 1');
+      expect(logsText).toContain('in-progress stderr line 1');
+      expect(logsView.children.some((c) => typeof c === 'object' && c.tag === 'scrollbox')).toBe(true);
+    });
   });
 
-  describe('buildHookLogsBody lazy loading', () => {
+  describe('buildHookLogsBody and buildHookRunDetailBody scrolling', () => {
+    test('should make logs scrollable for Error and In progress states in both detail and logs popups', () => {
+      const { runtime } = makeSolid();
+      const lines = Array.from({ length: 80 }, (_, i) => `output line ${i + 1}`).join('\n');
+
+      for (const status of [HookRunState.FAILURE, HookRunState.PENDING]) {
+        const record = makeLogRecord({
+          status,
+          reason: lines,
+          stderr: lines,
+        });
+
+        const detailBody = buildHookRunDetailBody(
+          record,
+          '/tmp/logs.jsonl',
+          THEME,
+          runtime,
+          () => {},
+          () => {},
+          1,
+          12,
+          undefined,
+          30,
+        ) as FakeNode;
+        const detailScrollbox = detailBody.children.find((c): c is FakeNode => typeof c === 'object' && c.tag === 'scrollbox');
+        expect(detailScrollbox).toBeDefined();
+        expect(collectText(detailScrollbox!)).toContain('output line 1');
+        detailScrollbox!.props.onScroll();
+        expect(collectText(detailScrollbox!)).toContain('output line 50');
+
+        const logsBody = buildHookLogsBody(record, THEME, runtime, () => {}, 20, undefined, 30) as FakeNode;
+        const logsScrollbox = logsBody.children.find((c): c is FakeNode => typeof c === 'object' && c.tag === 'scrollbox');
+        expect(logsScrollbox).toBeDefined();
+        expect(collectText(logsScrollbox!)).toContain('output line 1');
+        logsScrollbox!.props.onScroll();
+        expect(collectText(logsScrollbox!)).toContain('output line 50');
+      }
+    });
     test('should lazy-load large logs in chunks on scroll', () => {
       const { runtime } = makeSolid();
       const lines = Array.from({ length: 150 }, (_, i) => `log line ${i + 1}`);

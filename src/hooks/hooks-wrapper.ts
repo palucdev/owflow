@@ -91,6 +91,30 @@ const capStream = (text: string, isSession = false): { text: string; truncated: 
   };
 };
 
+const readStream = async (stream: ReadableStream<Uint8Array> | null | undefined, onChunk: (text: string) => void): Promise<string> => {
+  if (!stream) return '';
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let result = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      if (chunk) {
+        result += chunk;
+        onChunk(result);
+      }
+    }
+    const tail = decoder.decode();
+    if (tail) {
+      result += tail;
+      onChunk(result);
+    }
+  } catch {}
+  return result;
+};
+
 // shortcut: synchronous writeFileSync per hook state transition without trailing debounce or .tmp rename;
 // ceiling: >100 hook fires/sec causing tmp file contention or partial reads;
 // upgrade: 50ms trailing debounce with write-to-tmp-and-rename.
@@ -270,17 +294,38 @@ export const initializeHooksWrapper = async (
       });
       activeProcs.add(proc);
 
+      const isSession = sessionID !== undefined && sessionID.length > 0;
       const timeoutMs = Number(process.env[HOOK_TIMEOUT_ENV]);
       let timedOut = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let rawStdout = '';
+      let rawStderr = '';
+      let finished = false;
+      const syncPendingOutput = (): void => {
+        if (finished || event === HookEvent.Event) return;
+        const out = capStream(rawStdout, isSession);
+        const err = capStream(rawStderr, isSession);
+        statuses.set(event, {
+          status: HookRunState.PENDING,
+          startedAt,
+          ...(sessionID ? { sessionID } : {}),
+          ...(out.text ? { stdout: out.text } : {}),
+          ...(err.text ? { stderr: err.text } : {}),
+        });
+        writeStatusFile(statusFile, directory, statuses);
+      };
       const ioPromise = Promise.all([
-        new Response(proc.stdout).text().catch(() => ''),
-        new Response(proc.stderr).text().catch(() => ''),
+        readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined, (text) => {
+          rawStdout = text;
+          syncPendingOutput();
+        }),
+        readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined, (text) => {
+          rawStderr = text;
+          syncPendingOutput();
+        }),
         proc.exited,
       ]);
 
-      let rawStdout = '';
-      let rawStderr = '';
       let exitCode: number | null = null;
       try {
         const res =
@@ -301,13 +346,13 @@ export const initializeHooksWrapper = async (
             : await ioPromise;
         if (res !== 'timeout') [rawStdout, rawStderr, exitCode] = res;
       } finally {
+        finished = true;
         if (timer !== undefined) clearTimeout(timer);
         activeProcs.delete(proc);
       }
 
       const finishedAt = Date.now();
       const durationMs = Math.max(0, finishedAt - startedAt);
-      const isSession = sessionID !== undefined && sessionID.length > 0;
       const out = capStream(rawStdout, isSession);
       const err = capStream(rawStderr, isSession);
       const truncated = out.truncated || err.truncated;
