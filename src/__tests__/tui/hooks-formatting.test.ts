@@ -42,35 +42,56 @@ describe('TUI hook-formatting', () => {
   });
 
   test('statusLabelFor and colorForStatus should map states to labels and theme colors', () => {
+    expect(statusLabelFor(HookRunState.IDLE)).toBe('Idle');
     expect(statusLabelFor(HookRunState.PENDING)).toBe('In progress');
     expect(statusLabelFor(HookRunState.SUCCESS)).toBe('Success');
     expect(statusLabelFor(HookRunState.FAILURE)).toBe('Error');
     expect(statusLabelFor(undefined)).toBe('Idle');
 
+    expect(colorForStatus(HookRunState.IDLE, THEME)).toBe('muted-color');
     expect(colorForStatus(HookRunState.PENDING, THEME)).toBe('warning-color');
     expect(colorForStatus(HookRunState.SUCCESS, THEME)).toBe('success-color');
     expect(colorForStatus(HookRunState.FAILURE, THEME)).toBe('error-color');
     expect(colorForStatus(undefined, THEME)).toBe('muted-color');
   });
 
-  test('formatHookRunSummary should format run metadata and support truncation', () => {
-    const record = makeLogRecord({
+  test('formatHookRunSummary should format identical run metadata structure without logs across states', () => {
+    const errorRecord = makeLogRecord({
       status: HookRunState.FAILURE,
       exitCode: 1,
       reason: 'policy violation',
+      stdout: 'secret stdout',
+      stderr: 'secret stderr',
       sessionID: 'ses-123',
     });
-    const summary = formatHookRunSummary(record);
-    expect(summary).toContain('Event:  tool.execute.before');
-    expect(summary).toContain('Error — 123 ms');
-    expect(summary).toContain('Session: ses-123');
-    expect(summary).toContain('Exit:   1');
-    expect(summary).toContain('Reason: policy violation');
+    const errorSummary = formatHookRunSummary(errorRecord);
+    expect(errorSummary).toContain('Event:  tool.execute.before');
+    expect(errorSummary).toContain('Status: Error — 123 ms');
+    expect(errorSummary).toContain('Session: ses-123');
+    expect(errorSummary).toContain('Exit:   1');
+    expect(errorSummary).not.toContain('policy violation');
+    expect(errorSummary).not.toContain('secret stdout');
+    expect(errorSummary).not.toContain('secret stderr');
+    expect(errorSummary).not.toContain('\n\n');
 
     const pendingSummary = formatHookRunSummary(makeLogRecord({ status: HookRunState.PENDING, durationMs: 45 }));
     expect(pendingSummary).toContain('Status: In progress — 45 ms');
+    expect(pendingSummary).toContain('Session: none');
+    expect(pendingSummary).toContain('Exit:   none');
 
-    const truncated = formatHookRunSummary(record, 40);
+    const idleSummary = formatHookRunSummary(makeLogRecord({ status: HookRunState.IDLE, startedAt: 0, finishedAt: 0, durationMs: 0 }));
+    expect(idleSummary).toContain('Status: Idle — 0 ms');
+    expect(idleSummary).toContain('Time:   none');
+    expect(idleSummary).toContain('Session: none');
+    expect(idleSummary).toContain('Exit:   none');
+
+    // Identical line count and field labels across Idle, In progress, and Error
+    const labels = (s: string) => s.split('\n').map((line) => line.split(':')[0]);
+    expect(labels(idleSummary)).toEqual(['Event', 'Status', 'Time', 'Session', 'Exit']);
+    expect(labels(pendingSummary)).toEqual(['Event', 'Status', 'Time', 'Session', 'Exit']);
+    expect(labels(errorSummary)).toEqual(['Event', 'Status', 'Time', 'Session', 'Exit']);
+
+    const truncated = formatHookRunSummary(errorRecord, 40);
     expect(truncated).toContain('[message truncated]');
     expect(truncated.length).toBeLessThanOrEqual(40);
   });

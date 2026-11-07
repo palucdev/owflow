@@ -22,7 +22,6 @@ const buildScrollableTextBox = (
   maxHeight: number,
   renderer?: { requestRender: () => void },
   chunkLines = DEFAULT_LOG_CHUNK_LINES,
-  textAlign?: string,
 ): unknown => {
   const allLines = fullText.split('\n');
   const totalLines = allLines.length;
@@ -31,31 +30,36 @@ const buildScrollableTextBox = (
 
   const getVisibleText = (): string => allLines.slice(0, loadedLines).join('\n');
   const getFooterText = (): string => (loadedLines < totalLines ? `[scroll for more logs: ${loadedLines}/${totalLines} lines loaded]` : '');
+  const getBoxHeight = (): number => Math.min(maxHeight, Math.max(1, loadedLines + (loadedLines < totalLines ? 1 : 0)));
 
-  const bodyNode = txt(solid, getVisibleText(), fg, { width: '100%', ...(textAlign ? { textAlign } : {}) });
-  const footerNode = txt(solid, getFooterText(), theme.textMuted, { width: '100%', ...(textAlign ? { textAlign } : {}) });
+  const bodyNode = txt(solid, getVisibleText(), fg, { width: '100%', textAlign: 'center' });
+  const footerNode = txt(solid, getFooterText(), theme.textMuted, { width: '100%', textAlign: 'center' });
 
   const children: unknown[] = [bodyNode];
   if (loadedLines < totalLines) {
     children.push(footerNode);
   }
 
+  let scrollbox: unknown;
   const loadMore = (lines?: unknown): boolean => {
     if (loadedLines >= totalLines) return false;
     const step = typeof lines === 'number' ? lines : chunkLines;
     loadedLines = Math.min(totalLines, loadedLines + step);
     solid.setProp(bodyNode, 'content', getVisibleText());
     solid.setProp(footerNode, 'content', getFooterText());
+    if (scrollbox !== undefined) {
+      solid.setProp(scrollbox, 'height', getBoxHeight());
+    }
     renderer?.requestRender();
     return true;
   };
 
-  const scrollbox = el(
+  scrollbox = el(
     solid,
     'scrollbox',
     {
-      flexGrow: 1,
       width: '100%',
+      height: getBoxHeight(),
       maxHeight,
       focused: true,
       onScroll: loadMore,
@@ -88,10 +92,22 @@ export const buildHookLogsBody = (
   const fullText = formatSessionHookLogsMessage(records);
   const scrollbox = buildScrollableTextBox(fullText, theme.text, theme, solid, maxHeight, renderer, chunkLines);
 
-  return el(solid, 'box', { flexDirection: 'column', width: '100%', paddingLeft: 2, paddingRight: 2, paddingTop: 1, paddingBottom: 1, gap: 1 }, [
-    buildHeader(solid, `Hook logs: ${name}`, theme, onClose),
-    scrollbox,
-  ]);
+  return el(
+    solid,
+    'box',
+    {
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '100%',
+      paddingLeft: 2,
+      paddingRight: 2,
+      paddingTop: 1,
+      paddingBottom: 1,
+      gap: 1,
+    },
+    [buildHeader(solid, `Hook logs: ${name}`, theme, onClose), scrollbox],
+  );
 };
 
 export const buildHookRunDetailBody = (
@@ -101,10 +117,7 @@ export const buildHookRunDetailBody = (
   solid: SolidRuntime,
   onShowLogs: () => void,
   onClose: () => void,
-  totalRunsInSession?: number,
-  maxHeight = 12,
-  renderer?: { requestRender: () => void },
-  chunkLines = DEFAULT_LOG_CHUNK_LINES,
+  totalRunsInSession = 0,
 ): unknown => {
   const buttonLabel = txt(solid, SHOW_LOGS_LABEL, theme.selectedListItemText, { flexShrink: 0 });
   const button: unknown = el(
@@ -114,6 +127,8 @@ export const buildHookRunDetailBody = (
       backgroundColor: theme.primary,
       paddingLeft: 3,
       paddingRight: 3,
+      alignItems: 'center',
+      justifyContent: 'center',
       onMouseUp: onShowLogs,
       onMouseOver: () => {
         solid.setProp(button, 'backgroundColor', theme.backgroundElement);
@@ -127,16 +142,7 @@ export const buildHookRunDetailBody = (
     [buttonLabel],
   );
 
-  const summaryScrollbox = buildScrollableTextBox(
-    formatHookRunSummary(record),
-    theme.textMuted,
-    theme,
-    solid,
-    maxHeight,
-    renderer,
-    chunkLines,
-    'center',
-  );
+  const detailsText = [formatHookRunSummary(record), `Runs in session: ${totalRunsInSession}`, `Log file: ${logFile}`].join('\n');
 
   return el(
     solid,
@@ -144,6 +150,7 @@ export const buildHookRunDetailBody = (
     {
       flexDirection: 'column',
       alignItems: 'center',
+      justifyContent: 'center',
       width: '100%',
       paddingLeft: 2,
       paddingRight: 2,
@@ -153,15 +160,26 @@ export const buildHookRunDetailBody = (
     },
     [
       buildHeader(solid, `Hook run: ${record.name}`, theme, onClose),
-      summaryScrollbox,
-      ...(totalRunsInSession !== undefined && totalRunsInSession > 1
-        ? [txt(solid, `Runs in session: ${totalRunsInSession}`, theme.textMuted, { width: '100%', textAlign: 'center' })]
-        : []),
-      txt(solid, `Log file: ${logFile}`, theme.textMuted, { width: '100%', textAlign: 'center' }),
-      el(solid, 'box', { flexDirection: 'row', justifyContent: 'center', width: '100%' }, [button]),
+      txt(solid, detailsText, theme.textMuted, { width: '100%', textAlign: 'center' }),
+      el(solid, 'box', { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' }, [button]),
     ],
   );
 };
+
+const createIdleRecord = (row: ActiveHookRow, sessionID?: string): HookRunLogRecord => ({
+  version: 1,
+  runId: `${row.event}#idle`,
+  pid: process.pid,
+  workspace: '',
+  event: row.event,
+  hook: row.name,
+  name: row.name,
+  ...(sessionID !== undefined ? { sessionID } : {}),
+  startedAt: 0,
+  finishedAt: 0,
+  durationMs: 0,
+  status: HookRunState.IDLE,
+});
 
 const resolveSessionRecords = (
   logFile: string,
@@ -227,31 +245,19 @@ export const openHookLogPopup = (
 ): void => {
   const records = resolveSessionRecords(logFile, row, notBefore, sessionID, statusFile, fallbackEntry);
   try {
-    if (records.length === 0) {
-      api.ui.toast({
-        variant: 'info',
-        title: 'Hook logs',
-        message: `No runs recorded for ${row.name} in this session yet.`,
-      });
-      return;
-    }
-    const targetRecord = records[records.length - 1]!;
+    const targetRecord = records[records.length - 1] ?? createIdleRecord(row, sessionID);
     const h = api.renderer.height;
     const maxHeight = Math.max(4, Math.floor(((h > 0 ? h : 24) * 3) / 4) - 8);
-    const detailMaxHeight = Math.max(4, maxHeight - 4);
     const onClose = (): void => api.ui.dialog.clear();
     const showLogs = (): void => {
       try {
         const latest = resolveSessionRecords(logFile, row, notBefore, sessionID, statusFile, fallbackEntry);
-        const logRecords = latest.length > 0 ? latest : records;
+        const logRecords = latest.length > 0 ? latest : records.length > 0 ? records : [targetRecord];
         api.ui.dialog.replace(() => buildHookLogsBody(logRecords, theme, solid, onClose, maxHeight, api.renderer) as SolidElement);
         api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
       } catch {}
     };
-    api.ui.dialog.replace(
-      () =>
-        buildHookRunDetailBody(targetRecord, logFile, theme, solid, showLogs, onClose, records.length, detailMaxHeight, api.renderer) as SolidElement,
-    );
+    api.ui.dialog.replace(() => buildHookRunDetailBody(targetRecord, logFile, theme, solid, showLogs, onClose, records.length) as SolidElement);
     api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
   } catch {}
 };

@@ -61,23 +61,23 @@ const truncateMessage = (message: string, maxChars: number): string => {
 };
 
 export const formatHookRunSummary = (record: HookRunLogRecord, maxChars = RUN_SUMMARY_MAX_CHARS): string => {
+  const timestamp = record.finishedAt || record.startedAt;
+  const timeLabel = timestamp > 0 ? new Date(timestamp).toISOString() : 'none';
   const lines = [
     `Event:  ${record.event}`,
     `Status: ${statusLabelFor(record.status)} — ${record.durationMs} ms`,
-    `Time:   ${new Date(record.finishedAt || record.startedAt).toISOString()}`,
-    ...(record.sessionID !== undefined ? [`Session: ${record.sessionID}`] : []),
-    ...(record.exitCode !== undefined ? [`Exit:   ${record.exitCode ?? 'none'}`] : []),
-    ...(record.signal ? [`Signal: ${record.signal}`] : []),
-    ...(record.reason !== undefined ? ['', `Reason: ${record.reason}`] : []),
+    `Time:   ${timeLabel}`,
+    `Session: ${record.sessionID ?? 'none'}`,
+    `Exit:   ${record.exitCode ?? 'none'}`,
   ];
   return truncateMessage(lines.join('\n'), maxChars);
 };
 
 export const formatHookLogsMessage = (record: HookRunLogRecord): string => {
   const sections: string[] = [];
-  if (record.stderr !== undefined) sections.push(`--- stderr ---\n${record.stderr}`);
-  if (record.stdout !== undefined) sections.push(`--- stdout ---\n${record.stdout}`);
-  if (sections.length === 0 && record.reason !== undefined) sections.push(record.reason);
+  if (record.stderr !== undefined && record.stderr.trim().length > 0) sections.push(`--- stderr ---\n${record.stderr.trimEnd()}`);
+  if (record.stdout !== undefined && record.stdout.trim().length > 0) sections.push(`--- stdout ---\n${record.stdout.trimEnd()}`);
+  if (sections.length === 0 && record.reason !== undefined && record.reason.trim().length > 0) sections.push(record.reason.trimEnd());
   if (sections.length === 0) sections.push('No output captured for this run.');
   if (record.truncated === true) sections.push('[output truncated]');
   return sections.join('\n\n');

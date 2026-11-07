@@ -96,6 +96,7 @@ export interface HookScan {
 }
 
 export enum HookRunState {
+  IDLE = 'idle',
   PENDING = 'pending',
   SUCCESS = 'success',
   FAILURE = 'failure',
