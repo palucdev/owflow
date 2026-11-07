@@ -5,9 +5,6 @@
 
 import type { Hooks, Plugin } from '@opencode-ai/plugin';
 
-import path from 'node:path';
-import fs from 'node:fs';
-
 import { PLUGIN_VERSION } from './utils/plugin-info.js';
 import type { OpenCodeConfig } from './types/opencode-types.js';
 import { verify_template } from './tools/verify_template.js';
@@ -90,7 +87,6 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
           if (oldest !== undefined) agentBySession.delete(oldest);
         }
       } catch {
-        endSession;
         // ignore
       }
       // Dispatch deliberately outside the swallowing catch so gate throws
@@ -115,7 +111,10 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
     },
   };
 
+  // No wrapper - no support for user defined hooks, return owflow hook configs
   if (wrapper === undefined) return hooks;
+
+  // Return full plugin configuration with user hooks support
   const dispatchHandlers = createDispatchHandlers(wrapper.dispatch);
   const userDispose = dispatchHandlers.dispose;
   return {

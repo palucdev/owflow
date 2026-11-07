@@ -11,16 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Session-scoped, non-truncated hook logs with lazy-loaded scrolling** — hook outputs in active sessions are preserved in full without stream truncation, and displayed in the TUI logs popup with incremental lazy-loading as the user scrolls. Multiple runs within a session are grouped and viewable across the session lifecycle.
 
-## [0.8.0] - 2026-10-29
-
-### Changed
-
-- **Universal gate hooks (breaking change)** — Simplified user hooks subsystem to universal gate hooks. Removed the `observe` class, `HookClass` type, and `skipped-no-interpreter` status. All 16 lifecycle events and 32 host events now fail closed on non-`ok` (`blocked` / `failed`) outcomes and when interpreters are missing.
-- **Fail-closed `config` hook** — `config` hook failures and gate rejections now propagate and reject plugin initialization instead of being swallowed with warnings.
-- **Fail-closed host event hooks** — Host event hooks (`session.idle`, etc.) and the catch-all `event` hook fail closed, aborting active sessions on `failed` outcomes.
-- **Four-column table reports** — CLI tables and startup banners use 4 columns (`path`, `event`, `interpreter`, `status`), removing the redundant `class` column.
-- **Wire stability** — The `owflow-hooks/1` envelope format retains `"class": "gate"` for backward compatibility with existing scripts.
-
 ## [0.7.0] - 2026-10-29
 
 ### Added
@@ -36,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Universal gate hooks (breaking change)** — Simplified user hooks subsystem to universal gate hooks. Removed the `observe` class, `HookClass` type, and `skipped-no-interpreter` status. All 16 lifecycle events and 32 host events now fail closed on non-`ok` (`blocked` / `failed`) outcomes and when interpreters are missing.
+- **Fail-closed `config` hook** — `config` hook failures and gate rejections now propagate and reject plugin initialization instead of being swallowed with warnings.
+- **Fail-closed host event hooks** — Host event hooks (`session.idle`, etc.) and the catch-all `event` hook fail closed, aborting active sessions on `failed` outcomes.
+- **Four-column table reports** — CLI tables and startup banners use 4 columns (`path`, `event`, `interpreter`, `status`), removing the redundant `class` column.
+- **Wire stability** — The `owflow-hooks/1` envelope format retains `"class": "gate"` for backward compatibility with existing scripts.
 - `package.json`: new `owflow-hooks` bin, dual `exports` map (`"."` server entry and `"./tui"` TUI entry with emitted `.d.ts` declarations), repository metadata, and updated `engines` (`node >= 22`, `bun >= 1.3.0`).
 - Hook model centralized: event names are `HookEvent` enum values, all hook types/contracts live in `src/types/hook-types.ts`, and `.owflow` directory names live in `src/utils/workflow-paths.ts` and are referenced across the plugin.
 - Server hook wiring moved out of `src/index.ts` into `src/hooks/user-hooks.ts`; `tool.execute.before` now logs unexpected non-`Blocked:` errors with `[owflow] hooks:` while failing open, and `agentBySession` is bounded.
