@@ -1,8 +1,16 @@
 import fs from 'node:fs';
 import type { TuiPluginApi, TuiPluginModule } from '@opencode-ai/plugin/tui';
 import { readHookStatusSnapshot, readSessionLatestLogs, resolveHooksLogFile, resolveHooksStatusFile } from './hooks/hooks-logs.js';
-import type { HookRunState, HookRuntimeEntry } from './types/hook-types.js';
-import { DEFAULT_LOG_CHUNK_LINES, buildHookLogsBody, buildHookRunDetailBody, openHookLogPopup } from './tui/hooks-dialogs.js';
+import { HookRunState, type HookRuntimeEntry } from './types/hook-types.js';
+import {
+  DEFAULT_LOG_CHUNK_LINES,
+  buildHookLogsBody,
+  buildHookRunDetailBody,
+  getActiveDialogHandle,
+  openHookLogPopup,
+  resolveSessionRecords,
+  type ActiveDialogHandle,
+} from './tui/hooks-dialogs.js';
 import {
   buildActiveHooksView,
   colorForStatus,
@@ -25,7 +33,9 @@ export {
   formatHookLogsMessage,
   formatHookRunSummary,
   formatSessionHookLogsMessage,
+  getActiveDialogHandle,
   statusLabelFor,
+  type ActiveDialogHandle,
   type ActiveHookRow,
   type ActiveHooksView,
   type SidebarRenderHandle,
@@ -53,16 +63,20 @@ export const registerActiveHooksSidebar = async (
   const handles: SidebarRenderHandle[] = [];
   let statuses = new Map<string, HookRuntimeEntry>();
   let lastMtime: number | undefined;
+  let lastLogMtime: number | undefined;
   const sessionEpochs = new Map<string, number>();
   const pollingEnabled = process.env.OWFLOW_HOOKS_DISABLED !== '1';
 
   if (pollingEnabled) {
     const renderer = api.renderer;
     const tick = (): void => {
+      const activeDialog = getActiveDialogHandle();
+      let statusChanged = false;
       try {
         const stat = fs.statSync(statusFile);
-        if (stat.isFile() && lastMtime !== stat.mtimeMs) {
+        if (stat.isFile() && (lastMtime !== stat.mtimeMs || activeDialog !== undefined)) {
           lastMtime = stat.mtimeMs;
+          statusChanged = true;
           const result = readHookStatusSnapshot(statusFile);
           if (result.kind === 'ok') {
             statuses = new Map(Object.entries(result.snapshot.hooks));
@@ -74,6 +88,19 @@ export const registerActiveHooksSidebar = async (
         lastMtime = undefined;
       }
 
+      let logChanged = false;
+      try {
+        const logStat = fs.statSync(logFile);
+        if (logStat.isFile() && lastLogMtime !== logStat.mtimeMs) {
+          lastLogMtime = logStat.mtimeMs;
+          logChanged = true;
+        } else if (!logStat.isFile()) {
+          lastLogMtime = undefined;
+        }
+      } catch {
+        lastLogMtime = undefined;
+      }
+
       for (const handle of handles) {
         if (handle.disposed()) continue;
         if (handle.applyStatuses(statuses)) {
@@ -83,11 +110,26 @@ export const registerActiveHooksSidebar = async (
       for (let i = handles.length - 1; i >= 0; i -= 1) {
         if (handles[i]!.disposed()) handles.splice(i, 1);
       }
+
+      if (activeDialog !== undefined && (statusChanged || logChanged || statuses.get(activeDialog.event)?.status === HookRunState.PENDING)) {
+        const updatedRecords = resolveSessionRecords(
+          logFile,
+          activeDialog.row,
+          activeDialog.notBefore,
+          activeDialog.sessionID,
+          statusFile,
+          statuses.get(activeDialog.event),
+        );
+        activeDialog.update(updatedRecords);
+      }
     };
 
     const timer = setInterval(tick, DEFAULT_STATUS_POLL_MS);
     (timer as { unref?: () => void }).unref?.();
-    api.lifecycle.onDispose(() => clearInterval(timer));
+    api.lifecycle.onDispose(() => {
+      clearInterval(timer);
+      getActiveDialogHandle()?.dispose();
+    });
   }
 
   api.slots.register({

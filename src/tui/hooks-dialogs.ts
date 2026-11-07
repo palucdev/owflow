@@ -1,5 +1,5 @@
 import type { TuiPluginApi } from '@opencode-ai/plugin/tui';
-import { HookRunState, type HookRunLogRecord, type HookRuntimeEntry } from '../types/hook-types.js';
+import { HookRunState, type HookEventName, type HookRunLogRecord, type HookRuntimeEntry } from '../types/hook-types.js';
 import { formatHookRunSummary, formatSessionHookLogsMessage, type ActiveHookRow } from './hooks-formatting.js';
 import { el, txt, type SidebarTheme, type SolidElement, type SolidRuntime } from './primitives.js';
 import { readHookStatusSnapshot, readSessionHookLogs } from '../hooks/hooks-logs.js';
@@ -7,6 +7,19 @@ import { readHookStatusSnapshot, readSessionHookLogs } from '../hooks/hooks-logs
 const SHOW_LOGS_LABEL = 'View logs';
 const DETAIL_DIALOG_SIZE = 'large';
 export const DEFAULT_LOG_CHUNK_LINES = 100;
+
+export interface ActiveDialogHandle {
+  readonly event: HookEventName;
+  readonly row: ActiveHookRow;
+  readonly notBefore: number;
+  readonly sessionID?: string;
+  readonly update: (records: readonly HookRunLogRecord[]) => boolean;
+  readonly dispose: () => void;
+}
+
+let currentDialogHandle: ActiveDialogHandle | undefined;
+
+export const getActiveDialogHandle = (): ActiveDialogHandle | undefined => currentDialogHandle;
 
 const buildHeader = (solid: SolidRuntime, titleText: string, theme: SidebarTheme, onClose: () => void): unknown =>
   el(solid, 'box', { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 1 }, [
@@ -23,9 +36,9 @@ const buildScrollableTextBox = (
   renderer?: { requestRender: () => void },
   chunkLines = DEFAULT_LOG_CHUNK_LINES,
 ): unknown => {
-  const allLines = fullText.split('\n');
-  const totalLines = allLines.length;
-
+  let currentFullText = fullText;
+  let allLines = currentFullText.split('\n');
+  let totalLines = allLines.length;
   let loadedLines = Math.min(totalLines, chunkLines);
 
   const getVisibleText = (): string => allLines.slice(0, loadedLines).join('\n');
@@ -35,16 +48,31 @@ const buildScrollableTextBox = (
   const bodyNode = txt(solid, getVisibleText(), fg, { width: '100%', textAlign: 'center' });
   const footerNode = txt(solid, getFooterText(), theme.textMuted, { width: '100%', textAlign: 'center' });
 
-  const children: unknown[] = [bodyNode];
-  if (loadedLines < totalLines) {
-    children.push(footerNode);
-  }
-
   let scrollbox: unknown;
   const loadMore = (lines?: unknown): boolean => {
     if (loadedLines >= totalLines) return false;
     const step = typeof lines === 'number' ? lines : chunkLines;
     loadedLines = Math.min(totalLines, loadedLines + step);
+    solid.setProp(bodyNode, 'content', getVisibleText());
+    solid.setProp(footerNode, 'content', getFooterText());
+    if (scrollbox !== undefined) {
+      solid.setProp(scrollbox, 'height', getBoxHeight());
+    }
+    renderer?.requestRender();
+    return true;
+  };
+
+  const updateText = (nextFullText: string): boolean => {
+    if (nextFullText === currentFullText) return false;
+    const wasAtBottom = loadedLines >= totalLines;
+    currentFullText = nextFullText;
+    allLines = currentFullText.split('\n');
+    totalLines = allLines.length;
+    if (wasAtBottom) {
+      loadedLines = totalLines;
+    } else {
+      loadedLines = Math.min(totalLines, Math.max(loadedLines, Math.min(totalLines, chunkLines)));
+    }
     solid.setProp(bodyNode, 'content', getVisibleText());
     solid.setProp(footerNode, 'content', getFooterText());
     if (scrollbox !== undefined) {
@@ -66,9 +94,11 @@ const buildScrollableTextBox = (
       onWheel: loadMore,
       loadMore,
       loadAll: () => loadMore(totalLines),
+      updateText,
     },
-    children,
+    [bodyNode, footerNode],
   );
+  (scrollbox as Record<string, unknown>).updateText = updateText;
 
   try {
     (scrollbox as any).on?.('scroll', loadMore);
@@ -92,7 +122,13 @@ export const buildHookLogsBody = (
   const fullText = formatSessionHookLogsMessage(records);
   const scrollbox = buildScrollableTextBox(fullText, theme.text, theme, solid, maxHeight, renderer, chunkLines);
 
-  return el(
+  const updateRecords = (nextRecords: readonly HookRunLogRecord[]): boolean => {
+    const nextText = formatSessionHookLogsMessage(nextRecords);
+    const fn = (scrollbox as any)?.updateText ?? (scrollbox as any)?.props?.updateText;
+    return typeof fn === 'function' ? Boolean(fn(nextText)) : false;
+  };
+
+  const root = el(
     solid,
     'box',
     {
@@ -105,9 +141,12 @@ export const buildHookLogsBody = (
       paddingTop: 1,
       paddingBottom: 1,
       gap: 1,
+      updateRecords,
     },
     [buildHeader(solid, `Hook logs: ${name}`, theme, onClose), scrollbox],
   );
+  (root as Record<string, unknown>).updateRecords = updateRecords;
+  return root;
 };
 
 export const buildHookRunDetailBody = (
@@ -118,6 +157,7 @@ export const buildHookRunDetailBody = (
   onShowLogs: () => void,
   onClose: () => void,
   totalRunsInSession = 0,
+  renderer?: { requestRender: () => void },
 ): unknown => {
   const buttonLabel = txt(solid, SHOW_LOGS_LABEL, theme.selectedListItemText, { flexShrink: 0 });
   const button: unknown = el(
@@ -142,9 +182,22 @@ export const buildHookRunDetailBody = (
     [buttonLabel],
   );
 
-  const detailsText = [formatHookRunSummary(record), `Runs in session: ${totalRunsInSession}`, `Log file: ${logFile}`].join('\n');
+  const formatDetails = (rec: HookRunLogRecord, totalRuns: number): string =>
+    [formatHookRunSummary(rec), `Runs in session: ${totalRuns}`, `Log file: ${logFile}`].join('\n');
 
-  return el(
+  let currentDetailsText = formatDetails(record, totalRunsInSession);
+  const detailsNode = txt(solid, currentDetailsText, theme.textMuted, { width: '100%', textAlign: 'center' });
+
+  const update = (nextRecord: HookRunLogRecord, nextTotalRuns = totalRunsInSession): boolean => {
+    const nextDetailsText = formatDetails(nextRecord, nextTotalRuns);
+    if (nextDetailsText === currentDetailsText) return false;
+    currentDetailsText = nextDetailsText;
+    solid.setProp(detailsNode, 'content', nextDetailsText);
+    renderer?.requestRender();
+    return true;
+  };
+
+  const root = el(
     solid,
     'box',
     {
@@ -157,13 +210,16 @@ export const buildHookRunDetailBody = (
       paddingTop: 1,
       paddingBottom: 1,
       gap: 1,
+      update,
     },
     [
       buildHeader(solid, `Hook run: ${record.name}`, theme, onClose),
-      txt(solid, detailsText, theme.textMuted, { width: '100%', textAlign: 'center' }),
+      detailsNode,
       el(solid, 'box', { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' }, [button]),
     ],
   );
+  (root as Record<string, unknown>).update = update;
+  return root;
 };
 
 const createIdleRecord = (row: ActiveHookRow, sessionID?: string): HookRunLogRecord => ({
@@ -181,7 +237,7 @@ const createIdleRecord = (row: ActiveHookRow, sessionID?: string): HookRunLogRec
   status: HookRunState.IDLE,
 });
 
-const resolveSessionRecords = (
+export const resolveSessionRecords = (
   logFile: string,
   row: ActiveHookRow,
   notBefore: number,
@@ -204,13 +260,19 @@ const resolveSessionRecords = (
     } catch {}
   }
 
-  if (entry?.status === HookRunState.PENDING) {
+  if (entry && entry.status !== HookRunState.IDLE) {
     const belongs = sessionID && entry.sessionID ? entry.sessionID === sessionID : true;
-    if (belongs && records[records.length - 1]?.status !== HookRunState.PENDING) {
+    const lastRecord = records[records.length - 1];
+    const shouldAppend =
+      entry.status === HookRunState.PENDING
+        ? lastRecord?.status !== HookRunState.PENDING
+        : lastRecord === undefined || lastRecord.startedAt < entry.startedAt;
+    if (belongs && shouldAppend) {
       const now = Date.now();
-      const pendingRecord: HookRunLogRecord = {
+      const exitCode = (entry as { readonly exitCode?: number | null }).exitCode;
+      const runtimeRecord: HookRunLogRecord = {
         version: 1,
-        runId: `${row.event}#pending`,
+        runId: `${row.event}#${entry.status}`,
         pid: process.pid,
         workspace: '',
         event: row.event,
@@ -219,13 +281,14 @@ const resolveSessionRecords = (
         ...(entry.sessionID !== undefined ? { sessionID: entry.sessionID } : sessionID !== undefined ? { sessionID } : {}),
         startedAt: entry.startedAt,
         finishedAt: entry.finishedAt ?? now,
-        durationMs: entry.durationMs ?? Math.max(0, now - entry.startedAt),
-        status: HookRunState.PENDING,
+        durationMs: entry.durationMs ?? Math.max(0, (entry.finishedAt ?? now) - entry.startedAt),
+        status: entry.status,
+        ...(exitCode !== undefined ? { exitCode } : {}),
         ...(entry.reason !== undefined ? { reason: entry.reason } : {}),
         ...(entry.stdout !== undefined ? { stdout: entry.stdout } : {}),
         ...(entry.stderr !== undefined ? { stderr: entry.stderr } : {}),
       };
-      records = [...records, pendingRecord];
+      records = [...records, runtimeRecord];
     }
   }
 
@@ -243,21 +306,73 @@ export const openHookLogPopup = (
   statusFile?: string,
   fallbackEntry?: HookRuntimeEntry,
 ): void => {
+  currentDialogHandle?.dispose();
   const records = resolveSessionRecords(logFile, row, notBefore, sessionID, statusFile, fallbackEntry);
   try {
+    let latestRecords = records;
     const targetRecord = records[records.length - 1] ?? createIdleRecord(row, sessionID);
     const h = api.renderer.height;
     const maxHeight = Math.max(4, Math.floor(((h > 0 ? h : 24) * 3) / 4) - 8);
-    const onClose = (): void => api.ui.dialog.clear();
+    const onClose = (): void => {
+      currentDialogHandle?.dispose();
+      api.ui.dialog.clear();
+    };
     const showLogs = (): void => {
       try {
+        currentDialogHandle?.dispose();
         const latest = resolveSessionRecords(logFile, row, notBefore, sessionID, statusFile, fallbackEntry);
-        const logRecords = latest.length > 0 ? latest : records.length > 0 ? records : [targetRecord];
-        api.ui.dialog.replace(() => buildHookLogsBody(logRecords, theme, solid, onClose, maxHeight, api.renderer) as SolidElement);
+        const logRecords = latest.length > 0 ? latest : latestRecords.length > 0 ? latestRecords : [targetRecord];
+        let updateRecords: ((nextRecords: readonly HookRunLogRecord[]) => boolean) | undefined;
+        const logsHandle: ActiveDialogHandle = {
+          event: row.event,
+          row,
+          notBefore,
+          ...(sessionID !== undefined ? { sessionID } : {}),
+          update: (nextRecords) => {
+            latestRecords = nextRecords;
+            const effective = nextRecords.length > 0 ? nextRecords : [createIdleRecord(row, sessionID)];
+            return typeof updateRecords === 'function' ? Boolean(updateRecords(effective)) : false;
+          },
+          dispose: () => {
+            if (currentDialogHandle === logsHandle) {
+              currentDialogHandle = undefined;
+            }
+          },
+        };
+        currentDialogHandle = logsHandle;
+        api.ui.dialog.replace(() => {
+          const effective = latestRecords.length > 0 ? latestRecords : logRecords;
+          const logsBody = buildHookLogsBody(effective, theme, solid, onClose, maxHeight, api.renderer);
+          updateRecords = (logsBody as any)?.updateRecords ?? (logsBody as any)?.props?.updateRecords;
+          return logsBody as SolidElement;
+        }, logsHandle.dispose);
         api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
       } catch {}
     };
-    api.ui.dialog.replace(() => buildHookRunDetailBody(targetRecord, logFile, theme, solid, showLogs, onClose, records.length) as SolidElement);
+    let updateDetail: ((nextRecord: HookRunLogRecord, nextTotalRuns?: number) => boolean) | undefined;
+    const detailHandle: ActiveDialogHandle = {
+      event: row.event,
+      row,
+      notBefore,
+      ...(sessionID !== undefined ? { sessionID } : {}),
+      update: (nextRecords) => {
+        latestRecords = nextRecords;
+        const nextTarget = nextRecords[nextRecords.length - 1] ?? createIdleRecord(row, sessionID);
+        return typeof updateDetail === 'function' ? Boolean(updateDetail(nextTarget, nextRecords.length)) : false;
+      },
+      dispose: () => {
+        if (currentDialogHandle === detailHandle) {
+          currentDialogHandle = undefined;
+        }
+      },
+    };
+    currentDialogHandle = detailHandle;
+    api.ui.dialog.replace(() => {
+      const currentTarget = latestRecords[latestRecords.length - 1] ?? targetRecord;
+      const detailBody = buildHookRunDetailBody(currentTarget, logFile, theme, solid, showLogs, onClose, latestRecords.length, api.renderer);
+      updateDetail = (detailBody as any)?.update ?? (detailBody as any)?.props?.update;
+      return detailBody as SolidElement;
+    }, detailHandle.dispose);
     api.ui.dialog.setSize(DETAIL_DIALOG_SIZE);
   } catch {}
 };
