@@ -118,6 +118,9 @@ describe('TUI hook-dialogs', () => {
       const statusFile = path.join(tmpDir, 'status.json');
       const logFile = path.join(tmpDir, 'empty-logs.jsonl');
       const now = Date.now();
+      const streamFiles = hookLogs.resolveHookStreamLogFiles(logFile, 'tool-execute-before');
+      fs.writeFileSync(streamFiles.stdout, 'in-progress stdout line 1\nin-progress stdout line 2\n', 'utf8');
+      fs.writeFileSync(streamFiles.stderr, 'in-progress stderr line 1\n', 'utf8');
       fs.writeFileSync(
         statusFile,
         JSON.stringify({
@@ -129,8 +132,6 @@ describe('TUI hook-dialogs', () => {
             'tool.execute.before': {
               status: 'pending',
               startedAt: now,
-              stdout: 'in-progress stdout line 1\nin-progress stdout line 2',
-              stderr: 'in-progress stderr line 1',
             },
           },
         }),
@@ -347,7 +348,7 @@ describe('TUI hook-dialogs', () => {
       expect(text).not.toContain('[scroll for more logs');
     });
 
-    test('should preserve scroll position when not at bottom and tail-follow when at bottom on updateRecords', () => {
+    test('should preserve scroll position when not at bottom and tail-follow when at bottom on updateRecord', () => {
       const { runtime } = makeSolid();
       const initialLines = Array.from({ length: 80 }, (_, i) => `line ${i + 1}`);
       const record = makeLogRecord({ status: HookRunState.PENDING, stdout: initialLines.join('\n') });
@@ -355,20 +356,20 @@ describe('TUI hook-dialogs', () => {
       const body = buildHookLogsBody(record, THEME, runtime, () => {}, 20, undefined, 50) as FakeNode;
       const scrollbox = body.children.find((c): c is FakeNode => typeof c === 'object' && c.tag === 'scrollbox')!;
 
-      // User has not scrolled to bottom (50/81 lines loaded) -> updateRecords should not hijack scroll position
+      // User has not scrolled to bottom (50/81 lines loaded) -> updateRecord should not hijack scroll position
       const moreLines = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`);
-      body.props.updateRecords([makeLogRecord({ status: HookRunState.PENDING, stdout: moreLines.join('\n') })]);
+      body.props.updateRecord(makeLogRecord({ status: HookRunState.PENDING, stdout: moreLines.join('\n') }));
       let text = collectText(scrollbox);
       expect(text).toContain('line 49');
       expect(text).not.toContain('line 50');
       expect(text).toContain('[scroll for more logs: 50/101 lines loaded]');
 
-      // Scroll to bottom (loadAll) -> subsequent updateRecords should tail-follow automatically
+      // Scroll to bottom (loadAll) -> subsequent updateRecord should tail-follow automatically
       scrollbox.props.loadAll();
       expect(collectText(scrollbox)).toContain('line 100');
 
       const tailLines = Array.from({ length: 110 }, (_, i) => `line ${i + 1}`);
-      body.props.updateRecords([makeLogRecord({ status: HookRunState.PENDING, stdout: tailLines.join('\n') })]);
+      body.props.updateRecord(makeLogRecord({ status: HookRunState.PENDING, stdout: tailLines.join('\n') }));
       text = collectText(scrollbox);
       expect(text).toContain('line 110');
       expect(text).not.toContain('[scroll for more logs');
@@ -487,6 +488,9 @@ describe('TUI hook-dialogs', () => {
         'utf8',
       );
 
+      const streamFiles = hookLogs.resolveHookStreamLogFiles(logFile, 'tool-execute-before');
+      fs.writeFileSync(streamFiles.stdout, 'first run output\nchunk 1\n', 'utf8');
+
       let tickFn: (() => void) | undefined;
       spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(statusFile);
       spyOn(hookLogs, 'resolveHooksLogFile').mockReturnValue(logFile);
@@ -511,33 +515,18 @@ describe('TUI hook-dialogs', () => {
 
       expect(dialogCalls).toHaveLength(2);
       const logsView = dialogCalls[1]!.render() as FakeNode;
-      expect(collectText(logsView)).toContain('chunk 1');
+      expect(collectText(logsView)).toContain('first run output\nchunk 1');
       expect(collectText(logsView)).not.toContain('chunk 2');
 
-      // 2. Live Logs Streaming: emit new stdout chunk to statusFile
-      fs.writeFileSync(
-        statusFile,
-        JSON.stringify({
-          version: 1,
-          pid: 1,
-          workspace: tmpDir,
-          updatedAt: startedAt + 50,
-          hooks: {
-            'tool.execute.before': {
-              status: HookRunState.PENDING,
-              startedAt,
-              stdout: 'chunk 1\nchunk 2',
-            },
-          },
-        }),
-        'utf8',
-      );
+      // 2. Live Logs Streaming: append new stdout chunk to tracking log file
+      fs.appendFileSync(streamFiles.stdout, 'chunk 2\n', 'utf8');
 
       tickFn!();
       expect(dialogCalls).toHaveLength(2);
-      expect(collectText(logsView)).toContain('chunk 2');
+      expect(collectText(logsView)).toContain('first run output\nchunk 1\nchunk 2');
 
-      // 3. Completion Transition: append completed record to logFile and update statusFile
+      // 3. Completion Transition: append final chunk and completed record
+      fs.appendFileSync(streamFiles.stdout, 'final output complete\n', 'utf8');
       const completedRecord = makeLogRecord({
         runId: 'tool.execute.before#2',
         startedAt,
@@ -569,8 +558,7 @@ describe('TUI hook-dialogs', () => {
 
       tickFn!();
       const completedLogsText = collectText(logsView);
-      expect(completedLogsText).toContain('final output complete');
-      expect(completedLogsText).toContain('=== Run #2 (1970-01-01T00:00:02.180Z) — Success (180 ms) ===');
+      expect(completedLogsText).toContain('first run output\nchunk 1\nchunk 2\nfinal output complete');
 
       // 4. Dialog Teardown on Close: click esc button and verify handle is cleaned up
       expect(getActiveDialogHandle()).toBeDefined();

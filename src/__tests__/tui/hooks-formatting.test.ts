@@ -2,14 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  buildActiveHooksView,
-  colorForStatus,
-  formatHookLogsMessage,
-  formatHookRunSummary,
-  formatSessionHookLogsMessage,
-  statusLabelFor,
-} from '../../tui/hooks-formatting.js';
+import { buildActiveHooksView, colorForStatus, formatHookLogsMessage, formatHookRunSummary, statusLabelFor } from '../../tui/hooks-formatting.js';
 import { THEME, makeLogRecord } from './primitives.js';
 import { HookRunState } from '../../types/hook-types.js';
 
@@ -96,31 +89,18 @@ describe('TUI hook-formatting', () => {
     expect(truncated.length).toBeLessThanOrEqual(40);
   });
 
-  test('formatHookLogsMessage and formatSessionHookLogsMessage should format outputs', () => {
+  test('formatHookLogsMessage should format stdout, stderr, reason, and empty outputs', () => {
     // Empty output
     expect(formatHookLogsMessage(makeLogRecord())).toBe('No output captured for this run.');
 
     // Captured stdout & stderr
-    const record = makeLogRecord({ stdout: 'out-line', stderr: 'err-line' });
+    const record = makeLogRecord({ stdout: 'out-line 1\nout-line 2', stderr: 'err-line 1\nerr-line 2' });
     const message = formatHookLogsMessage(record);
-    expect(message).toContain('--- stdout ---\nout-line');
-    expect(message).toContain('--- stderr ---\nerr-line');
+    expect(message).toContain('--- stderr ---\nerr-line 1\nerr-line 2');
+    expect(message).toContain('--- stdout ---\nout-line 1\nout-line 2');
 
-    // Multiple session records including pending
-    const record2 = makeLogRecord({
-      status: HookRunState.FAILURE,
-      stderr: 'second-err',
-    });
-    const record3 = makeLogRecord({
-      status: HookRunState.PENDING,
-      stdout: 'pending-out',
-    });
-    const sessionMsg = formatSessionHookLogsMessage([record, record2, record3]);
-    expect(sessionMsg).toContain('=== Run #1');
-    expect(sessionMsg).toContain('=== Run #2');
-    expect(sessionMsg).toContain('=== Run #3');
-    expect(sessionMsg).toContain('In progress');
-    expect(sessionMsg).toContain('second-err');
-    expect(sessionMsg).toContain('pending-out');
+    // Reason fallback when stdio is empty
+    const reasonOnly = makeLogRecord({ status: HookRunState.FAILURE, reason: 'hook failed' });
+    expect(formatHookLogsMessage(reasonOnly)).toBe('hook failed');
   });
 });

@@ -15,11 +15,10 @@ import {
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
-import { resolveHooksLogFile, resolveHooksStatusFile } from './hooks-logs.js';
+import { appendHookStreamLog, resolveHookStreamLogFiles, resolveHooksLogFile, resolveHooksStatusFile } from './hooks-logs.js';
 import { scanHooks } from './hooks-discovery.js';
 
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
-export const MAX_CAPTURE_BYTES = 16 * 1024;
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
 export const ABORT_COOLDOWN_MS = 2_000;
 export const CIRCUIT_BREAKER_THRESHOLD = 4;
@@ -78,20 +77,7 @@ const sessionIDFrom = (input: unknown): string | undefined => {
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 };
 
-const capStream = (text: string, isSession = false): { text: string; truncated: boolean } => {
-  if (isSession) {
-    return { text, truncated: false };
-  }
-  if (Buffer.byteLength(text, 'utf8') <= MAX_CAPTURE_BYTES) {
-    return { text, truncated: false };
-  }
-  return {
-    text: Buffer.from(text, 'utf8').subarray(0, MAX_CAPTURE_BYTES).toString('utf8'),
-    truncated: true,
-  };
-};
-
-const readStream = async (stream: ReadableStream<Uint8Array> | null | undefined, onChunk: (text: string) => void): Promise<string> => {
+const readStream = async (stream: ReadableStream<Uint8Array> | null | undefined, onChunk: (chunk: string) => void): Promise<string> => {
   if (!stream) return '';
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -103,13 +89,13 @@ const readStream = async (stream: ReadableStream<Uint8Array> | null | undefined,
       const chunk = decoder.decode(value, { stream: true });
       if (chunk) {
         result += chunk;
-        onChunk(result);
+        onChunk(chunk);
       }
     }
     const tail = decoder.decode();
     if (tail) {
       result += tail;
-      onChunk(result);
+      onChunk(tail);
     }
   } catch {}
   return result;
@@ -155,17 +141,7 @@ export const initializeHooksWrapper = async (
 
   const appendLog = (record: HookRunLogRecord): void => {
     try {
-      const key = JSON.stringify([
-        record.event,
-        record.hook,
-        record.sessionID,
-        record.status,
-        record.reason,
-        record.exitCode,
-        record.signal,
-        record.stdout,
-        record.stderr,
-      ]);
+      const key = JSON.stringify([record.event, record.hook, record.sessionID, record.status, record.reason, record.exitCode, record.signal]);
       if (key === lastLogKey) return;
       fs.mkdirSync(path.dirname(logFile), { recursive: true, mode: 0o700 });
       if (fs.existsSync(logFile)) {
@@ -210,10 +186,12 @@ export const initializeHooksWrapper = async (
       const runId = `${event}#${runCounter}`;
       const startedAt = Date.now();
       const name = path.basename(entry.path, path.extname(entry.path));
+      const streamFiles = resolveHookStreamLogFiles(logFile, name, sessionID);
       const breakerKey = `${event}::${entry.path}::${sessionID ?? 'global'}`;
       const breaker = breakers.get(breakerKey);
       if (breaker && startedAt < breaker.trippedUntil) {
         const reason = `Circuit breaker active for ${entry.path} after ${CIRCUIT_BREAKER_THRESHOLD} rapid consecutive failures (cooldown until ${new Date(breaker.trippedUntil).toISOString()})`;
+        appendHookStreamLog(streamFiles.stderr, `${reason}\n`);
         statuses.set(event, {
           status: HookRunState.FAILURE,
           startedAt,
@@ -244,6 +222,7 @@ export const initializeHooksWrapper = async (
       if (!entry.interpreter.available || !entry.interpreter.resolved) {
         const label = entry.interpreter.resolved ?? entry.interpreter.expected;
         const reason = `${label} is not available`;
+        appendHookStreamLog(streamFiles.stderr, `${reason}\n`);
         statuses.set(event, {
           status: HookRunState.FAILURE,
           startedAt,
@@ -294,34 +273,17 @@ export const initializeHooksWrapper = async (
       });
       activeProcs.add(proc);
 
-      const isSession = sessionID !== undefined && sessionID.length > 0;
       const timeoutMs = Number(process.env[HOOK_TIMEOUT_ENV]);
       let timedOut = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let rawStdout = '';
       let rawStderr = '';
-      let finished = false;
-      const syncPendingOutput = (): void => {
-        if (finished || event === HookEvent.Event) return;
-        const out = capStream(rawStdout, isSession);
-        const err = capStream(rawStderr, isSession);
-        statuses.set(event, {
-          status: HookRunState.PENDING,
-          startedAt,
-          ...(sessionID ? { sessionID } : {}),
-          ...(out.text ? { stdout: out.text } : {}),
-          ...(err.text ? { stderr: err.text } : {}),
-        });
-        writeStatusFile(statusFile, directory, statuses);
-      };
       const ioPromise = Promise.all([
-        readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined, (text) => {
-          rawStdout = text;
-          syncPendingOutput();
+        readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined, (chunk) => {
+          appendHookStreamLog(streamFiles.stdout, chunk);
         }),
-        readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined, (text) => {
-          rawStderr = text;
-          syncPendingOutput();
+        readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined, (chunk) => {
+          appendHookStreamLog(streamFiles.stderr, chunk);
         }),
         proc.exited,
       ]);
@@ -346,16 +308,12 @@ export const initializeHooksWrapper = async (
             : await ioPromise;
         if (res !== 'timeout') [rawStdout, rawStderr, exitCode] = res;
       } finally {
-        finished = true;
         if (timer !== undefined) clearTimeout(timer);
         activeProcs.delete(proc);
       }
 
       const finishedAt = Date.now();
       const durationMs = Math.max(0, finishedAt - startedAt);
-      const out = capStream(rawStdout, isSession);
-      const err = capStream(rawStderr, isSession);
-      const truncated = out.truncated || err.truncated;
       const signal = proc.signalCode ?? null;
       const ok = !timedOut && exitCode === 0 && signal === null;
 
@@ -381,7 +339,7 @@ export const initializeHooksWrapper = async (
       }
 
       // Silent successful catch-all `event` runs leave no status/log trace so hot bus events don't flood.
-      if (ok && event === HookEvent.Event && !out.text.trim() && !err.text.trim()) {
+      if (ok && event === HookEvent.Event && !rawStdout.trim() && !rawStderr.trim()) {
         if (previousStatus) statuses.set(event, previousStatus);
         else statuses.delete(event);
         writeStatusFile(statusFile, directory, statuses);
@@ -392,7 +350,17 @@ export const initializeHooksWrapper = async (
         ? undefined
         : timedOut
           ? `process timed out after ${Math.floor(timeoutMs)}ms`
-          : err.text.trim() || out.text.trim() || (signal ? `process terminated by signal ${signal}` : `process exited with code ${exitCode}`);
+          : rawStderr.trim() || rawStdout.trim() || (signal ? `process terminated by signal ${signal}` : `process exited with code ${exitCode}`);
+
+      if (rawStdout.length > 0 && !rawStdout.endsWith('\n')) {
+        appendHookStreamLog(streamFiles.stdout, '\n');
+      }
+      if (rawStderr.length > 0 && !rawStderr.endsWith('\n')) {
+        appendHookStreamLog(streamFiles.stderr, '\n');
+      }
+      if (!ok && !rawStdout.trim() && !rawStderr.trim() && reason) {
+        appendHookStreamLog(streamFiles.stderr, `${reason}\n`);
+      }
 
       statuses.set(event, {
         status: ok ? HookRunState.SUCCESS : HookRunState.FAILURE,
@@ -420,9 +388,6 @@ export const initializeHooksWrapper = async (
         exitCode,
         ...(signal ? { signal } : {}),
         ...(reason ? { reason } : {}),
-        ...(out.text ? { stdout: out.text } : {}),
-        ...(err.text ? { stderr: err.text } : {}),
-        ...(truncated ? { truncated: true } : {}),
       });
 
       if (!ok) {

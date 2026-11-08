@@ -109,8 +109,6 @@ export interface HookRuntimeEntry {
   readonly durationMs?: number;
   readonly reason?: string;
   readonly sessionID?: string;
-  readonly stdout?: string;
-  readonly stderr?: string;
 }
 
 export interface HookStatusSnapshot {
@@ -141,7 +139,11 @@ export interface HookRunLogRecord {
   readonly reason?: string;
   readonly stdout?: string;
   readonly stderr?: string;
-  readonly truncated?: boolean;
+}
+
+export interface HookStreamLogFiles {
+  readonly stdout: string;
+  readonly stderr: string;
 }
 
 export type HookLogReadResult =

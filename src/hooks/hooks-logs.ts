@@ -8,12 +8,14 @@ import {
   type HookRunLogRecord,
   type HookStatusReadResult,
   type HookStatusSnapshot,
+  type HookStreamLogFiles,
 } from '../types/hook-types.js';
 
 export * from '../types/hook-types.js';
 
 export const STATUS_FILE_ENV = 'OWFLOW_HOOKS_STATUS_FILE';
 export const LOG_FILE_ENV = 'OWFLOW_HOOK_LOGS_FILE';
+const MAX_STREAM_LOG_FILE_BYTES = 4 * 1024 * 1024;
 
 const workspaceKey = (workspace: string): string => {
   let resolved = path.resolve(workspace);
@@ -34,6 +36,55 @@ export const resolveHooksStatusFile = (workspace: string): string =>
 
 export const resolveHooksLogFile = (workspace: string): string =>
   process.env[LOG_FILE_ENV] ?? path.join(os.tmpdir(), 'opencode', `owflow-hook-logs-${workspaceKey(workspace)}.jsonl`);
+
+export const resolveHookStreamLogFiles = (logFile: string, hookName: string, sessionID?: string): HookStreamLogFiles => {
+  const dir = path.dirname(logFile);
+  const sessionPrefix = sessionID && sessionID.trim().length > 0 ? path.basename(sessionID.trim()) : 'global';
+  const safeHook = path.basename(hookName.trim());
+  return {
+    stdout: path.join(dir, `${sessionPrefix}.${safeHook}.stdout.log`),
+    stderr: path.join(dir, `${sessionPrefix}.${safeHook}.stderr.log`),
+  };
+};
+
+export const appendHookStreamLog = (file: string, chunk: string): void => {
+  if (!chunk) return;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    if (fs.existsSync(file)) {
+      const stat = fs.lstatSync(file);
+      if (stat.isSymbolicLink()) return;
+      if (stat.size > MAX_STREAM_LOG_FILE_BYTES) fs.renameSync(file, `${file}.1`);
+    }
+    fs.appendFileSync(file, chunk, { encoding: 'utf8', mode: 0o600 });
+  } catch {
+    // Best-effort log persistence never affects hook execution.
+  }
+};
+
+const readTextFileSafe = (file: string): string => {
+  try {
+    const stat = fs.lstatSync(file);
+    if (stat.isSymbolicLink() || !stat.isFile()) return '';
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+};
+
+export const readHookStreamLogs = (logFile: string, hookName: string, sessionID?: string): HookStreamLogFiles => {
+  const files = resolveHookStreamLogFiles(logFile, hookName, sessionID);
+  const stdout = readTextFileSafe(files.stdout);
+  const stderr = readTextFileSafe(files.stderr);
+  if (stdout.length > 0 || stderr.length > 0 || !sessionID) {
+    return { stdout, stderr };
+  }
+  const globalFiles = resolveHookStreamLogFiles(logFile, hookName);
+  return {
+    stdout: readTextFileSafe(globalFiles.stdout),
+    stderr: readTextFileSafe(globalFiles.stderr),
+  };
+};
 
 export const readHookStatusSnapshot = (file: string): HookStatusReadResult => {
   try {
@@ -73,16 +124,6 @@ export const readHookLogRecords = (file: string): HookLogReadResult => {
   } catch (error) {
     return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? { kind: 'missing' } : { kind: 'invalid' };
   }
-};
-
-export const readLatestHookLog = (
-  file: string,
-  event: HookEventName,
-  since = Number.NEGATIVE_INFINITY,
-  sessionID?: string,
-): HookRunLogRecord | undefined => {
-  const records = readSessionHookLogs(file, event, since, sessionID);
-  return records.length > 0 ? records[records.length - 1] : undefined;
 };
 
 export const readSessionLatestLogs = (file: string, sessionID: string): Map<string, HookRunLogRecord> => {

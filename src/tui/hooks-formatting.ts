@@ -79,23 +79,5 @@ export const formatHookLogsMessage = (record: HookRunLogRecord): string => {
   if (record.stdout !== undefined && record.stdout.trim().length > 0) sections.push(`--- stdout ---\n${record.stdout.trimEnd()}`);
   if (sections.length === 0 && record.reason !== undefined && record.reason.trim().length > 0) sections.push(record.reason.trimEnd());
   if (sections.length === 0) sections.push('No output captured for this run.');
-  if (record.truncated === true) sections.push('[output truncated]');
   return sections.join('\n\n');
-};
-
-export const formatSessionHookLogsMessage = (recordOrRecords: HookRunLogRecord | readonly HookRunLogRecord[]): string => {
-  const records = Array.isArray(recordOrRecords) ? recordOrRecords : [recordOrRecords];
-  if (records.length === 0) return 'No output captured for this run.';
-  if (records.length === 1) return formatHookLogsMessage(records[0]!);
-
-  const parts: string[] = [];
-  for (let i = 0; i < records.length; i++) {
-    const rec = records[i]!;
-    const time = new Date(rec.finishedAt || rec.startedAt).toISOString();
-    const status = statusLabelFor(rec.status);
-    const header = `=== Run #${i + 1} (${time}) — ${status} (${rec.durationMs} ms) ===`;
-    parts.push(header);
-    parts.push(formatHookLogsMessage(rec));
-  }
-  return parts.join('\n\n');
 };

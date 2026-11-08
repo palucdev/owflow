@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import type { TuiPluginApi, TuiPluginModule } from '@opencode-ai/plugin/tui';
 import { readHookStatusSnapshot, readSessionLatestLogs, resolveHooksLogFile, resolveHooksStatusFile } from './hooks/hooks-logs.js';
-import { HookRunState, type HookRuntimeEntry } from './types/hook-types.js';
+import { type HookRunState, type HookRuntimeEntry } from './types/hook-types.js';
 import {
   DEFAULT_LOG_CHUNK_LINES,
   buildHookLogsBody,
@@ -16,7 +16,6 @@ import {
   colorForStatus,
   formatHookLogsMessage,
   formatHookRunSummary,
-  formatSessionHookLogsMessage,
   statusLabelFor,
   type ActiveHookRow,
   type ActiveHooksView,
@@ -32,7 +31,6 @@ export {
   colorForStatus,
   formatHookLogsMessage,
   formatHookRunSummary,
-  formatSessionHookLogsMessage,
   getActiveDialogHandle,
   statusLabelFor,
   type ActiveDialogHandle,
@@ -63,7 +61,6 @@ export const registerActiveHooksSidebar = async (
   const handles: SidebarRenderHandle[] = [];
   let statuses = new Map<string, HookRuntimeEntry>();
   let lastMtime: number | undefined;
-  let lastLogMtime: number | undefined;
   const sessionEpochs = new Map<string, number>();
   const pollingEnabled = process.env.OWFLOW_HOOKS_DISABLED !== '1';
 
@@ -71,12 +68,10 @@ export const registerActiveHooksSidebar = async (
     const renderer = api.renderer;
     const tick = (): void => {
       const activeDialog = getActiveDialogHandle();
-      let statusChanged = false;
       try {
         const stat = fs.statSync(statusFile);
         if (stat.isFile() && (lastMtime !== stat.mtimeMs || activeDialog !== undefined)) {
           lastMtime = stat.mtimeMs;
-          statusChanged = true;
           const result = readHookStatusSnapshot(statusFile);
           if (result.kind === 'ok') {
             statuses = new Map(Object.entries(result.snapshot.hooks));
@@ -86,19 +81,6 @@ export const registerActiveHooksSidebar = async (
         }
       } catch {
         lastMtime = undefined;
-      }
-
-      let logChanged = false;
-      try {
-        const logStat = fs.statSync(logFile);
-        if (logStat.isFile() && lastLogMtime !== logStat.mtimeMs) {
-          lastLogMtime = logStat.mtimeMs;
-          logChanged = true;
-        } else if (!logStat.isFile()) {
-          lastLogMtime = undefined;
-        }
-      } catch {
-        lastLogMtime = undefined;
       }
 
       for (const handle of handles) {
@@ -111,7 +93,7 @@ export const registerActiveHooksSidebar = async (
         if (handles[i]!.disposed()) handles.splice(i, 1);
       }
 
-      if (activeDialog !== undefined && (statusChanged || logChanged || statuses.get(activeDialog.event)?.status === HookRunState.PENDING)) {
+      if (activeDialog !== undefined) {
         const updatedRecords = resolveSessionRecords(
           logFile,
           activeDialog.row,

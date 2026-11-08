@@ -3,14 +3,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  appendHookStreamLog,
   LOG_FILE_ENV,
   readHookLogRecords,
   readHookStatusSnapshot,
-  readLatestHookLog,
+  readHookStreamLogs,
   readSessionHookLogs,
   readSessionLatestLogs,
   resolveHooksLogFile,
   resolveHooksStatusFile,
+  resolveHookStreamLogFiles,
   STATUS_FILE_ENV,
   type HookRunLogRecord,
 } from '../../hooks/hooks-logs.js';
@@ -139,7 +141,7 @@ describe('hook-logs (status and log file readers and resolvers)', () => {
     expect(readHookLogRecords(symLog)).toEqual({ kind: 'invalid' });
   });
 
-  test('readSessionLatestLogs, readLatestHookLog, and readSessionHookLogs support session and event log retrieval', () => {
+  test('readSessionLatestLogs and readSessionHookLogs support session and event log retrieval', () => {
     const root = makeTempDir();
     const logFile = path.join(root, 'test-logs.jsonl');
 
@@ -232,19 +234,42 @@ describe('hook-logs (status and log file readers and resolvers)', () => {
     expect(ses2Logs.size).toBe(1);
     expect(ses2Logs.get(HookEvent.ToolExecuteBefore)).toEqual(recordOther as HookRunLogRecord);
 
-    // readLatestHookLog with sessionID
-    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, 'ses_1')).toEqual(recordA2 as HookRunLogRecord);
-    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, 5_000, 'ses_2')).toEqual(recordOther as HookRunLogRecord);
-    expect(readLatestHookLog(logFile, HookEvent.ChatMessage, 5_000, 'ses_2')).toBeUndefined();
-
-    // readLatestHookLog without sessionID
-    expect(readLatestHookLog(logFile, HookEvent.Config)).toEqual(recordNoSession as HookRunLogRecord);
-    expect(readLatestHookLog(logFile, HookEvent.Config, 10_000)).toBeUndefined();
-
     // readSessionHookLogs returns all records for that session event
     const ses1ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_1');
     expect(ses1ToolLogs).toEqual([recordA1, recordA2] as HookRunLogRecord[]);
     const ses2ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_2');
     expect(ses2ToolLogs).toEqual([recordOther] as HookRunLogRecord[]);
+    expect(readSessionHookLogs(logFile, HookEvent.Config)).toEqual([recordNoSession] as HookRunLogRecord[]);
+    expect(readSessionHookLogs(logFile, HookEvent.Config, 10_000)).toEqual([]);
+  });
+
+  test('resolveHookStreamLogFiles, appendHookStreamLog, and readHookStreamLogs manage per-hook stdout and stderr files', () => {
+    const root = makeTempDir();
+    const logFile = path.join(root, 'logs.jsonl');
+
+    const sesFiles = resolveHookStreamLogFiles(logFile, 'tool-execute-before', 'ses_1');
+    expect(path.basename(sesFiles.stdout)).toBe('ses_1.tool-execute-before.stdout.log');
+    expect(path.basename(sesFiles.stderr)).toBe('ses_1.tool-execute-before.stderr.log');
+
+    const globalFiles = resolveHookStreamLogFiles(logFile, 'config');
+    expect(path.basename(globalFiles.stdout)).toBe('global.config.stdout.log');
+    expect(path.basename(globalFiles.stderr)).toBe('global.config.stderr.log');
+
+    appendHookStreamLog(sesFiles.stdout, 'first line\n');
+    appendHookStreamLog(sesFiles.stdout, 'second line\n');
+    appendHookStreamLog(sesFiles.stderr, 'err 1\n');
+    appendHookStreamLog(sesFiles.stderr, '');
+
+    expect(readHookStreamLogs(logFile, 'tool-execute-before', 'ses_1')).toEqual({
+      stdout: 'first line\nsecond line\n',
+      stderr: 'err 1\n',
+    });
+
+    // Global fallback when session-specific log does not exist
+    appendHookStreamLog(globalFiles.stdout, 'global config out\n');
+    expect(readHookStreamLogs(logFile, 'config', 'ses_1')).toEqual({
+      stdout: 'global config out\n',
+      stderr: '',
+    });
   });
 });

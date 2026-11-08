@@ -12,10 +12,9 @@ import {
   createDispatchHandlers,
   HOOK_TIMEOUT_ENV,
   initializeHooksWrapper,
-  MAX_CAPTURE_BYTES,
   MAX_LOG_FILE_BYTES,
 } from '../../hooks/hooks-wrapper.js';
-import { readHookLogRecords, readLatestHookLog } from '../../hooks/hooks-logs.js';
+import { readHookLogRecords, readHookStreamLogs, readSessionHookLogs } from '../../hooks/hooks-logs.js';
 import { HookEvent, HookRunState } from '../../types/hook-types.js';
 
 describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
@@ -67,11 +66,8 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     const statusFile = path.join(root, 'status.json');
     const logFile = path.join(root, 'logs.jsonl');
 
-    // 1. Successful hook with large stdout (> 16KB) and stderr
-    fs.writeFileSync(
-      path.join(hooksDir, 'tool-execute-before.sh'),
-      `#!/usr/bin/env bash\nhead -c ${MAX_CAPTURE_BYTES + 100} < /dev/zero | tr '\\0' 'a'\necho "warn line" >&2\nexit 0\n`,
-    );
+    // 1. Successful hook with stdout and stderr
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), `#!/usr/bin/env bash\necho "out line"\necho "warn line" >&2\nexit 0\n`);
     // 2. Failing hook (non-zero exit)
     fs.writeFileSync(path.join(hooksDir, 'chat-message.sh'), `#!/usr/bin/env bash\necho "policy violation" >&2\nexit 2\n`);
 
@@ -84,20 +80,24 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
       { statusFile, logFile },
     );
 
-    // Session hook run is NOT truncated
+    // Session hook run writes stdout and stderr to <session_id>.<hook>.stdout/stderr.log
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_ok' }, {});
-    const latestOk = readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, Number.NEGATIVE_INFINITY, 'ses_ok');
+    const latestOk = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, Number.NEGATIVE_INFINITY, 'ses_ok').at(-1);
     expect(latestOk?.status).toBe(HookRunState.SUCCESS);
-    expect(latestOk?.truncated).toBeUndefined();
-    expect(latestOk?.stdout?.length).toBeGreaterThan(MAX_CAPTURE_BYTES);
-    expect(latestOk?.stderr).toBe('warn line\n');
-    expect(readLatestHookLog(logFile, HookEvent.ToolExecuteBefore, Date.now() + 10_000)).toBeUndefined();
+    expect(readHookStreamLogs(logFile, 'tool-execute-before', 'ses_ok')).toEqual({
+      stdout: 'out line\n',
+      stderr: 'warn line\n',
+    });
+    expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, Date.now() + 10_000)).toEqual([]);
 
-    // Non-session hook run caps at MAX_CAPTURE_BYTES and is marked truncated
+    // Non-session hook run writes to global.<hook>.stdout/stderr.log
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
-    const nonSession = readLatestHookLog(logFile, HookEvent.ToolExecuteBefore);
+    const nonSession = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore).at(-1);
     expect(nonSession?.status).toBe(HookRunState.SUCCESS);
-    expect(nonSession?.truncated).toBe(true);
+    expect(readHookStreamLogs(logFile, 'tool-execute-before')).toEqual({
+      stdout: 'out line\n',
+      stderr: 'warn line\n',
+    });
 
     // Coalescing identical consecutive run does not duplicate JSONL line
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
@@ -309,7 +309,7 @@ describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
     expect(snapshot.hooks['session.idle']?.status).toBe(HookRunState.FAILURE);
     expect(snapshot.hooks['session.idle']?.reason).toBe('test failed');
 
-    const latestIdleLog = readLatestHookLog(logFile, 'session.idle', Number.NEGATIVE_INFINITY, 'ses_idle_1');
+    const latestIdleLog = readSessionHookLogs(logFile, 'session.idle', Number.NEGATIVE_INFINITY, 'ses_idle_1').at(-1);
     expect(latestIdleLog?.status).toBe(HookRunState.FAILURE);
     expect(latestIdleLog?.reason).toBe('test failed');
     wrapper.dispose();
