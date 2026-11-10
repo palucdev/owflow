@@ -164,16 +164,24 @@ export const initializeHooksWrapper = async (
   const abortingSessions = new Map<string, number>();
   const breakers = new Map<string, CircuitBreakerEntry>();
   let runCounter = 0;
-  let lastLogKey: string | undefined;
+  const writtenRunRecords = new Set<string>();
 
   writeStatusFile(statusFile, directory, statuses);
 
   const appendLog = (record: HookRunLogRecord): void => {
     try {
-      const key = JSON.stringify([record.event, record.hook, record.sessionID, record.status, record.reason, record.exitCode, record.signal]);
-      if (key === lastLogKey) return;
+      // Distinguish distinct runs by runId and terminal status
+      const recordKey = `${record.runId}:${record.status}`;
+      if (writtenRunRecords.has(recordKey)) return;
+
       appendWithRotation(logFile, JSON.stringify(record));
-      lastLogKey = key;
+      writtenRunRecords.add(recordKey);
+
+      // Bounded set eviction to prevent memory growth across thousands of runs
+      if (writtenRunRecords.size > 1000) {
+        const oldest = writtenRunRecords.values().next().value;
+        if (oldest) writtenRunRecords.delete(oldest);
+      }
     } catch {
       // Best-effort log persistence never affects hook execution.
     }

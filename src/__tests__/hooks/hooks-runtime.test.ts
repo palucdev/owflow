@@ -134,10 +134,10 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     expect(nonSession?.stdout).toBe('out line\n');
     expect(nonSession?.stderr).toBe('warn line\n');
 
-    // Coalescing identical consecutive run does not duplicate JSONL line
+    // Consecutive dispatches are each recorded with distinct runId in JSONL
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
     const logsAfterRepeat = readHookLogRecords(logFile);
-    expect(logsAfterRepeat.kind === 'ok' && logsAfterRepeat.records.length).toBe(2);
+    expect(logsAfterRepeat.kind === 'ok' && logsAfterRepeat.records.length).toBe(3);
 
     // Non-zero exit fails closed and ends session
     await expect(wrapper.dispatch(HookEvent.ChatMessage, { sessionID: 'ses_fail' }, {})).rejects.toThrow(/Blocked: policy violation\./);
@@ -149,6 +149,67 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     expect(fs.existsSync(`${logFile}.1`)).toBe(true);
 
     wrapper.dispose();
+  });
+
+  test('preserves full run history across consecutive successful runs in the same session', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    const statusFile = path.join(root, 'status-dedup.json');
+    const logFile = path.join(root, 'logs-dedup.jsonl');
+    const hookScript = path.join(hooksDir, 'tool-execute-before.sh');
+    fs.writeFileSync(hookScript, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+
+    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+    const sessionID = 'ses_multi_run';
+
+    for (let i = 0; i < 5; i++) {
+      await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID }, {});
+    }
+
+    const logs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, sessionID);
+    expect(logs.length).toBe(5);
+    expect(logs.map((l) => l.runId)).toEqual([
+      'tool.execute.before#1',
+      'tool.execute.before#2',
+      'tool.execute.before#3',
+      'tool.execute.before#4',
+      'tool.execute.before#5',
+    ]);
+
+    wrapper.dispose();
+  });
+
+  test('evicts oldest entries when written run records exceed capacity', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    const statusFile = path.join(root, 'status-evict.json');
+    const logFile = path.join(root, 'logs-evict.jsonl');
+    const hookScript = path.join(hooksDir, 'tool-execute-before.sh');
+    fs.writeFileSync(hookScript, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+
+    const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(
+      () =>
+        ({
+          pid: 12345,
+          kill: () => {},
+          exited: Promise.resolve(0),
+          stdout: new Response('').body,
+          stderr: new Response('').body,
+          signalCode: null,
+        }) as any,
+    );
+
+    try {
+      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+      for (let i = 0; i < 1005; i++) {
+        await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
+      }
+      wrapper.dispose();
+    } finally {
+      spawnSpy.mockRestore();
+    }
   });
 
   test('timeout and missing interpreter fail closed', async () => {
