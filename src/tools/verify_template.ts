@@ -21,9 +21,16 @@ export const verify_template = tool({
       };
     }
 
-    const templatePath = path.join(__dirname, '../templates', templateName);
+    const templatesDir = path.resolve(process.env.OWFLOW_TEMPLATES_DIR ?? path.join(__dirname, '../templates'));
+    const safeTemplateName = path.basename(templateName);
+    const templatePath = path.resolve(templatesDir, safeTemplateName);
 
-    if (!fs.existsSync(templatePath)) {
+    if (
+      templateName !== safeTemplateName ||
+      templateName.includes('..') ||
+      !templatePath.startsWith(templatesDir + path.sep) ||
+      !fs.existsSync(templatePath)
+    ) {
       return {
         output: `Template '${templateName}' not found. Hint: Verify the template name is correct and exists in the /templates folder (e.g., 'orchestrator-state-development.yml').`,
       };

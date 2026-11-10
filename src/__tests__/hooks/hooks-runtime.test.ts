@@ -13,6 +13,9 @@ import {
   HOOK_TIMEOUT_ENV,
   initializeHooksWrapper,
   MAX_LOG_FILE_BYTES,
+  MAX_STREAM_BUFFER_BYTES,
+  NON_SESSION_STREAM_CAP_BYTES,
+  readStream,
 } from '../../hooks/hooks-runtime.js';
 import { readHookLogRecords, readHookStreamLogs, readSessionHookLogs } from '../../hooks/hooks-persistence.js';
 import { HookEvent, HookRunState } from '../../types/hook-types.js';
@@ -449,5 +452,76 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       spawnSpy.mockRestore();
       warnSpy.mockRestore();
     }
+  });
+
+  test('readStream should read stream and invoke onChunk within limit', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('hello '));
+        controller.enqueue(encoder.encode('world'));
+        controller.close();
+      },
+    });
+
+    const chunks: string[] = [];
+    const result = await readStream(stream, (c) => chunks.push(c));
+    expect(result).toBe('hello world');
+    expect(chunks.join('')).toBe('hello world');
+  });
+
+  test('readStream should return empty string for null or undefined stream', async () => {
+    expect(await readStream(null, () => {})).toBe('');
+    expect(await readStream(undefined, () => {})).toBe('');
+  });
+
+  test('readStream should cancel stream reader and bound output when maxBytes is exceeded', async () => {
+    const encoder = new TextEncoder();
+    let cancelCalled = false;
+    let cancelReason: unknown;
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('chunk-one-12345-'));
+        controller.enqueue(encoder.encode('chunk-two-67890-'));
+        controller.enqueue(encoder.encode('chunk-three-should-not-be-buffered-'));
+      },
+      cancel(reason) {
+        cancelCalled = true;
+        cancelReason = reason;
+      },
+    });
+
+    const chunks: string[] = [];
+    const maxBytes = 15;
+    const result = await readStream(stream, (c) => chunks.push(c), maxBytes);
+
+    expect(cancelCalled).toBe(true);
+    expect(cancelReason).toBe('Stream limit exceeded');
+    expect(result.length).toBeLessThanOrEqual(maxBytes);
+  });
+
+  test('non-session hook dispatch caps logged stdout to NON_SESSION_STREAM_CAP_BYTES in jsonl logs', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), "#!/usr/bin/env bash\nhead -c 32768 < /dev/zero | tr '\\0' 'A'\nexit 0\n");
+    const statusFile = path.join(root, 'status.json');
+    const logFile = path.join(root, 'logs.jsonl');
+
+    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+    await wrapper.dispatch(HookEvent.ToolExecuteBefore, {
+      tool: 'bash',
+      args: { command: 'test' },
+    });
+
+    const logResult = readHookLogRecords(logFile);
+    expect(logResult.kind).toBe('ok');
+    if (logResult.kind === 'ok') {
+      expect(logResult.records.length).toBe(1);
+      expect(logResult.records[0].stdout?.length).toBe(NON_SESSION_STREAM_CAP_BYTES);
+    }
+
+    wrapper.dispose();
   });
 });

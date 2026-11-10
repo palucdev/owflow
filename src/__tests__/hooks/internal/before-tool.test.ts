@@ -50,6 +50,8 @@ describe('guardAgainstDestructiveActions', () => {
       'git stash',
       'git reset --hard',
       'git reset --hard HEAD~1',
+      'git reset origin/main --hard',
+      'git reset HEAD~1 --hard',
       'git checkout -- .',
       'git checkout .',
       'git clean -fd',

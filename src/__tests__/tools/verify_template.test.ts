@@ -1,4 +1,4 @@
-import { expect, test, describe } from 'bun:test';
+import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verify_template } from '../../tools/verify_template.js';
@@ -8,9 +8,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 describe('verify_template tool', () => {
   const templatesDir = path.join(__dirname, '../../templates');
   const fixturesDir = path.join(__dirname, '../fixtures/verify-template');
-  const testTemplateName = '../__tests__/fixtures/verify-template/templates/test-template.yml';
+  const testTemplateName = 'test-template.yml';
 
   describe('general tool behavior', () => {
+    beforeAll(() => {
+      process.env.OWFLOW_TEMPLATES_DIR = path.join(fixturesDir, 'templates');
+    });
+
+    afterAll(() => {
+      delete process.env.OWFLOW_TEMPLATES_DIR;
+    });
+
     test('should return error if file not found', async () => {
       const result = await verify_template.execute({ filePath: 'nonexistent.yml', templateName: testTemplateName }, {
         directory: fixturesDir,
@@ -33,7 +41,7 @@ describe('verify_template tool', () => {
     });
 
     test('should return error if reference template file has invalid YAML syntax', async () => {
-      const invalidTemplateName = '../__tests__/fixtures/verify-template/templates/invalid-template.yml';
+      const invalidTemplateName = 'invalid-template.yml';
       const result = await verify_template.execute({ filePath: 'target.yml', templateName: invalidTemplateName }, { directory: fixturesDir } as any);
       expect((result as any).output).toContain(`Internal Error: Failed to parse reference template YAML '${invalidTemplateName}'`);
     });
@@ -49,6 +57,25 @@ describe('verify_template tool', () => {
     test('should pass if target file matches template structure', async () => {
       const result = await verify_template.execute({ filePath: 'valid.yml', templateName: testTemplateName }, { directory: fixturesDir } as any);
       expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
+    });
+
+    test('should prevent path traversal outside templates directory', async () => {
+      const result = await verify_template.execute({ filePath: 'valid.yml', templateName: '../../package.json' }, {
+        directory: fixturesDir,
+      } as any);
+      expect((result as any).output).toContain("Template '../../package.json' not found");
+    });
+
+    test('should reject template names containing slashes or backslashes', async () => {
+      const slashResult = await verify_template.execute({ filePath: 'valid.yml', templateName: 'nested/template.yml' }, {
+        directory: fixturesDir,
+      } as any);
+      expect((slashResult as any).output).toContain("Template 'nested/template.yml' not found");
+
+      const backslashResult = await verify_template.execute({ filePath: 'valid.yml', templateName: 'nested\\template.yml' }, {
+        directory: fixturesDir,
+      } as any);
+      expect((backslashResult as any).output).toContain("Template 'nested\\template.yml' not found");
     });
   });
 

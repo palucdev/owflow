@@ -20,6 +20,8 @@ import { scanHooks } from './hooks-registry.js';
 
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
+export const MAX_STREAM_BUFFER_BYTES = 4 * 1024 * 1024;
+export const NON_SESSION_STREAM_CAP_BYTES = 16 * 1024;
 export const ABORT_COOLDOWN_MS = 2_000;
 export const CIRCUIT_BREAKER_THRESHOLD = 4;
 export const CIRCUIT_BREAKER_RAPID_GAP_MS = 500;
@@ -82,24 +84,40 @@ const sessionIDFrom = (input: unknown): string | undefined => {
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 };
 
-const readStream = async (stream: ReadableStream<Uint8Array> | null | undefined, onChunk: (chunk: string) => void): Promise<string> => {
+export const readStream = async (
+  stream: ReadableStream<Uint8Array> | null | undefined,
+  onChunk: (chunk: string) => void,
+  maxBytes = MAX_STREAM_BUFFER_BYTES,
+): Promise<string> => {
   if (!stream) return '';
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let result = '';
+  let totalBytes = 0;
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      totalBytes += value.byteLength;
       const chunk = decoder.decode(value, { stream: true });
       if (chunk) {
-        result += chunk;
+        if (result.length < maxBytes) {
+          result += chunk.slice(0, maxBytes - result.length);
+        }
         onChunk(chunk);
+      }
+      if (totalBytes >= maxBytes) {
+        try {
+          await reader.cancel('Stream limit exceeded');
+        } catch {}
+        break;
       }
     }
     const tail = decoder.decode();
     if (tail) {
-      result += tail;
+      if (result.length < maxBytes) {
+        result += tail.slice(0, maxBytes - result.length);
+      }
       onChunk(tail);
     }
   } catch {}
@@ -398,6 +416,11 @@ export const initializeHooksWrapper = async (
       });
       writeStatusFile(statusFile, directory, statuses);
 
+      const loggedStdout =
+        !sessionID && rawStdout.length > NON_SESSION_STREAM_CAP_BYTES ? rawStdout.slice(0, NON_SESSION_STREAM_CAP_BYTES) : rawStdout;
+      const loggedStderr =
+        !sessionID && rawStderr.length > NON_SESSION_STREAM_CAP_BYTES ? rawStderr.slice(0, NON_SESSION_STREAM_CAP_BYTES) : rawStderr;
+
       appendLog({
         version: 1,
         runId,
@@ -414,8 +437,8 @@ export const initializeHooksWrapper = async (
         exitCode,
         ...(signal ? { signal } : {}),
         ...(reason ? { reason } : {}),
-        ...(rawStdout ? { stdout: rawStdout } : {}),
-        ...(rawStderr ? { stderr: rawStderr } : {}),
+        ...(loggedStdout ? { stdout: loggedStdout } : {}),
+        ...(loggedStderr ? { stderr: loggedStderr } : {}),
       });
 
       if (!ok) {

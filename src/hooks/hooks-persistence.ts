@@ -31,11 +31,16 @@ const workspaceKey = (workspace: string): string => {
     .slice(0, 16);
 };
 
+export const getUserTmpDir = (): string => {
+  const uid = typeof process.getuid === 'function' ? String(process.getuid()) : (process.env.USER ?? process.env.USERNAME ?? 'default');
+  return path.join(os.tmpdir(), `opencode-${uid}`);
+};
+
 export const resolveHooksStatusFile = (workspace: string): string =>
-  process.env[STATUS_FILE_ENV] ?? path.join(os.tmpdir(), 'opencode', `owflow-hooks-${workspaceKey(workspace)}.json`);
+  process.env[STATUS_FILE_ENV] ?? path.join(getUserTmpDir(), `owflow-hooks-${workspaceKey(workspace)}.json`);
 
 export const resolveHooksLogFile = (workspace: string): string =>
-  process.env[LOG_FILE_ENV] ?? path.join(os.tmpdir(), 'opencode', `owflow-hook-logs-${workspaceKey(workspace)}.jsonl`);
+  process.env[LOG_FILE_ENV] ?? path.join(getUserTmpDir(), `owflow-hook-logs-${workspaceKey(workspace)}.jsonl`);
 
 export const resolveHookStreamLogFiles = (logFile: string, hookName: string, sessionID?: string): HookStreamLogFiles => {
   const dir = path.dirname(logFile);

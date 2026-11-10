@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   appendHookStreamLog,
+  getUserTmpDir,
   LOG_FILE_ENV,
   readHookLogRecords,
   readHookStatusSnapshot,
@@ -35,12 +36,18 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
 
   test('resolveHooksStatusFile and resolveHooksLogFile resolve default and env-overridden paths', () => {
     const root = makeTempDir();
+    const userDir = getUserTmpDir();
+    expect(userDir).toMatch(/opencode-.+/);
+    expect(resolveHooksStatusFile(root)).toContain(userDir);
     expect(resolveHooksStatusFile(root)).toContain('owflow-hooks-');
+    expect(resolveHooksLogFile(root)).toContain(userDir);
     expect(resolveHooksLogFile(root)).toContain('owflow-hook-logs-');
 
     // Non-existent workspace still resolves
     const nonExistent = path.join(root, 'does-not-exist');
+    expect(resolveHooksStatusFile(nonExistent)).toContain(userDir);
     expect(resolveHooksStatusFile(nonExistent)).toContain('owflow-hooks-');
+    expect(resolveHooksLogFile(nonExistent)).toContain(userDir);
     expect(resolveHooksLogFile(nonExistent)).toContain('owflow-hook-logs-');
 
     const prevStatus = process.env[STATUS_FILE_ENV];
