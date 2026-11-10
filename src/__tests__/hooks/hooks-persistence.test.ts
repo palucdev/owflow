@@ -3,18 +3,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  appendHookStreamLog,
+  appendWithRotation,
   getUserTmpDir,
   LOG_FILE_ENV,
   readHookLogRecords,
   readHookStatusSnapshot,
-  readHookStreamLogs,
   readSessionHookLogs,
   readSessionLatestLogs,
+  resolveHooksLatestSymlink,
   resolveHooksLogFile,
   resolveHooksStatusFile,
-  resolveHookStreamLogFiles,
   STATUS_FILE_ENV,
+  writeHookCrashLog,
   type HookRunLogRecord,
 } from '../../hooks/hooks-persistence.js';
 import { HookEvent } from '../../types/hook-types.js';
@@ -253,58 +253,78 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     expect(readSessionHookLogs(logFile, HookEvent.Config, 10_000)).toEqual([]);
   });
 
-  test('resolveHookStreamLogFiles, appendHookStreamLog, and readHookStreamLogs manage per-hook stdout and stderr files', () => {
+  test('appendWithRotation rotates files exceeding maxBytes and rejects dangling symlinks', () => {
     const root = makeTempDir();
-    const logFile = path.join(root, 'logs.jsonl');
+    const logFile = path.join(root, 'rot-test.log');
 
-    const sesFiles = resolveHookStreamLogFiles(logFile, 'tool-execute-before', 'ses_1');
-    expect(path.basename(sesFiles.stdout)).toBe('ses_1.tool-execute-before.stdout.log');
-    expect(path.basename(sesFiles.stderr)).toBe('ses_1.tool-execute-before.stderr.log');
+    // 1. Basic append with automatic newline
+    appendWithRotation(logFile, 'line 1');
+    appendWithRotation(logFile, 'line 2\n');
+    expect(fs.readFileSync(logFile, 'utf8')).toBe('line 1\nline 2\n');
 
-    const globalFiles = resolveHookStreamLogFiles(logFile, 'config');
-    expect(path.basename(globalFiles.stdout)).toBe('global.config.stdout.log');
-    expect(path.basename(globalFiles.stderr)).toBe('global.config.stderr.log');
+    // 2. Empty or empty-like line does nothing
+    appendWithRotation(logFile, '');
+    expect(fs.readFileSync(logFile, 'utf8')).toBe('line 1\nline 2\n');
 
-    appendHookStreamLog(sesFiles.stdout, 'first line\n');
-    appendHookStreamLog(sesFiles.stdout, 'second line\n');
-    appendHookStreamLog(sesFiles.stderr, 'err 1\n');
-    appendHookStreamLog(sesFiles.stderr, '');
+    // 3. Rotation when file size exceeds maxBytes
+    const smallCap = 20; // 20 bytes
+    appendWithRotation(logFile, 'line that pushes over cap', smallCap);
+    appendWithRotation(logFile, 'line after rotation', smallCap);
+    expect(fs.existsSync(`${logFile}.1`)).toBe(true);
+    expect(fs.readFileSync(logFile, 'utf8')).toBe('line after rotation\n');
 
-    expect(readHookStreamLogs(logFile, 'tool-execute-before', 'ses_1')).toEqual({
-      stdout: 'first line\nsecond line\n',
-      stderr: 'err 1\n',
-    });
-
-    // Does not fall back to global logs when sessionID is provided
-    appendHookStreamLog(globalFiles.stdout, 'global config out\n');
-    expect(readHookStreamLogs(logFile, 'config')).toEqual({
-      stdout: 'global config out\n',
-      stderr: '',
-    });
-    expect(readHookStreamLogs(logFile, 'config', 'ses_1')).toEqual({
-      stdout: '',
-      stderr: '',
-    });
-  });
-
-  test('appendHookStreamLog rejects dangling symlinks and safely replaces symlink rotation targets', () => {
-    const root = makeTempDir();
+    // 4. Dangling symlink target must not be written to
     const targetFile = path.join(root, 'target.txt');
-    const symlog = path.join(root, 'dangling-stream.log');
-
-    // 1. Dangling symlink must not be followed or written to
-    fs.symlinkSync(targetFile, symlog);
-    appendHookStreamLog(symlog, 'malicious append');
+    const symLog = path.join(root, 'dangling.log');
+    fs.symlinkSync(targetFile, symLog);
+    appendWithRotation(symLog, 'malicious payload');
     expect(fs.existsSync(targetFile)).toBe(false);
 
-    // 2. Safe rotation target replacement when .1 is a symlink
+    // 5. Safe rotation target replacement when .1 is a symlink
     const largeLog = path.join(root, 'large.log');
-    fs.writeFileSync(largeLog, 'x'.repeat(4 * 1024 * 1024 + 10));
+    fs.writeFileSync(largeLog, 'x'.repeat(50));
     const rotSym = `${largeLog}.1`;
     fs.symlinkSync(targetFile, rotSym);
-    appendHookStreamLog(largeLog, 'chunk after rotation');
+    appendWithRotation(largeLog, 'chunk after rotation', 20);
     expect(fs.lstatSync(rotSym).isSymbolicLink()).toBe(false);
     expect(fs.existsSync(targetFile)).toBe(false);
+  });
+
+  test('writeHookCrashLog writes formatted crash entries to owflow-hooks-crash.log', () => {
+    const root = makeTempDir();
+    const userDir = getUserTmpDir();
+    const crashLogFile = path.join(userDir, 'owflow-hooks-crash.log');
+
+    const err = new Error('test crash failure');
+    writeHookCrashLog(root, 'test_source', err);
+
+    expect(fs.existsSync(crashLogFile)).toBe(true);
+    const content = fs.readFileSync(crashLogFile, 'utf8');
+    expect(content).toContain('[test_source]');
+    expect(content).toContain(`[workspace: ${root}]`);
+    expect(content).toContain('test crash failure');
+
+    // String error variant
+    writeHookCrashLog(root, 'string_source', 'raw string failure');
+    const updated = fs.readFileSync(crashLogFile, 'utf8');
+    expect(updated).toContain('[string_source]');
+    expect(updated).toContain('raw string failure');
+  });
+
+  test('resolveHooksLatestSymlink creates and resolves symlink pointing to active workspace log file', () => {
+    const root = makeTempDir();
+    const userDir = getUserTmpDir();
+    const symlinkPath = resolveHooksLatestSymlink(root);
+
+    expect(symlinkPath).toBe(path.join(userDir, 'owflow-hooks-latest.jsonl'));
+    const expectedTarget = resolveHooksLogFile(root);
+    expect(fs.lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
+    expect(fs.readlinkSync(symlinkPath)).toBe(expectedTarget);
+
+    // Calling it again updates or preserves the symlink safely
+    const symlinkPath2 = resolveHooksLatestSymlink(root);
+    expect(symlinkPath2).toBe(symlinkPath);
+    expect(fs.lstatSync(symlinkPath2).isSymbolicLink()).toBe(true);
   });
 
   test('readHookLogRecords and readHookStatusSnapshot return cached results when mtime and size are unchanged', () => {

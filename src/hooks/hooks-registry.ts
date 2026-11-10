@@ -15,6 +15,13 @@ import { hooksLocationLabel } from '../utils/workflow-paths.js';
 const HOOK_STEM_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const STEM_TO_EVENT = new Map<string, HookEventName>(HOOK_EVENT_NAMES.map((ev) => [ev.replaceAll('.', '-'), ev]));
 const EXCLUDED_STEMS = new Map<string, string>(EXCLUDED_EVENT_NAMES.map((ev) => [ev.replaceAll('.', '-'), ev]));
+export const IGNORED_FILENAMES = new Set(['.ds_store', 'thumbs.db', 'desktop.ini', '.gitkeep']);
+
+const isIgnoredFile = (name: string): boolean => {
+  const lower = name.toLowerCase();
+  return IGNORED_FILENAMES.has(lower) || lower.endsWith('.md') || name.endsWith('~') || name.endsWith('.swp');
+};
+
 const RECOVERY_HINT =
   'Hint: fix or remove the invalid file(s) and restart OpenCode. The owflow plugin — including the destructive-command guard — has been dropped until the hooks directory validates. To start without user hooks, set OWFLOW_HOOKS_DISABLED=1.';
 
@@ -35,10 +42,13 @@ export const scanHooks = (hooksDir: string, options: { mode?: HookDigestMode; wh
     '.ps1': { expected: 'pwsh', available: Boolean(ps1), ...(ps1 ? { resolved: ps1 } : {}) },
   };
 
-  const raw: Array<{ stem: string; entry: HookRegistryEntry }> = [];
+  const entries: HookRegistryEntry[] = [];
   const failures: HookValidationFailure[] = [];
+  const seenStems = new Map<string, HookRegistryEntry>();
 
   for (const dirent of fs.readdirSync(hooksDir, { withFileTypes: true })) {
+    if (isIgnoredFile(dirent.name)) continue;
+
     const entryPath = path.join(hooksDir, dirent.name);
     if (!dirent.isFile()) {
       failures.push({ path: entryPath, error: `not a regular file (only hook scripts belong in ${hooksLocationLabel}/)` });
@@ -67,31 +77,33 @@ export const scanHooks = (hooksDir: string, options: { mode?: HookDigestMode; wh
       });
       continue;
     }
-    const interpreter = interpreters[ext];
-    raw.push({
-      stem,
-      entry: {
-        path: entryPath,
-        event,
-        interpreter,
-        status: interpreter.available ? 'registered' : 'will-fail-closed',
-      },
-    });
-  }
 
-  const byStem = Map.groupBy(raw, (item) => item.stem);
-  const entries: HookRegistryEntry[] = [];
-  for (const [stem, group] of byStem) {
-    if (group.length === 1) {
-      entries.push(group[0]!.entry);
-      continue;
-    }
-    const names = group.map((g) => path.basename(g.entry.path)).join(', ');
-    for (const g of group) {
+    const interpreter = interpreters[ext];
+    const entry: HookRegistryEntry = {
+      path: entryPath,
+      event,
+      interpreter,
+      status: interpreter.available ? 'registered' : 'will-fail-closed',
+    };
+
+    const existing = seenStems.get(stem);
+    if (existing) {
+      const names = `${path.basename(existing.path)}, ${path.basename(entryPath)}`;
       failures.push({
-        path: g.entry.path,
+        path: entryPath,
         error: `hook name "${stem}" is provided by multiple files (${names}); define it in exactly one format`,
       });
+      const existingIdx = entries.findIndex((e) => e.path === existing.path);
+      if (existingIdx !== -1) {
+        entries.splice(existingIdx, 1);
+        failures.push({
+          path: existing.path,
+          error: `hook name "${stem}" is provided by multiple files (${names}); define it in exactly one format`,
+        });
+      }
+    } else {
+      seenStems.set(stem, entry);
+      entries.push(entry);
     }
   }
 

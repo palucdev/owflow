@@ -2,15 +2,7 @@ import fs from 'node:fs';
 import type { TuiPluginApi, TuiPluginModule } from '@opencode-ai/plugin/tui';
 import { readHookStatusSnapshot, readSessionLatestLogs, resolveHooksLogFile, resolveHooksStatusFile } from './hooks/hooks-persistence.js';
 import { type HookRunState, type HookRuntimeEntry } from './types/hook-types.js';
-import {
-  DEFAULT_LOG_CHUNK_LINES,
-  buildHookLogsBody,
-  buildHookRunDetailBody,
-  getActiveDialogHandle,
-  openHookLogPopup,
-  resolveSessionRecords,
-  type ActiveDialogHandle,
-} from './tui/hooks-dialogs.js';
+import { buildHookLogsBody, buildHookRunDetailBody, getActiveDialogHandle, openHookLogPopup, type ActiveDialogHandle } from './tui/hooks-dialogs.js';
 import {
   buildActiveHooksView,
   colorForStatus,
@@ -24,7 +16,6 @@ import { materializeSidebar, type SidebarRenderHandle } from './tui/hooks-sideba
 import { loadSolidRuntime, type SidebarTheme, type SolidRuntime } from './tui/primitives.js';
 
 export {
-  DEFAULT_LOG_CHUNK_LINES,
   buildActiveHooksView,
   buildHookLogsBody,
   buildHookRunDetailBody,
@@ -67,7 +58,6 @@ export const registerActiveHooksSidebar = async (
   if (pollingEnabled) {
     const renderer = api.renderer;
     const tick = (): void => {
-      const activeDialog = getActiveDialogHandle();
       try {
         const stat = fs.statSync(statusFile);
         if (stat.isFile() && lastMtime !== stat.mtimeMs) {
@@ -91,18 +81,6 @@ export const registerActiveHooksSidebar = async (
       }
       for (let i = handles.length - 1; i >= 0; i -= 1) {
         if (handles[i]!.disposed()) handles.splice(i, 1);
-      }
-
-      if (activeDialog !== undefined) {
-        const updatedRecords = resolveSessionRecords(
-          logFile,
-          activeDialog.row,
-          activeDialog.notBefore,
-          activeDialog.sessionID,
-          statusFile,
-          statuses.get(activeDialog.event),
-        );
-        activeDialog.update(updatedRecords);
       }
     };
 

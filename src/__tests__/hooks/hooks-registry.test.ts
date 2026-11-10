@@ -92,7 +92,7 @@ describe('hooks-registry (scanHooks and validation)', () => {
     fs.writeFileSync(path.join(hooksDir, 'session-idle.ps1'), '');
 
     fs.mkdirSync(path.join(hooksDir, 'subdir'));
-    fs.writeFileSync(path.join(hooksDir, 'readme.md'), '');
+    fs.writeFileSync(path.join(hooksDir, 'invalid.txt'), '');
     fs.writeFileSync(path.join(hooksDir, 'Bad_Name.sh'), '');
     fs.writeFileSync(path.join(hooksDir, 'permission-ask.sh'), '');
     fs.writeFileSync(path.join(hooksDir, 'unknown-event.sh'), '');
@@ -103,5 +103,26 @@ describe('hooks-registry (scanHooks and validation)', () => {
     const report = scanHooks(hooksDir, { mode: HookDigestMode.Report });
     expect(report.entries.map((e) => e.event)).toEqual(['session.idle']);
     expect(report.failures.length).toBe(7);
+  });
+
+  test('scanHooks silently ignores OS and editor noise (.DS_Store, README.md, thumbs.db, editor swap files)', () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
+    fs.writeFileSync(path.join(hooksDir, '.DS_Store'), '');
+    fs.writeFileSync(path.join(hooksDir, 'README.md'), '');
+    fs.writeFileSync(path.join(hooksDir, 'Thumbs.db'), '');
+    fs.writeFileSync(path.join(hooksDir, 'desktop.ini'), '');
+    fs.writeFileSync(path.join(hooksDir, '.gitkeep'), '');
+    fs.writeFileSync(path.join(hooksDir, 'tool.sh~'), '');
+    fs.writeFileSync(path.join(hooksDir, '.tool.sh.swp'), '');
+
+    const scan = scanHooks(hooksDir, {
+      which: (cmd) => (cmd === 'bash' ? '/bin/bash' : null),
+    });
+    expect(scan.failures).toEqual([]);
+    expect(scan.entries).toHaveLength(1);
+    expect(scan.entries[0]!.event).toBe('tool.execute.before');
   });
 });

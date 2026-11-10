@@ -8,6 +8,7 @@ import * as commandsConfig from '../configuration/commands-config.js';
 import * as skillsConfig from '../configuration/skills-config.js';
 import * as beforeTool from '../hooks/internal/before-tool.js';
 import * as hooksWrapperModule from '../hooks/hooks-runtime.js';
+import * as hooksPersistenceModule from '../hooks/hooks-persistence.js';
 import * as sessionCompaction from '../hooks/internal/session-compaction.js';
 import OwflowPlugin from '../index.js';
 import { fork_task } from '../tools/fork_task.js';
@@ -211,6 +212,35 @@ describe('OwflowPlugin', () => {
         expect(wrapperDisposed).toBe(true);
       } finally {
         wrapperSpy.mockRestore();
+      }
+    });
+
+    test('should maintain built-in destructive action guard and write crash log when user hooks fail initialization', async () => {
+      const crashSpy = spyOn(hooksPersistenceModule, 'writeHookCrashLog').mockImplementation(() => {});
+      const wrapperSpy = spyOn(hooksWrapperModule, 'initializeHooksWrapper').mockRejectedValue(new Error('SyntaxError in user hook script'));
+      const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+
+        expect(crashSpy).toHaveBeenCalledWith(tmpDir, 'startup_digest_failed', expect.any(Error));
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('user hooks failed to load'));
+        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('destructive command guard remains ACTIVE'));
+
+        // Plugin is returned in safe-mode
+        expect(plugin.tool).toBeDefined();
+        expect(plugin['tool.execute.before']).toBeDefined();
+        expect(plugin.event).toBeUndefined();
+
+        // Destructive command guard remains 100% active and blocks destructive actions
+        await plugin['chat.message']!({ sessionID: 'sess-guard', agent: 'main' }, {} as any);
+        await expect(
+          plugin['tool.execute.before']!({ tool: 'bash', sessionID: 'sess-guard', callID: 'c-crash' }, { args: { command: 'git reset --hard' } }),
+        ).rejects.toThrow('Blocked: destructive command not permitted for agent "main"');
+      } finally {
+        crashSpy.mockRestore();
+        wrapperSpy.mockRestore();
+        errorSpy.mockRestore();
       }
     });
   });

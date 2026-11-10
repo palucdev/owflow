@@ -15,9 +15,10 @@ import {
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
-import { appendHookStreamLog, resolveHookStreamLogFiles, resolveHooksLogFile, resolveHooksStatusFile } from './hooks-persistence.js';
+import { appendWithRotation, resolveHooksLatestSymlink, resolveHooksLogFile, resolveHooksStatusFile } from './hooks-persistence.js';
 import { scanHooks } from './hooks-registry.js';
 
+export const DEFAULT_HOOK_TIMEOUT_MS = 30_000;
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
 export const MAX_STREAM_BUFFER_BYTES = 4 * 1024 * 1024;
@@ -86,7 +87,7 @@ const sessionIDFrom = (input: unknown): string | undefined => {
 
 export const readStream = async (
   stream: ReadableStream<Uint8Array> | null | undefined,
-  onChunk: (chunk: string) => void,
+  onChunk?: (chunk: string) => void,
   maxBytes = MAX_STREAM_BUFFER_BYTES,
 ): Promise<string> => {
   if (!stream) return '';
@@ -104,7 +105,7 @@ export const readStream = async (
         if (result.length < maxBytes) {
           result += chunk.slice(0, maxBytes - result.length);
         }
-        onChunk(chunk);
+        onChunk?.(chunk);
       }
       if (totalBytes >= maxBytes) {
         try {
@@ -118,7 +119,7 @@ export const readStream = async (
       if (result.length < maxBytes) {
         result += tail.slice(0, maxBytes - result.length);
       }
-      onChunk(tail);
+      onChunk?.(tail);
     }
   } catch {}
   return result;
@@ -157,6 +158,7 @@ export const initializeHooksWrapper = async (
   const byEvent = Map.groupBy(entries, (e) => e.event);
   const statusFile = options.statusFile ?? resolveHooksStatusFile(directory);
   const logFile = options.logFile ?? resolveHooksLogFile(directory);
+  resolveHooksLatestSymlink(directory);
   const statuses = new Map<string, HookRuntimeEntry>();
   const activeProcs = new Set<ReturnType<typeof Bun.spawn>>();
   const abortingSessions = new Map<string, number>();
@@ -170,21 +172,7 @@ export const initializeHooksWrapper = async (
     try {
       const key = JSON.stringify([record.event, record.hook, record.sessionID, record.status, record.reason, record.exitCode, record.signal]);
       if (key === lastLogKey) return;
-      fs.mkdirSync(path.dirname(logFile), { recursive: true, mode: 0o700 });
-      try {
-        const stat = fs.lstatSync(logFile);
-        if (stat.isSymbolicLink()) return;
-        if (stat.size > MAX_LOG_FILE_BYTES) {
-          try {
-            const rotStat = fs.lstatSync(`${logFile}.1`);
-            if (rotStat.isSymbolicLink()) fs.unlinkSync(`${logFile}.1`);
-          } catch {}
-          fs.renameSync(logFile, `${logFile}.1`);
-        }
-      } catch (err: any) {
-        if (err?.code !== 'ENOENT') return;
-      }
-      fs.appendFileSync(logFile, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 });
+      appendWithRotation(logFile, JSON.stringify(record));
       lastLogKey = key;
     } catch {
       // Best-effort log persistence never affects hook execution.
@@ -221,12 +209,10 @@ export const initializeHooksWrapper = async (
       const runId = `${event}#${runCounter}`;
       const startedAt = Date.now();
       const name = path.basename(entry.path, path.extname(entry.path));
-      const streamFiles = resolveHookStreamLogFiles(logFile, name, sessionID);
       const breakerKey = `${event}::${entry.path}::${sessionID ?? 'global'}`;
       const breaker = breakers.get(breakerKey);
       if (breaker && startedAt < breaker.trippedUntil) {
         const reason = `Circuit breaker active for ${entry.path} after ${CIRCUIT_BREAKER_THRESHOLD} rapid consecutive failures (cooldown until ${new Date(breaker.trippedUntil).toISOString()})`;
-        appendHookStreamLog(streamFiles.stderr, `${reason}\n`);
         statuses.set(event, {
           status: HookRunState.FAILURE,
           startedAt,
@@ -257,7 +243,6 @@ export const initializeHooksWrapper = async (
       if (!entry.interpreter.available || !entry.interpreter.resolved) {
         const label = entry.interpreter.resolved ?? entry.interpreter.expected;
         const reason = `${label} is not available`;
-        appendHookStreamLog(streamFiles.stderr, `${reason}\n`);
         statuses.set(event, {
           status: HookRunState.FAILURE,
           startedAt,
@@ -297,45 +282,79 @@ export const initializeHooksWrapper = async (
       });
       writeStatusFile(statusFile, directory, statuses);
 
-      try {
-        const sOut = fs.lstatSync(streamFiles.stdout);
-        if (!sOut.isSymbolicLink()) fs.writeFileSync(streamFiles.stdout, '');
-      } catch {}
-      try {
-        const sErr = fs.lstatSync(streamFiles.stderr);
-        if (!sErr.isSymbolicLink()) fs.writeFileSync(streamFiles.stderr, '');
-      } catch {}
+      if (process.env.OWFLOW_DEBUG === '1') {
+        console.error(`[owflow:debug] [${event}] Spawning ${entry.path} (stdin: ${stdinText.length} bytes)`);
+      }
 
-      // shortcut: buffers full child stdout/stderr via Response.text() before slicing to 16KB;
-      // ceiling: runaway hook writing >100MB to stdio;
-      // upgrade: ReadableStream.getReader() loop with byte counter and cancel().
-      const proc = Bun.spawn([entry.interpreter.resolved, entry.path], {
-        cwd: directory,
-        stdin: Buffer.from(stdinText),
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      activeProcs.add(proc);
+      let proc: ReturnType<typeof Bun.spawn>;
+      try {
+        proc = Bun.spawn([entry.interpreter.resolved, entry.path], {
+          cwd: directory,
+          stdin: Buffer.from(stdinText),
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        activeProcs.add(proc);
+      } catch (spawnError) {
+        const finishedAt = Date.now();
+        const spawnErrMsg = spawnError instanceof Error ? spawnError.message : String(spawnError);
+        const reason = `failed to spawn ${entry.path}: ${spawnErrMsg}`;
+        statuses.set(event, {
+          status: HookRunState.FAILURE,
+          startedAt,
+          finishedAt,
+          durationMs: 0,
+          reason,
+          ...(sessionID ? { sessionID } : {}),
+        });
+        writeStatusFile(statusFile, directory, statuses);
+        appendLog({
+          version: 1,
+          runId,
+          pid: process.pid,
+          workspace: directory,
+          event,
+          hook: entry.path,
+          name,
+          ...(sessionID ? { sessionID } : {}),
+          startedAt,
+          finishedAt,
+          durationMs: 0,
+          status: HookRunState.FAILURE,
+          reason,
+        });
+        await abortSession(event, sessionID, entry.path);
+        const failPosture = canAbortSessionForEvent(event) ? 'failure ends the current session; fail closed' : 'failure recorded; fail closed';
+        throw new Error(
+          `Blocked: failed to spawn hook ${entry.path}: ${spawnErrMsg}. Hint: fix the failing script ${entry.path} (${failPosture}), or remove it and restart OpenCode to proceed.`,
+        );
+      }
 
-      const timeoutMs = Number(process.env[HOOK_TIMEOUT_ENV]);
+      const rawTimeout = process.env[HOOK_TIMEOUT_ENV];
+      let timeoutMs = DEFAULT_HOOK_TIMEOUT_MS;
+      if (rawTimeout !== undefined) {
+        const parsed = Number(rawTimeout);
+        if (Number.isFinite(parsed) && parsed <= 0) {
+          timeoutMs = 0;
+        } else if (Number.isFinite(parsed)) {
+          timeoutMs = parsed;
+        }
+      }
+
       let timedOut = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let rawStdout = '';
       let rawStderr = '';
       const ioPromise = Promise.all([
-        readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined, (chunk) => {
-          appendHookStreamLog(streamFiles.stdout, chunk);
-        }),
-        readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined, (chunk) => {
-          appendHookStreamLog(streamFiles.stderr, chunk);
-        }),
+        readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined),
+        readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined),
         proc.exited,
       ]);
 
       let exitCode: number | null = null;
       try {
         const res =
-          Number.isFinite(timeoutMs) && timeoutMs > 0
+          timeoutMs > 0
             ? await Promise.race([
                 ioPromise,
                 new Promise<'timeout'>((resolve) => {
@@ -360,6 +379,10 @@ export const initializeHooksWrapper = async (
       const durationMs = Math.max(0, finishedAt - startedAt);
       const signal = proc.signalCode ?? null;
       const ok = !timedOut && exitCode === 0 && signal === null;
+
+      if (process.env.OWFLOW_DEBUG === '1') {
+        console.error(`[owflow:debug] [${event}] Finished ${entry.path} in ${durationMs}ms (exitCode: ${exitCode}, ok: ${ok})`);
+      }
 
       if (ok) {
         breakers.delete(breakerKey);
@@ -395,16 +418,6 @@ export const initializeHooksWrapper = async (
         : timedOut
           ? `process timed out after ${Math.floor(timeoutMs)}ms`
           : rawStderr.trim() || rawStdout.trim() || (signal ? `process terminated by signal ${signal}` : `process exited with code ${exitCode}`);
-
-      if (rawStdout.length > 0 && !rawStdout.endsWith('\n')) {
-        appendHookStreamLog(streamFiles.stdout, '\n');
-      }
-      if (rawStderr.length > 0 && !rawStderr.endsWith('\n')) {
-        appendHookStreamLog(streamFiles.stderr, '\n');
-      }
-      if (!ok && !rawStdout.trim() && !rawStderr.trim() && reason) {
-        appendHookStreamLog(streamFiles.stderr, `${reason}\n`);
-      }
 
       statuses.set(event, {
         status: ok ? HookRunState.SUCCESS : HookRunState.FAILURE,
@@ -501,9 +514,23 @@ export const createDispatchHandlers = (dispatch: Dispatcher): Hooks => {
     [HookEvent.Event]: async (input: unknown) => {
       const type = (input as { event?: { type?: unknown } } | undefined)?.event?.type;
       if (typeof type === 'string' && isHostEventName(type) && !chains.has(type)) {
-        await runSerialized(type, () => dispatch(type, input));
+        await runSerialized(type, async () => {
+          try {
+            await dispatch(type, input);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.warn(`[owflow] reactive host event "${type}" failed: ${msg}`);
+          }
+        });
       }
-      await runSerialized(HookEvent.Event, () => dispatch(HookEvent.Event, input));
+      await runSerialized(HookEvent.Event, async () => {
+        try {
+          await dispatch(HookEvent.Event, input);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.warn(`[owflow] catch-all event hook failed: ${msg}`);
+        }
+      });
     },
   };
 };

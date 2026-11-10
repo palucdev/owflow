@@ -8,14 +8,13 @@ import {
   type HookRunLogRecord,
   type HookStatusReadResult,
   type HookStatusSnapshot,
-  type HookStreamLogFiles,
 } from '../types/hook-types.js';
 
 export * from '../types/hook-types.js';
 
 export const STATUS_FILE_ENV = 'OWFLOW_HOOKS_STATUS_FILE';
 export const LOG_FILE_ENV = 'OWFLOW_HOOK_LOGS_FILE';
-const MAX_STREAM_LOG_FILE_BYTES = 4 * 1024 * 1024;
+const DEFAULT_LOG_ROTATION_BYTES = 4 * 1024 * 1024;
 
 const workspaceKey = (workspace: string): string => {
   let resolved = path.resolve(workspace);
@@ -42,36 +41,57 @@ export const resolveHooksStatusFile = (workspace: string): string =>
 export const resolveHooksLogFile = (workspace: string): string =>
   process.env[LOG_FILE_ENV] ?? path.join(getUserTmpDir(), `owflow-hook-logs-${workspaceKey(workspace)}.jsonl`);
 
-export const resolveHookStreamLogFiles = (logFile: string, hookName: string, sessionID?: string): HookStreamLogFiles => {
-  const dir = path.dirname(logFile);
-  const sessionPrefix = sessionID && sessionID.trim().length > 0 ? path.basename(sessionID.trim()) : 'global';
-  const safeHook = path.basename(hookName.trim());
-  return {
-    stdout: path.join(dir, `${sessionPrefix}.${safeHook}.stdout.log`),
-    stderr: path.join(dir, `${sessionPrefix}.${safeHook}.stderr.log`),
-  };
+export const resolveHooksLatestSymlink = (workspace: string): string => {
+  const symlinkPath = path.join(getUserTmpDir(), 'owflow-hooks-latest.jsonl');
+  const target = resolveHooksLogFile(workspace);
+  try {
+    fs.mkdirSync(path.dirname(symlinkPath), { recursive: true, mode: 0o700 });
+    try {
+      const stat = fs.lstatSync(symlinkPath);
+      if (stat.isSymbolicLink() || stat.isFile()) {
+        fs.unlinkSync(symlinkPath);
+      }
+    } catch {}
+    fs.symlinkSync(target, symlinkPath);
+  } catch {
+    // Best-effort symlink creation
+  }
+  return symlinkPath;
 };
 
-export const appendHookStreamLog = (file: string, chunk: string): void => {
-  if (!chunk) return;
+export const appendWithRotation = (filePath: string, line: string, maxBytes = DEFAULT_LOG_ROTATION_BYTES): void => {
+  if (!line) return;
   try {
-    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
     try {
-      const stat = fs.lstatSync(file);
+      const stat = fs.lstatSync(filePath);
       if (stat.isSymbolicLink()) return;
-      if (stat.size > MAX_STREAM_LOG_FILE_BYTES) {
+      if (stat.size > maxBytes) {
         try {
-          const rotStat = fs.lstatSync(`${file}.1`);
-          if (rotStat.isSymbolicLink()) fs.unlinkSync(`${file}.1`);
+          const rotStat = fs.lstatSync(`${filePath}.1`);
+          if (rotStat.isSymbolicLink()) fs.unlinkSync(`${filePath}.1`);
         } catch {}
-        fs.renameSync(file, `${file}.1`);
+        fs.renameSync(filePath, `${filePath}.1`);
       }
     } catch (err: any) {
       if (err?.code !== 'ENOENT') return;
     }
-    fs.appendFileSync(file, chunk, { encoding: 'utf8', mode: 0o600 });
+    const content = line.endsWith('\n') ? line : `${line}\n`;
+    fs.appendFileSync(filePath, content, { encoding: 'utf8', mode: 0o600 });
   } catch {
     // Best-effort log persistence never affects hook execution.
+  }
+};
+
+export const writeHookCrashLog = (workspace: string, source: string, error: unknown): void => {
+  try {
+    const crashFile = path.join(getUserTmpDir(), 'owflow-hooks-crash.log');
+    const timestamp = new Date().toISOString();
+    const errStr = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    const entry = `[${timestamp}] [${source}] [workspace: ${workspace}]\n${errStr}\n\n`;
+    appendWithRotation(crashFile, entry);
+  } catch {
+    // Best-effort crash logging never throws
   }
 };
 
@@ -81,34 +101,8 @@ interface FileCacheEntry<T> {
   readonly value: T;
 }
 
-const textFileCache = new Map<string, FileCacheEntry<string>>();
 const statusFileCache = new Map<string, FileCacheEntry<HookStatusReadResult>>();
 const logRecordsCache = new Map<string, FileCacheEntry<HookLogReadResult>>();
-
-const readTextFileSafe = (file: string): string => {
-  try {
-    const stat = fs.lstatSync(file);
-    if (stat.isSymbolicLink() || !stat.isFile()) return '';
-    const cached = textFileCache.get(file);
-    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-      return cached.value;
-    }
-    const content = fs.readFileSync(file, 'utf8');
-    textFileCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value: content });
-    return content;
-  } catch {
-    textFileCache.delete(file);
-    return '';
-  }
-};
-
-export const readHookStreamLogs = (logFile: string, hookName: string, sessionID?: string): HookStreamLogFiles => {
-  const files = resolveHookStreamLogFiles(logFile, hookName, sessionID);
-  return {
-    stdout: readTextFileSafe(files.stdout),
-    stderr: readTextFileSafe(files.stderr),
-  };
-};
 
 export const readHookStatusSnapshot = (file: string): HookStatusReadResult => {
   try {

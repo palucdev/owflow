@@ -15,8 +15,9 @@ import { configureSkills } from './configuration/skills-config.js';
 import { configureCommands } from './configuration/commands-config.js';
 import { configureAgents } from './configuration/agents-config.js';
 import { createDispatchHandlers, initializeHooksWrapper } from './hooks/hooks-runtime.js';
-import { HookEvent, type HookReportInput } from './types/hook-types.js';
+import { HookEvent, type HookReportInput, type HooksWrapper } from './types/hook-types.js';
 import { renderSnapshot } from './hooks/hooks-diagnostics.js';
+import { writeHookCrashLog } from './hooks/hooks-persistence.js';
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 
@@ -38,8 +39,22 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
       console.warn(`[owflow] failed to end session ${sessionID} after a gate hook failed: ${message}`);
     }
   };
-  const wrapper = hooksDisabled ? undefined : await initializeHooksWrapper(directory, endSession);
-  const snapshot: HookReportInput = wrapper?.snapshot ?? { entries: [], bypassed: true };
+
+  let wrapper: HooksWrapper | undefined;
+  let snapshot: HookReportInput = { entries: [], bypassed: true };
+
+  if (!hooksDisabled) {
+    try {
+      wrapper = await initializeHooksWrapper(directory, endSession);
+      snapshot = wrapper.snapshot;
+    } catch (error) {
+      writeHookCrashLog(directory, 'startup_digest_failed', error);
+      console.error(`[owflow] ERROR: user hooks failed to load (${(error as Error).message}).`);
+      console.error(`[owflow] Built-in destructive command guard remains ACTIVE.`);
+      console.error(`[owflow] User hooks bypassed until fixed. See crash log.`);
+      wrapper = undefined;
+    }
+  }
 
   const hooks: Hooks = {
     tool: {

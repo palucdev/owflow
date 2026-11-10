@@ -12,12 +12,13 @@ import {
   createDispatchHandlers,
   HOOK_TIMEOUT_ENV,
   initializeHooksWrapper,
+  DEFAULT_HOOK_TIMEOUT_MS,
   MAX_LOG_FILE_BYTES,
   MAX_STREAM_BUFFER_BYTES,
   NON_SESSION_STREAM_CAP_BYTES,
   readStream,
 } from '../../hooks/hooks-runtime.js';
-import { readHookLogRecords, readHookStreamLogs, readSessionHookLogs } from '../../hooks/hooks-persistence.js';
+import { readHookLogRecords, readSessionHookLogs } from '../../hooks/hooks-persistence.js';
 import { HookEvent, HookRunState } from '../../types/hook-types.js';
 
 describe('hooks-runtime (execution & dispatch runtime)', () => {
@@ -118,24 +119,20 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       { statusFile, logFile },
     );
 
-    // Session hook run writes stdout and stderr to <session_id>.<hook>.stdout/stderr.log
+    // Session hook run writes stdout and stderr directly to JSONL records
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_ok' }, {});
     const latestOk = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, Number.NEGATIVE_INFINITY, 'ses_ok').at(-1);
     expect(latestOk?.status).toBe(HookRunState.SUCCESS);
-    expect(readHookStreamLogs(logFile, 'tool-execute-before', 'ses_ok')).toEqual({
-      stdout: 'out line\n',
-      stderr: 'warn line\n',
-    });
+    expect(latestOk?.stdout).toBe('out line\n');
+    expect(latestOk?.stderr).toBe('warn line\n');
     expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, Date.now() + 10_000)).toEqual([]);
 
-    // Non-session hook run writes to global.<hook>.stdout/stderr.log
+    // Non-session hook run writes to JSONL
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
     const nonSession = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore).at(-1);
     expect(nonSession?.status).toBe(HookRunState.SUCCESS);
-    expect(readHookStreamLogs(logFile, 'tool-execute-before')).toEqual({
-      stdout: 'out line\n',
-      stderr: 'warn line\n',
-    });
+    expect(nonSession?.stdout).toBe('out line\n');
+    expect(nonSession?.stderr).toBe('warn line\n');
 
     // Coalescing identical consecutive run does not duplicate JSONL line
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
@@ -523,5 +520,177 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     }
 
     wrapper.dispose();
+  });
+
+  test('default 30s timeout triggers when OWFLOW_HOOK_TIMEOUT_MS is unset, and is disabled when set to 0', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
+
+    expect(DEFAULT_HOOK_TIMEOUT_MS).toBe(30_000);
+
+    const prevTimeout = process.env[HOOK_TIMEOUT_ENV];
+    delete process.env[HOOK_TIMEOUT_ENV];
+
+    let killed = false;
+    let exitResolver: (code: number) => void;
+    const exitPromise = new Promise<number>((resolve) => {
+      exitResolver = resolve;
+    });
+
+    const mockProc = {
+      pid: 12345,
+      kill: spyOn({ kill: () => {} }, 'kill').mockImplementation(() => {
+        killed = true;
+        exitResolver(143);
+      }),
+      exited: exitPromise,
+      stdout: new Response('').body,
+      stderr: new Response('').body,
+      signalCode: null,
+    };
+
+    const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
+    try {
+      const origSetTimeout = globalThis.setTimeout;
+      let recordedDelay: number | undefined;
+      spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+        recordedDelay = ms;
+        // do not wait 30s in test, trigger immediately
+        fn();
+        return 1 as any;
+      }) as typeof setTimeout);
+
+      const wrapper = await initializeHooksWrapper(root, undefined, {
+        statusFile: path.join(root, 's.json'),
+        logFile: path.join(root, 'l.jsonl'),
+      });
+
+      await expect(wrapper.dispatch(HookEvent.Config, {})).rejects.toThrow(/timed out after 30000ms/);
+      expect(recordedDelay).toBe(30_000);
+      expect(killed).toBe(true);
+      wrapper.dispose();
+
+      // Now verify timeout is disabled when set to 0
+      process.env[HOOK_TIMEOUT_ENV] = '0';
+      let timeoutScheduled = false;
+      (globalThis.setTimeout as any).mockImplementation(((fn: () => void, ms?: number) => {
+        timeoutScheduled = true;
+        return 1 as any;
+      }) as typeof setTimeout);
+
+      const quickProc = {
+        pid: 12346,
+        kill: () => {},
+        exited: Promise.resolve(0),
+        stdout: new Response('').body,
+        stderr: new Response('').body,
+        signalCode: null,
+      };
+      spawnSpy.mockImplementation(() => quickProc as any);
+
+      const wrapper2 = await initializeHooksWrapper(root, undefined, {
+        statusFile: path.join(root, 's2.json'),
+        logFile: path.join(root, 'l2.jsonl'),
+      });
+      await wrapper2.dispatch(HookEvent.Config, {});
+      expect(timeoutScheduled).toBe(false);
+      wrapper2.dispose();
+    } finally {
+      spawnSpy.mockRestore();
+      if (prevTimeout === undefined) delete process.env[HOOK_TIMEOUT_ENV];
+      else process.env[HOOK_TIMEOUT_ENV] = prevTimeout;
+    }
+  });
+
+  test('OWFLOW_DEBUG=1 logs real-time trace messages to console.error', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\necho "debug-ok"\nexit 0\n');
+
+    const errLines: string[] = [];
+    const errSpy = spyOn(console, 'error').mockImplementation((msg: string) => {
+      errLines.push(msg);
+    });
+
+    const prevDebug = process.env.OWFLOW_DEBUG;
+    process.env.OWFLOW_DEBUG = '1';
+
+    try {
+      const wrapper = await initializeHooksWrapper(root, undefined, {
+        statusFile: path.join(root, 'status.json'),
+        logFile: path.join(root, 'logs.jsonl'),
+      });
+      await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
+
+      expect(errLines.some((l) => l.includes('[owflow:debug] [tool.execute.before] Spawning'))).toBe(true);
+      expect(errLines.some((l) => l.includes('[owflow:debug] [tool.execute.before] Finished') && l.includes('exitCode: 0'))).toBe(true);
+      wrapper.dispose();
+    } finally {
+      errSpy.mockRestore();
+      if (prevDebug === undefined) delete process.env.OWFLOW_DEBUG;
+      else process.env.OWFLOW_DEBUG = prevDebug;
+    }
+  });
+
+  test('Bun.spawn throwing fails closed with clean Blocked error and records failure in logs', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n');
+
+    const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+      throw new Error('EACCES: permission denied');
+    });
+
+    const statusFile = path.join(root, 'status.json');
+    const logFile = path.join(root, 'logs.jsonl');
+
+    try {
+      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+      await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {})).rejects.toThrow(/Blocked: failed to spawn hook.*EACCES: permission denied/);
+
+      const logs = readHookLogRecords(logFile);
+      expect(logs.kind).toBe('ok');
+      if (logs.kind === 'ok') {
+        expect(logs.records).toHaveLength(1);
+        expect(logs.records[0].status).toBe(HookRunState.FAILURE);
+        expect(logs.records[0].reason).toContain('EACCES: permission denied');
+      }
+      wrapper.dispose();
+    } finally {
+      spawnSpy.mockRestore();
+    }
+  });
+
+  test('createDispatchHandlers isolates reactive host event failures from crashing OpenCode event bus', async () => {
+    const warnLines: string[] = [];
+    const warnSpy = spyOn(console, 'warn').mockImplementation((msg: string) => {
+      warnLines.push(msg);
+    });
+
+    try {
+      const dispatchMock = spyOn(
+        {
+          dispatch: async (ev: string) => {
+            if (ev === 'session.idle') throw new Error('Blocked: idle check failed');
+            if (ev === HookEvent.Event) throw new Error('Blocked: catch-all event failed');
+          },
+        },
+        'dispatch',
+      );
+
+      const handlers = createDispatchHandlers(dispatchMock.mock.calls ? (dispatchMock as any) : () => Promise.resolve());
+
+      // Dispatching reactive event via host Event handler should NOT throw unhandled rejection
+      await handlers[HookEvent.Event]({ event: { type: 'session.idle' } });
+
+      expect(warnLines.some((l) => l.includes('reactive host event "session.idle" failed'))).toBe(true);
+      expect(warnLines.some((l) => l.includes('catch-all event hook failed'))).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

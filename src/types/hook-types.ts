@@ -65,8 +65,6 @@ export const EXCLUDED_EVENT_NAMES = ['permission.ask', 'tool', 'auth', 'provider
 
 export const isHostEventName = (value: string): value is HostEventName => (HOST_EVENT_NAMES as readonly string[]).includes(value);
 
-export const isHookEventName = (value: string): value is HookEventName => (HOOK_EVENT_NAMES as readonly string[]).includes(value);
-
 /**
  * Validation digest mode for `scanHooks`.
  * - `FailFast`: Throws on any validation failure at startup/runtime to prevent
@@ -148,11 +146,6 @@ export interface HookRunLogRecord {
   readonly stderr?: string;
 }
 
-export interface HookStreamLogFiles {
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
 export type HookLogReadResult =
   { readonly kind: 'missing' | 'invalid' } | { readonly kind: 'ok'; readonly records: readonly HookRunLogRecord[]; readonly truncated: boolean };
 
@@ -175,9 +168,4 @@ export interface HooksWrapper {
 export interface HooksWrapperOptions {
   readonly statusFile?: string;
   readonly logFile?: string;
-}
-
-export enum HookRunResult {
-  SUCCESS = 0,
-  ERROR = 1,
 }
