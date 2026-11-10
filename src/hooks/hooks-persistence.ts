@@ -16,7 +16,7 @@ export const STATUS_FILE_ENV = 'OWFLOW_HOOKS_STATUS_FILE';
 export const LOG_FILE_ENV = 'OWFLOW_HOOK_LOGS_FILE';
 const DEFAULT_LOG_ROTATION_BYTES = 4 * 1024 * 1024;
 
-const workspaceKey = (workspace: string): string => {
+export const workspaceKey = (workspace: string): string => {
   let resolved = path.resolve(workspace);
   try {
     resolved = fs.realpathSync.native(resolved);
@@ -42,7 +42,7 @@ export const resolveHooksLogFile = (workspace: string): string =>
   process.env[LOG_FILE_ENV] ?? path.join(getUserTmpDir(), `owflow-hook-logs-${workspaceKey(workspace)}.jsonl`);
 
 export const resolveHooksLatestSymlink = (workspace: string): string => {
-  const symlinkPath = path.join(getUserTmpDir(), 'owflow-hooks-latest.jsonl');
+  const symlinkPath = path.join(getUserTmpDir(), `owflow-hooks-latest-${workspaceKey(workspace)}.jsonl`);
   const target = resolveHooksLogFile(workspace);
   try {
     fs.mkdirSync(path.dirname(symlinkPath), { recursive: true, mode: 0o700 });
@@ -54,7 +54,7 @@ export const resolveHooksLatestSymlink = (workspace: string): string => {
     } catch {}
     fs.symlinkSync(target, symlinkPath);
   } catch {
-    // Best-effort symlink creation
+    // Graceful fallback for non-admin Windows or filesystem restrictions
   }
   return symlinkPath;
 };

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +14,7 @@ import {
   resolveHooksLogFile,
   resolveHooksStatusFile,
   STATUS_FILE_ENV,
+  workspaceKey,
   writeHookCrashLog,
   type HookRunLogRecord,
 } from '../../hooks/hooks-persistence.js';
@@ -316,7 +317,9 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     const userDir = getUserTmpDir();
     const symlinkPath = resolveHooksLatestSymlink(root);
 
-    expect(symlinkPath).toBe(path.join(userDir, 'owflow-hooks-latest.jsonl'));
+    const expectedName = `owflow-hooks-latest-${workspaceKey(root)}.jsonl`;
+    expect(symlinkPath).toBe(path.join(userDir, expectedName));
+    expect(symlinkPath).toMatch(/owflow-hooks-latest-[a-f0-9]{16}\.jsonl$/);
     const expectedTarget = resolveHooksLogFile(root);
     expect(fs.lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
     expect(fs.readlinkSync(symlinkPath)).toBe(expectedTarget);
@@ -325,6 +328,42 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     const symlinkPath2 = resolveHooksLatestSymlink(root);
     expect(symlinkPath2).toBe(symlinkPath);
     expect(fs.lstatSync(symlinkPath2).isSymbolicLink()).toBe(true);
+  });
+
+  test('resolveHooksLatestSymlink maintains distinct symlinks across multiple workspaces without collision', () => {
+    const root1 = makeTempDir();
+    const root2 = makeTempDir();
+    const symlink1 = resolveHooksLatestSymlink(root1);
+    const symlink2 = resolveHooksLatestSymlink(root2);
+
+    expect(symlink1).not.toBe(symlink2);
+    expect(symlink1).toContain(`owflow-hooks-latest-${workspaceKey(root1)}.jsonl`);
+    expect(symlink2).toContain(`owflow-hooks-latest-${workspaceKey(root2)}.jsonl`);
+    expect(fs.lstatSync(symlink1).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(symlink2).isSymbolicLink()).toBe(true);
+    expect(fs.readlinkSync(symlink1)).toBe(resolveHooksLogFile(root1));
+    expect(fs.readlinkSync(symlink2)).toBe(resolveHooksLogFile(root2));
+
+    // Re-resolving workspace 1 does not affect workspace 2's symlink
+    const symlink1Again = resolveHooksLatestSymlink(root1);
+    expect(symlink1Again).toBe(symlink1);
+    expect(fs.readlinkSync(symlink1Again)).toBe(resolveHooksLogFile(root1));
+    expect(fs.readlinkSync(symlink2)).toBe(resolveHooksLogFile(root2));
+  });
+
+  test('resolveHooksLatestSymlink handles filesystem symlink errors gracefully', () => {
+    const root = makeTempDir();
+    const symlinkSpy = spyOn(fs, 'symlinkSync').mockImplementation(() => {
+      const err = new Error('EPERM: operation not permitted');
+      (err as any).code = 'EPERM';
+      throw err;
+    });
+    try {
+      const symlinkPath = resolveHooksLatestSymlink(root);
+      expect(symlinkPath).toContain(`owflow-hooks-latest-${workspaceKey(root)}.jsonl`);
+    } finally {
+      symlinkSpy.mockRestore();
+    }
   });
 
   test('readHookLogRecords and readHookStatusSnapshot return cached results when mtime and size are unchanged', () => {
