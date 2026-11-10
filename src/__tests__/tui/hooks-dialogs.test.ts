@@ -292,6 +292,8 @@ describe('TUI hook-dialogs', () => {
           expect(logsBody.props.justifyContent).toBe('center');
           const logsScrollbox = logsBody.children.find((c): c is FakeNode => typeof c === 'object' && c.tag === 'scrollbox');
           expect(logsScrollbox).toBeDefined();
+          const bodyNode = logsScrollbox!.children[0] as FakeNode;
+          expect(bodyNode.props.textAlign).toBe('left');
           expect(collectText(logsScrollbox!)).toContain('output line 1');
           logsScrollbox!.props.onScroll();
           expect(collectText(logsScrollbox!)).toContain('output line 50');

@@ -70,7 +70,7 @@ export const registerActiveHooksSidebar = async (
       const activeDialog = getActiveDialogHandle();
       try {
         const stat = fs.statSync(statusFile);
-        if (stat.isFile() && (lastMtime !== stat.mtimeMs || activeDialog !== undefined)) {
+        if (stat.isFile() && lastMtime !== stat.mtimeMs) {
           lastMtime = stat.mtimeMs;
           const result = readHookStatusSnapshot(statusFile);
           if (result.kind === 'ok') {

@@ -17,10 +17,13 @@ describe('guardAgainstDestructiveActions', () => {
   });
 
   test('should allow safe bash commands for non-whitelisted agents', async () => {
-    const output = { args: { command: 'git status' } };
+    const safeCommands = ['git status', 'git push origin main', 'rm file.txt', 'rm -f file.txt', 'rm -r dir'];
     const map = new Map<string, string>([['session-1', 'main']]);
 
-    await expect(guardAgainstDestructiveActions(defaultInput, output, map)).resolves.toBeUndefined();
+    for (const cmd of safeCommands) {
+      const output = { args: { command: cmd } };
+      await expect(guardAgainstDestructiveActions(defaultInput, output, map)).resolves.toBeUndefined();
+    }
   });
 
   test('should allow safe bash commands when command or args is empty/undefined', async () => {
@@ -52,8 +55,14 @@ describe('guardAgainstDestructiveActions', () => {
       'git clean -fd',
       'git push --force origin main',
       'git push -f origin main',
+      'git push --force-with-lease origin main',
+      'git push origin +main',
       'rm -rf dist',
       'rm -fr temp',
+      'rm -r -f temp',
+      'rm -f -r temp',
+      'rm --recursive --force temp',
+      'rm --force --recursive temp',
     ];
 
     test.each(destructiveCommands)('should block destructive command: %s', async (cmd) => {

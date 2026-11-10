@@ -15,7 +15,7 @@ export const guardAgainstDestructiveActions = async (
   if (WHITELIST.includes(agentName)) return;
   const cmd = output?.args?.command ?? '';
   const DESTRUCTIVE =
-    /git\s+stash|git\s+reset\s+--hard|git\s+checkout\s+--\s+\.|git\s+checkout\s+\.\s*(?:$|\s)|git\s+clean|git\s+push\s+(?:--force|-f)|rm\s+-[rf]{2}/i;
+    /git\s+stash|git\s+reset\s+--hard|git\s+checkout\s+--\s+\.|git\s+checkout\s+\.\s*(?:$|\s)|git\s+clean|git\s+push\s+(?:.*?\s)?(?:--force(?:-with-lease)?|-f|\+[a-z0-9_\-\/]+)|rm\s+.*?(?:-[a-z]*[rf][a-z]*\s+-[a-z]*[rf]|-[rf]{2}|--recursive\s+--force|--force\s+--recursive)/i;
   if (DESTRUCTIVE.test(cmd)) {
     throw new Error(`Blocked: destructive command not permitted for agent "${agentName}"`);
   }

@@ -58,6 +58,41 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     });
   });
 
+  test('buildStdinPayload serializes circular context references without throwing', () => {
+    const circularObj: any = { name: 'circular-test' };
+    circularObj.self = circularObj;
+    const raw = buildStdinPayload(HookEvent.ToolExecuteBefore, circularObj, {}, 'ses_circ');
+    expect(() => JSON.parse(raw)).not.toThrow();
+    const parsed = JSON.parse(raw);
+    expect(parsed.context.self.self).toBe('[Circular]');
+  });
+
+  test('runtime status and log persistence safely ignore dangling symlinks and clean up symlink rotation targets', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n');
+
+    const targetFile = path.join(root, 'target-status.txt');
+    const danglingStatus = path.join(root, 'dangling-status.json');
+    fs.symlinkSync(targetFile, danglingStatus);
+
+    const targetLog = path.join(root, 'target-log.txt');
+    const danglingLog = path.join(root, 'dangling-log.jsonl');
+    fs.symlinkSync(targetLog, danglingLog);
+
+    const wrapper = await initializeHooksWrapper(root, undefined, {
+      statusFile: danglingStatus,
+      logFile: danglingLog,
+    });
+    await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_sym' }, {});
+    wrapper.dispose();
+
+    // Neither target file should have been created or written to
+    expect(fs.existsSync(targetFile)).toBe(false);
+    expect(fs.existsSync(targetLog)).toBe(false);
+  });
+
   test('git-hooks execution: exit 0 succeeds, non-zero fails closed & aborts session, truncates large output, rotates logs, and supports timeout', async () => {
     const root = makeTempDir();
     const hooksDir = path.join(root, '.owflow', 'hooks');

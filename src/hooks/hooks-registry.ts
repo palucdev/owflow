@@ -3,7 +3,8 @@ import path from 'node:path';
 import {
   EXCLUDED_EVENT_NAMES,
   HookDigestMode,
-  isHookEventName,
+  HOOK_EVENT_NAMES,
+  type HookEventName,
   type HookRegistryEntry,
   type HookScan,
   type HookValidationFailure,
@@ -12,6 +13,8 @@ import {
 import { hooksLocationLabel } from '../utils/workflow-paths.js';
 
 const HOOK_STEM_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const STEM_TO_EVENT = new Map<string, HookEventName>(HOOK_EVENT_NAMES.map((ev) => [ev.replaceAll('.', '-'), ev]));
+const EXCLUDED_STEMS = new Map<string, string>(EXCLUDED_EVENT_NAMES.map((ev) => [ev.replaceAll('.', '-'), ev]));
 const RECOVERY_HINT =
   'Hint: fix or remove the invalid file(s) and restart OpenCode. The owflow plugin — including the destructive-command guard — has been dropped until the hooks directory validates. To start without user hooks, set OWFLOW_HOOKS_DISABLED=1.';
 
@@ -51,13 +54,17 @@ export const scanHooks = (hooksDir: string, options: { mode?: HookDigestMode; wh
       failures.push({ path: entryPath, error: `stem "${stem}" is not lowercase kebab-case ([a-z0-9]+(-[a-z0-9]+)*)` });
       continue;
     }
-    const event = stem.replaceAll('-', '.');
-    if ((EXCLUDED_EVENT_NAMES as readonly string[]).includes(event)) {
-      failures.push({ path: entryPath, error: `stem "${stem}" derives to "${event}", an excluded event that cannot be hooked` });
+    const excluded = EXCLUDED_STEMS.get(stem);
+    if (excluded) {
+      failures.push({ path: entryPath, error: `stem "${stem}" derives to "${excluded}", an excluded event that cannot be hooked` });
       continue;
     }
-    if (!isHookEventName(event)) {
-      failures.push({ path: entryPath, error: `stem "${stem}" derives to "${event}", which is not a dispatchable hook or a known host event` });
+    const event = STEM_TO_EVENT.get(stem);
+    if (!event) {
+      failures.push({
+        path: entryPath,
+        error: `stem "${stem}" derives to "${stem.replaceAll('-', '.')}", which is not a dispatchable hook or a known host event`,
+      });
       continue;
     }
     const interpreter = interpreters[ext];

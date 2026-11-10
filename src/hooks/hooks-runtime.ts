@@ -47,6 +47,7 @@ export const buildStdinPayload = (event: HookEventName, input: unknown, output: 
       Object.assign(context, src);
     }
   }
+  const seen = new WeakSet<object>();
   return JSON.stringify(
     {
       event,
@@ -55,14 +56,18 @@ export const buildStdinPayload = (event: HookEventName, input: unknown, output: 
     },
     (_key, value) => {
       if (typeof value === 'bigint') return value.toString();
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        const proto = Object.getPrototypeOf(value);
-        if (proto !== Object.prototype && proto !== null) {
-          const picked: Record<string, unknown> = {};
-          for (const k of IDENTITY_KEYS) {
-            if (value[k] !== undefined) picked[k] = value[k];
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) return '[Circular]';
+        seen.add(value);
+        if (!Array.isArray(value)) {
+          const proto = Object.getPrototypeOf(value);
+          if (proto !== Object.prototype && proto !== null) {
+            const picked: Record<string, unknown> = {};
+            for (const k of IDENTITY_KEYS) {
+              if (value[k] !== undefined) picked[k] = value[k];
+            }
+            return picked;
           }
-          return picked;
         }
       }
       return value;
@@ -107,7 +112,11 @@ const readStream = async (stream: ReadableStream<Uint8Array> | null | undefined,
 const writeStatusFile = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-    if (fs.existsSync(file) && fs.lstatSync(file).isSymbolicLink()) return;
+    try {
+      if (fs.lstatSync(file).isSymbolicLink()) return;
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') return;
+    }
     const snapshot: HookStatusSnapshot = {
       version: 1,
       pid: process.pid,
@@ -144,10 +153,18 @@ export const initializeHooksWrapper = async (
       const key = JSON.stringify([record.event, record.hook, record.sessionID, record.status, record.reason, record.exitCode, record.signal]);
       if (key === lastLogKey) return;
       fs.mkdirSync(path.dirname(logFile), { recursive: true, mode: 0o700 });
-      if (fs.existsSync(logFile)) {
+      try {
         const stat = fs.lstatSync(logFile);
         if (stat.isSymbolicLink()) return;
-        if (stat.size > MAX_LOG_FILE_BYTES) fs.renameSync(logFile, `${logFile}.1`);
+        if (stat.size > MAX_LOG_FILE_BYTES) {
+          try {
+            const rotStat = fs.lstatSync(`${logFile}.1`);
+            if (rotStat.isSymbolicLink()) fs.unlinkSync(`${logFile}.1`);
+          } catch {}
+          fs.renameSync(logFile, `${logFile}.1`);
+        }
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') return;
       }
       fs.appendFileSync(logFile, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 });
       lastLogKey = key;
@@ -261,6 +278,15 @@ export const initializeHooksWrapper = async (
         ...(sessionID ? { sessionID } : {}),
       });
       writeStatusFile(statusFile, directory, statuses);
+
+      try {
+        const sOut = fs.lstatSync(streamFiles.stdout);
+        if (!sOut.isSymbolicLink()) fs.writeFileSync(streamFiles.stdout, '');
+      } catch {}
+      try {
+        const sErr = fs.lstatSync(streamFiles.stderr);
+        if (!sErr.isSymbolicLink()) fs.writeFileSync(streamFiles.stderr, '');
+      } catch {}
 
       // shortcut: buffers full child stdout/stderr via Response.text() before slicing to 16KB;
       // ceiling: runaway hook writing >100MB to stdio;
@@ -388,6 +414,8 @@ export const initializeHooksWrapper = async (
         exitCode,
         ...(signal ? { signal } : {}),
         ...(reason ? { reason } : {}),
+        ...(rawStdout ? { stdout: rawStdout } : {}),
+        ...(rawStderr ? { stderr: rawStderr } : {}),
       });
 
       if (!ok) {

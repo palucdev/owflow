@@ -1,5 +1,5 @@
 import type { TuiPluginApi } from '@opencode-ai/plugin/tui';
-import { HookRunState, type HookEventName, type HookRunLogRecord, type HookRuntimeEntry } from '../types/hook-types.js';
+import { HookEvent, HookRunState, type HookEventName, type HookRunLogRecord, type HookRuntimeEntry } from '../types/hook-types.js';
 import { formatHookLogsMessage, formatHookRunSummary, type ActiveHookRow } from './hooks-presenter.js';
 import { el, txt, type SidebarTheme, type SolidElement, type SolidRuntime } from './primitives.js';
 import { readHookStatusSnapshot, readHookStreamLogs, readSessionHookLogs } from '../hooks/hooks-persistence.js';
@@ -45,7 +45,7 @@ const buildScrollableTextBox = (
   const getFooterText = (): string => (loadedLines < totalLines ? `[scroll for more logs: ${loadedLines}/${totalLines} lines loaded]` : '');
   const getBoxHeight = (): number => Math.min(maxHeight, Math.max(1, loadedLines + (loadedLines < totalLines ? 1 : 0)));
 
-  const bodyNode = txt(solid, getVisibleText(), fg, { width: '100%', textAlign: 'center' });
+  const bodyNode = txt(solid, getVisibleText(), fg, { width: '100%', textAlign: 'left' });
   const footerNode = txt(solid, getFooterText(), theme.textMuted, { width: '100%', textAlign: 'center' });
 
   let scrollbox: unknown;
@@ -288,7 +288,7 @@ export const resolveSessionRecords = (
     }
   }
 
-  const effectiveSessionID = sessionID ?? entry?.sessionID ?? records[records.length - 1]?.sessionID;
+  const effectiveSessionID = row.event === HookEvent.Config ? undefined : (entry?.sessionID ?? records[records.length - 1]?.sessionID ?? sessionID);
   const streamLogs = readHookStreamLogs(logFile, row.name, effectiveSessionID);
   if (streamLogs.stdout.length > 0 || streamLogs.stderr.length > 0) {
     const base = records[records.length - 1] ?? createIdleRecord(row, effectiveSessionID);

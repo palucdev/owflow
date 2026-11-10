@@ -51,10 +51,18 @@ export const appendHookStreamLog = (file: string, chunk: string): void => {
   if (!chunk) return;
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-    if (fs.existsSync(file)) {
+    try {
       const stat = fs.lstatSync(file);
       if (stat.isSymbolicLink()) return;
-      if (stat.size > MAX_STREAM_LOG_FILE_BYTES) fs.renameSync(file, `${file}.1`);
+      if (stat.size > MAX_STREAM_LOG_FILE_BYTES) {
+        try {
+          const rotStat = fs.lstatSync(`${file}.1`);
+          if (rotStat.isSymbolicLink()) fs.unlinkSync(`${file}.1`);
+        } catch {}
+        fs.renameSync(file, `${file}.1`);
+      }
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') return;
     }
     fs.appendFileSync(file, chunk, { encoding: 'utf8', mode: 0o600 });
   } catch {
@@ -62,27 +70,38 @@ export const appendHookStreamLog = (file: string, chunk: string): void => {
   }
 };
 
+interface FileCacheEntry<T> {
+  readonly mtimeMs: number;
+  readonly size: number;
+  readonly value: T;
+}
+
+const textFileCache = new Map<string, FileCacheEntry<string>>();
+const statusFileCache = new Map<string, FileCacheEntry<HookStatusReadResult>>();
+const logRecordsCache = new Map<string, FileCacheEntry<HookLogReadResult>>();
+
 const readTextFileSafe = (file: string): string => {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isFile()) return '';
-    return fs.readFileSync(file, 'utf8');
+    const cached = textFileCache.get(file);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+      return cached.value;
+    }
+    const content = fs.readFileSync(file, 'utf8');
+    textFileCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value: content });
+    return content;
   } catch {
+    textFileCache.delete(file);
     return '';
   }
 };
 
 export const readHookStreamLogs = (logFile: string, hookName: string, sessionID?: string): HookStreamLogFiles => {
   const files = resolveHookStreamLogFiles(logFile, hookName, sessionID);
-  const stdout = readTextFileSafe(files.stdout);
-  const stderr = readTextFileSafe(files.stderr);
-  if (stdout.length > 0 || stderr.length > 0 || !sessionID) {
-    return { stdout, stderr };
-  }
-  const globalFiles = resolveHookStreamLogFiles(logFile, hookName);
   return {
-    stdout: readTextFileSafe(globalFiles.stdout),
-    stderr: readTextFileSafe(globalFiles.stderr),
+    stdout: readTextFileSafe(files.stdout),
+    stderr: readTextFileSafe(files.stderr),
   };
 };
 
@@ -90,12 +109,19 @@ export const readHookStatusSnapshot = (file: string): HookStatusReadResult => {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isFile()) return { kind: 'invalid' };
+    const cached = statusFileCache.get(file);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+      return cached.value;
+    }
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (parsed?.version !== 1 || typeof parsed.hooks !== 'object' || parsed.hooks === null) {
       return { kind: 'invalid' };
     }
-    return { kind: 'ok', snapshot: parsed as HookStatusSnapshot };
+    const result: HookStatusReadResult = { kind: 'ok', snapshot: parsed as HookStatusSnapshot };
+    statusFileCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value: result });
+    return result;
   } catch (error) {
+    statusFileCache.delete(file);
     return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? { kind: 'missing' } : { kind: 'invalid' };
   }
 };
@@ -107,6 +133,10 @@ export const readHookLogRecords = (file: string): HookLogReadResult => {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isFile()) return { kind: 'invalid' };
+    const cached = logRecordsCache.get(file);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+      return cached.value;
+    }
     const raw = fs.readFileSync(file, 'utf8');
     const records: HookRunLogRecord[] = [];
     for (const line of raw.split('\n')) {
@@ -120,8 +150,11 @@ export const readHookLogRecords = (file: string): HookLogReadResult => {
         // skip malformed lines
       }
     }
-    return { kind: 'ok', records, truncated: false };
+    const result: HookLogReadResult = { kind: 'ok', records, truncated: false };
+    logRecordsCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value: result });
+    return result;
   } catch (error) {
+    logRecordsCache.delete(file);
     return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? { kind: 'missing' } : { kind: 'invalid' };
   }
 };
@@ -150,8 +183,7 @@ export const readSessionHookLogs = (
   return result.records.filter((r) => {
     if (r.event !== event) return false;
     if (sessionID !== undefined && sessionID.length > 0) {
-      if (r.sessionID === sessionID) return true;
-      if (r.sessionID !== undefined) return false;
+      if (r.sessionID !== sessionID && r.sessionID !== undefined) return false;
     }
     return r.startedAt >= since;
   });

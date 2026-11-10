@@ -59,8 +59,6 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
       configureCommands(typedConfig);
       configureAgents(typedConfig);
 
-      config = typedConfig;
-
       // User scripts run after built-in config mutations; failing closed on rejection.
       if (wrapper !== undefined) {
         await wrapper.dispatch(HookEvent.Config, typedConfig);
@@ -121,9 +119,15 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
     ...hooks,
     ...dispatchHandlers,
     dispose: async () => {
-      await userDispose?.();
-      wrapper.dispose();
-      agentBySession.clear();
+      try {
+        await userDispose?.();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.warn(`[owflow] error during user dispose hook: ${msg}`);
+      } finally {
+        wrapper.dispose();
+        agentBySession.clear();
+      }
     },
   };
 };

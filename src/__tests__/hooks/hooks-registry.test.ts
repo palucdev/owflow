@@ -65,6 +65,26 @@ describe('hooks-registry (scanHooks and validation)', () => {
     ]);
   });
 
+  test('scanHooks correctly maps hyphenated host events like installation.update-available', () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'installation-update-available.sh'), '');
+
+    const valid = scanHooks(hooksDir, {
+      which: (cmd) => (cmd === 'bash' ? '/bin/bash' : null),
+    });
+    expect(valid.failures).toEqual([]);
+    expect(valid.entries).toEqual([
+      {
+        path: path.join(hooksDir, 'installation-update-available.sh'),
+        event: 'installation.update-available',
+        interpreter: { expected: 'bash', available: true, resolved: '/bin/bash' },
+        status: 'registered',
+      },
+    ]);
+  });
+
   test('scanHooks flags invalid files, extensions, stems, excluded/unknown events, and duplicates', () => {
     const root = makeTempDir();
     const hooksDir = path.join(root, '.owflow', 'hooks');

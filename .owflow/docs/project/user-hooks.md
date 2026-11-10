@@ -10,6 +10,9 @@ owflow exposes OpenCode's lifecycle events to the host project as git-style scri
 - The filename stem must be lowercase kebab-case (`[a-z0-9]+(-[a-z0-9]+)*`) and maps mechanically to a dotted event name: `tool-execute-before.sh` → `tool.execute.before`.
 - A stem may also name a v1 **host event** (`HOST_EVENT_NAMES`, 32 events), firing when the single `event` hook receives that type (`session-idle.sh` → `session.idle`).
 - Each hook name may appear **exactly once**, in one format (`.sh` via `bash`, or `.ps1` via `pwsh`/`powershell.exe`). Any non-regular file, unroutable extension, ill-formed stem, duplicate stem, or unknown/excluded event fails the strict startup digest loudly with a recovery `Hint:`.
+- **Digest Modes (`HookDigestMode`)**:
+  - `FailFast` (runtime default): Enforces strict startup integrity (`initializeHooksWrapper`). Any validation failure immediately throws an error and halts plugin startup, preventing ambiguous or malformed hook configurations from silently running.
+  - `Report` (diagnostic mode): Non-throwing scan used by inspection surfaces like the TUI sidebar (`buildActiveHooksView`) and test suites, returning all collected failures alongside valid entries without interrupting the UI process.
 
 ## Hooks Contract
 

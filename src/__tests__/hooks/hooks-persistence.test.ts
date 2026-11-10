@@ -237,6 +237,9 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     // readSessionHookLogs returns all records for that session event
     const ses1ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_1');
     expect(ses1ToolLogs).toEqual([recordA1, recordA2] as HookRunLogRecord[]);
+    // since filter must be respected even when sessionID matches
+    const ses1ToolLogsSince = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 1_500, 'ses_1');
+    expect(ses1ToolLogsSince).toEqual([recordA2] as HookRunLogRecord[]);
     const ses2ToolLogs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_2');
     expect(ses2ToolLogs).toEqual([recordOther] as HookRunLogRecord[]);
     expect(readSessionHookLogs(logFile, HookEvent.Config)).toEqual([recordNoSession] as HookRunLogRecord[]);
@@ -265,11 +268,64 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
       stderr: 'err 1\n',
     });
 
-    // Global fallback when session-specific log does not exist
+    // Does not fall back to global logs when sessionID is provided
     appendHookStreamLog(globalFiles.stdout, 'global config out\n');
-    expect(readHookStreamLogs(logFile, 'config', 'ses_1')).toEqual({
+    expect(readHookStreamLogs(logFile, 'config')).toEqual({
       stdout: 'global config out\n',
       stderr: '',
     });
+    expect(readHookStreamLogs(logFile, 'config', 'ses_1')).toEqual({
+      stdout: '',
+      stderr: '',
+    });
+  });
+
+  test('appendHookStreamLog rejects dangling symlinks and safely replaces symlink rotation targets', () => {
+    const root = makeTempDir();
+    const targetFile = path.join(root, 'target.txt');
+    const symlog = path.join(root, 'dangling-stream.log');
+
+    // 1. Dangling symlink must not be followed or written to
+    fs.symlinkSync(targetFile, symlog);
+    appendHookStreamLog(symlog, 'malicious append');
+    expect(fs.existsSync(targetFile)).toBe(false);
+
+    // 2. Safe rotation target replacement when .1 is a symlink
+    const largeLog = path.join(root, 'large.log');
+    fs.writeFileSync(largeLog, 'x'.repeat(4 * 1024 * 1024 + 10));
+    const rotSym = `${largeLog}.1`;
+    fs.symlinkSync(targetFile, rotSym);
+    appendHookStreamLog(largeLog, 'chunk after rotation');
+    expect(fs.lstatSync(rotSym).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(targetFile)).toBe(false);
+  });
+
+  test('readHookLogRecords and readHookStatusSnapshot return cached results when mtime and size are unchanged', () => {
+    const root = makeTempDir();
+    const logFile = path.join(root, 'cached-log.jsonl');
+    const record = {
+      version: 1,
+      runId: 'tool.execute.before#1',
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: '/hook.sh',
+      name: 'tool-execute-before',
+      startedAt: 1_000,
+      finishedAt: 1_050,
+      durationMs: 50,
+      status: 'success' as const,
+    };
+    fs.writeFileSync(logFile, `${JSON.stringify(record)}\n`);
+
+    const firstRead = readHookLogRecords(logFile);
+    const secondRead = readHookLogRecords(logFile);
+    expect(firstRead).toBe(secondRead);
+
+    const statusFile = path.join(root, 'cached-status.json');
+    fs.writeFileSync(statusFile, JSON.stringify({ version: 1, pid: 1, workspace: root, updatedAt: 100, hooks: {} }));
+    const firstStatus = readHookStatusSnapshot(statusFile);
+    const secondStatus = readHookStatusSnapshot(statusFile);
+    expect(firstStatus).toBe(secondStatus);
   });
 });

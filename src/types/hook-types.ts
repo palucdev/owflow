@@ -67,6 +67,13 @@ export const isHostEventName = (value: string): value is HostEventName => (HOST_
 
 export const isHookEventName = (value: string): value is HookEventName => (HOOK_EVENT_NAMES as readonly string[]).includes(value);
 
+/**
+ * Validation digest mode for `scanHooks`.
+ * - `FailFast`: Throws on any validation failure at startup/runtime to prevent
+ *   running with invalid or ambiguous hooks (fail-closed contract).
+ * - `Report`: Collects failures without throwing, allowing UI surfaces (TUI sidebar)
+ *   and test suites to safely inspect hook status without crashing the process.
+ */
 export enum HookDigestMode {
   FailFast = 'fail-fast',
   Report = 'report',
