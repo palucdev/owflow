@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { interpreterLabel, renderSnapshot } from '../../hooks/hooks-reporting.js';
+import { interpreterLabel, renderSnapshot } from '../../hooks/hooks-diagnostics.js';
 import { HookEvent } from '../../types/hook-types.js';
 
-describe('hooks-reporting (table, snapshot, and json rendering)', () => {
+describe('hooks-diagnostics (table, snapshot, and json rendering)', () => {
   test('interpreterLabel formats interpreter status and resolution', () => {
     expect(interpreterLabel({ expected: 'bash', resolved: '/bin/bash', available: true })).toBe('/bin/bash (available)');
     expect(interpreterLabel({ expected: 'bash', available: true })).toBe('bash (available)');

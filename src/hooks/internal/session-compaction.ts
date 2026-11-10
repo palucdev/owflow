@@ -1,6 +1,6 @@
 import { $ } from 'bun';
 
-import { tasksDirectory } from '../utils/workflow-paths.js';
+import { tasksDirectory } from '../../utils/workflow-paths.js';
 
 /**
  * Post-compaction reminder.

@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scanHooks } from '../../hooks/hooks-discovery.js';
+import { scanHooks } from '../../hooks/hooks-registry.js';
 import { DISPATCHABLE_EVENTS, EXCLUDED_EVENT_NAMES, HOOK_EVENT_NAMES, HOST_EVENT_NAMES, HookDigestMode } from '../../types/hook-types.js';
 
-describe('hooks-discovery (scanHooks and validation)', () => {
+describe('hooks-registry (scanHooks and validation)', () => {
   const tempDirs: string[] = [];
 
   const makeTempDir = (): string => {

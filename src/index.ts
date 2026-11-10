@@ -9,14 +9,14 @@ import { PLUGIN_VERSION } from './utils/plugin-info.js';
 import type { OpenCodeConfig } from './types/opencode-types.js';
 import { verify_template } from './tools/verify_template.js';
 import { fork_task } from './tools/fork_task.js';
-import { rereadOrchestratorState } from './hooks/session-compaction.js';
-import { guardAgainstDestructiveActions } from './hooks/before-tool.js';
+import { rereadOrchestratorState } from './hooks/internal/session-compaction.js';
+import { guardAgainstDestructiveActions } from './hooks/internal/before-tool.js';
 import { configureSkills } from './configuration/skills-config.js';
 import { configureCommands } from './configuration/commands-config.js';
 import { configureAgents } from './configuration/agents-config.js';
-import { createDispatchHandlers, initializeHooksWrapper } from './hooks/hooks-wrapper.js';
+import { createDispatchHandlers, initializeHooksWrapper } from './hooks/hooks-runtime.js';
 import { HookEvent, type HookReportInput } from './types/hook-types.js';
-import { renderSnapshot } from './hooks/hooks-reporting.js';
+import { renderSnapshot } from './hooks/hooks-diagnostics.js';
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 

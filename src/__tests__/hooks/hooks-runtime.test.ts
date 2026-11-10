@@ -13,11 +13,11 @@ import {
   HOOK_TIMEOUT_ENV,
   initializeHooksWrapper,
   MAX_LOG_FILE_BYTES,
-} from '../../hooks/hooks-wrapper.js';
-import { readHookLogRecords, readHookStreamLogs, readSessionHookLogs } from '../../hooks/hooks-logs.js';
+} from '../../hooks/hooks-runtime.js';
+import { readHookLogRecords, readHookStreamLogs, readSessionHookLogs } from '../../hooks/hooks-persistence.js';
 import { HookEvent, HookRunState } from '../../types/hook-types.js';
 
-describe('hooks-wrapper (runtime execution & dispatch wrapper)', () => {
+describe('hooks-runtime (execution & dispatch runtime)', () => {
   const tempDirs: string[] = [];
 
   const makeTempDir = (): string => {

@@ -15,8 +15,8 @@ import {
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
-import { appendHookStreamLog, resolveHookStreamLogFiles, resolveHooksLogFile, resolveHooksStatusFile } from './hooks-logs.js';
-import { scanHooks } from './hooks-discovery.js';
+import { appendHookStreamLog, resolveHookStreamLogFiles, resolveHooksLogFile, resolveHooksStatusFile } from './hooks-persistence.js';
+import { scanHooks } from './hooks-registry.js';
 
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;

@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildActiveHooksView, colorForStatus, formatHookLogsMessage, formatHookRunSummary, statusLabelFor } from '../../tui/hooks-formatting.js';
+import { buildActiveHooksView, colorForStatus, formatHookLogsMessage, formatHookRunSummary, statusLabelFor } from '../../tui/hooks-presenter.js';
 import { THEME, makeLogRecord } from './primitives.js';
 import { HookRunState } from '../../types/hook-types.js';
 
-describe('TUI hook-formatting', () => {
+describe('TUI hooks-presenter', () => {
   let tmpDir: string;
   let hooksDir: string;
 

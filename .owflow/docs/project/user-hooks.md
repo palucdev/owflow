@@ -2,7 +2,7 @@
 
 ## Overview
 
-owflow exposes OpenCode's lifecycle events to the host project as git-style script hooks. Every regular file in `<project>/.owflow/hooks/` is validated at plugin initialization and dispatched through owflow's hook handlers — first the built-in destructive-command guard, then the project's scripts. Discovery and validation live in `src/hooks/hooks-discovery.ts`, reporting in `src/hooks/hooks-reporting.ts`, and runtime log readers in `src/hooks/hook-logs.ts`, with process execution, status/log writing, and dispatch wrapping in `src/hooks/hooks-wrapper.ts`; the TUI (`src/tui.ts`) provides the interactive surface.
+owflow exposes OpenCode's lifecycle events to the host project as git-style script hooks. Every regular file in `<project>/.owflow/hooks/` is validated at plugin initialization and dispatched through owflow's hook handlers — first the built-in destructive-command guard, then the project's scripts. Discovery and validation live in `src/hooks/hooks-registry.ts`, reporting in `src/hooks/hooks-diagnostics.ts`, and runtime log readers in `src/hooks/hooks-persistence.ts`, with process execution, status/log writing, and dispatch wrapping in `src/hooks/hooks-runtime.ts`; the TUI (`src/tui.ts`) provides the interactive surface.
 
 ## Discovery and Naming
 

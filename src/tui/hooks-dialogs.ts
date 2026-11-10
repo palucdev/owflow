@@ -1,8 +1,8 @@
 import type { TuiPluginApi } from '@opencode-ai/plugin/tui';
 import { HookRunState, type HookEventName, type HookRunLogRecord, type HookRuntimeEntry } from '../types/hook-types.js';
-import { formatHookLogsMessage, formatHookRunSummary, type ActiveHookRow } from './hooks-formatting.js';
+import { formatHookLogsMessage, formatHookRunSummary, type ActiveHookRow } from './hooks-presenter.js';
 import { el, txt, type SidebarTheme, type SolidElement, type SolidRuntime } from './primitives.js';
-import { readHookStatusSnapshot, readHookStreamLogs, readSessionHookLogs } from '../hooks/hooks-logs.js';
+import { readHookStatusSnapshot, readHookStreamLogs, readSessionHookLogs } from '../hooks/hooks-persistence.js';
 
 const SHOW_LOGS_LABEL = 'View logs';
 const DETAIL_DIALOG_SIZE = 'large';

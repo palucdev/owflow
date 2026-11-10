@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { guardAgainstDestructiveActions } from '../../hooks/before-tool.js';
+import { guardAgainstDestructiveActions } from '../../../hooks/internal/before-tool.js';
 
 describe('guardAgainstDestructiveActions', () => {
   const defaultInput = {

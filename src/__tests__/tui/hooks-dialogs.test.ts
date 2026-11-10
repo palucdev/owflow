@@ -3,7 +3,7 @@ import type { TimerHandler } from 'bun';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import * as hookLogs from '../../hooks/hooks-logs.js';
+import * as hookLogs from '../../hooks/hooks-persistence.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
 import { buildHookLogsBody, buildHookRunDetailBody, getActiveDialogHandle } from '../../tui/hooks-dialogs.js';
 import { HookRunState } from '../../types/hook-types.js';

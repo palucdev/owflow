@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import type { TuiPluginApi, TuiPluginModule } from '@opencode-ai/plugin/tui';
-import { readHookStatusSnapshot, readSessionLatestLogs, resolveHooksLogFile, resolveHooksStatusFile } from './hooks/hooks-logs.js';
+import { readHookStatusSnapshot, readSessionLatestLogs, resolveHooksLogFile, resolveHooksStatusFile } from './hooks/hooks-persistence.js';
 import { type HookRunState, type HookRuntimeEntry } from './types/hook-types.js';
 import {
   DEFAULT_LOG_CHUNK_LINES,
@@ -19,7 +19,7 @@ import {
   statusLabelFor,
   type ActiveHookRow,
   type ActiveHooksView,
-} from './tui/hooks-formatting.js';
+} from './tui/hooks-presenter.js';
 import { materializeSidebar, type SidebarRenderHandle } from './tui/hooks-sidebar.js';
 import { loadSolidRuntime, type SidebarTheme, type SolidRuntime } from './tui/primitives.js';
 

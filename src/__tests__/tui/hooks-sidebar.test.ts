@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import * as hookLogs from '../../hooks/hooks-logs.js';
+import * as hookLogs from '../../hooks/hooks-persistence.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
 import { THEME, collectText, findClickableByContent, makeFakeApi, makeSolid, wait } from './primitives.js';
 import type { TimerHandler } from 'bun';

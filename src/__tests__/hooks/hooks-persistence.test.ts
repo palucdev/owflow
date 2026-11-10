@@ -15,10 +15,10 @@ import {
   resolveHookStreamLogFiles,
   STATUS_FILE_ENV,
   type HookRunLogRecord,
-} from '../../hooks/hooks-logs.js';
+} from '../../hooks/hooks-persistence.js';
 import { HookEvent } from '../../types/hook-types.js';
 
-describe('hook-logs (status and log file readers and resolvers)', () => {
+describe('hooks-persistence (status and log file readers and resolvers)', () => {
   const tempDirs: string[] = [];
 
   const makeTempDir = (): string => {

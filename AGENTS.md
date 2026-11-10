@@ -51,10 +51,10 @@ All workflows in this plugin follow this pattern when failures occur:
 
 ## Hooks
 
-The plugin registers OpenCode lifecycle hooks from its entry point (`src/index.ts`), implemented in `src/hooks/` and shipped in `dist/hooks/`:
+The plugin registers OpenCode lifecycle hooks from its entry point (`src/index.ts`), implemented in `src/hooks/internal/` and shipped in `dist/hooks/internal/`:
 
-- `src/hooks/before-tool.ts` — `tool.execute.before`
-- `src/hooks/session-compaction.ts` — `experimental.session.compacting`
+- `src/hooks/internal/before-tool.ts` — `tool.execute.before`
+- `src/hooks/internal/session-compaction.ts` — `experimental.session.compacting`
 
 ### Destructive Command Protection (`tool.execute.before`)
 
@@ -70,7 +70,7 @@ Fires after context compaction. Injects a reminder to re-read `orchestrator-stat
 
 ### User Hooks Wrapper (`.owflow/hooks/`)
 
-Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. Discovery and validation live in `src/hooks/hooks-discovery.ts`, reporting in `src/hooks/hooks-reporting.ts`, and runtime log readers in `src/hooks/hook-logs.ts`, with process execution, status/log writing, and dispatch wrapping in `src/hooks/hooks-wrapper.ts`; `src/tui.ts` (TUI) provides the interactive surface.
+Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. Discovery and validation live in `src/hooks/hooks-registry.ts`, reporting in `src/hooks/hooks-diagnostics.ts`, and runtime log readers in `src/hooks/hooks-persistence.ts`, with process execution, status/log writing, and dispatch wrapping in `src/hooks/hooks-runtime.ts`; `src/tui.ts` (TUI) provides the interactive surface.
 
 - Scripts are named `kebab-event.ext` (`tool-execute-before.sh` → `tool.execute.before`) and run as subprocesses; supported extensions are `.sh` and `.ps1`.
 - A stem may also name a v1 host event (`session-idle.sh` → `session.idle`). These fire only for their matching `event.type` via the single `event` hook, and accept the pinned `HOST_EVENT_NAMES` set (32 events); v2-only `session.next.*` names are rejected.

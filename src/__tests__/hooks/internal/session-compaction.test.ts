@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { rereadOrchestratorState } from '../../hooks/session-compaction.js';
+import { rereadOrchestratorState } from '../../../hooks/internal/session-compaction.js';
 
 describe('rereadOrchestratorState', () => {
   let tmpDir: string;
