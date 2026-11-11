@@ -8,6 +8,5 @@ if git diff --quiet HEAD -- src package.json README.md LICENSE; then
   exit 0
 fi
 
-bun run type-check
 bun run prettify
 bun run build

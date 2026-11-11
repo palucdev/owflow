@@ -13,12 +13,19 @@ import {
   HOOK_TIMEOUT_ENV,
   initializeHooksWrapper,
   DEFAULT_HOOK_TIMEOUT_MS,
+  flushStatusFileAtomic,
   MAX_LOG_FILE_BYTES,
-  MAX_STREAM_BUFFER_BYTES,
   NON_SESSION_STREAM_CAP_BYTES,
   readStream,
+  STATUS_DEBOUNCE_MS,
 } from '../../hooks/hooks-runtime.js';
-import { readHookLogRecords, readSessionHookLogs, resolveHooksLatestSymlink, resolveHooksLogFile } from '../../hooks/hooks-persistence.js';
+import {
+  readHookLogRecords,
+  readHookStatusSnapshot,
+  readSessionHookLogs,
+  resolveHooksLatestSymlink,
+  resolveHooksLogFile,
+} from '../../hooks/hooks-persistence.js';
 import { HookEvent, HookRunState } from '../../types/hook-types.js';
 
 describe('hooks-runtime (execution & dispatch runtime)', () => {
@@ -629,13 +636,13 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     wrapper.dispose();
   });
 
-  test('default 30s timeout triggers when OWFLOW_HOOK_TIMEOUT_MS is unset, and is disabled when set to 0', async () => {
+  test('default 2m timeout triggers when OWFLOW_HOOK_TIMEOUT_MS is unset, and is disabled when set to 0', async () => {
     const root = makeTempDir();
     const hooksDir = path.join(root, '.owflow', 'hooks');
     fs.mkdirSync(hooksDir, { recursive: true });
     fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
 
-    expect(DEFAULT_HOOK_TIMEOUT_MS).toBe(30_000);
+    expect(DEFAULT_HOOK_TIMEOUT_MS).toBe(120_000);
 
     const prevTimeout = process.env[HOOK_TIMEOUT_ENV];
     delete process.env[HOOK_TIMEOUT_ENV];
@@ -659,13 +666,15 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     };
 
     const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
+    const setTimeoutSpy = spyOn(globalThis, 'setTimeout');
     try {
-      const origSetTimeout = globalThis.setTimeout;
       let recordedDelay: number | undefined;
-      spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
-        recordedDelay = ms;
-        // do not wait 30s in test, trigger immediately
-        fn();
+      setTimeoutSpy.mockImplementation(((fn: () => void, ms?: number) => {
+        if (ms !== STATUS_DEBOUNCE_MS) {
+          recordedDelay = ms;
+          // do not wait 2m in test, trigger immediately
+          fn();
+        }
         return 1 as any;
       }) as typeof setTimeout);
 
@@ -674,16 +683,18 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
         logFile: path.join(root, 'l.jsonl'),
       });
 
-      await expect(wrapper.dispatch(HookEvent.Config, {})).rejects.toThrow(/timed out after 30000ms/);
-      expect(recordedDelay).toBe(30_000);
+      await expect(wrapper.dispatch(HookEvent.Config, {})).rejects.toThrow(/timed out after 120000ms/);
+      expect(recordedDelay).toBe(120_000);
       expect(killed).toBe(true);
       wrapper.dispose();
 
       // Now verify timeout is disabled when set to 0
       process.env[HOOK_TIMEOUT_ENV] = '0';
       let timeoutScheduled = false;
-      (globalThis.setTimeout as any).mockImplementation(((fn: () => void, ms?: number) => {
-        timeoutScheduled = true;
+      setTimeoutSpy.mockImplementation(((fn: () => void, ms?: number) => {
+        if (ms !== STATUS_DEBOUNCE_MS) {
+          timeoutScheduled = true;
+        }
         return 1 as any;
       }) as typeof setTimeout);
 
@@ -705,6 +716,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       expect(timeoutScheduled).toBe(false);
       wrapper2.dispose();
     } finally {
+      setTimeoutSpy.mockRestore();
       spawnSpy.mockRestore();
       if (prevTimeout === undefined) delete process.env[HOOK_TIMEOUT_ENV];
       else process.env[HOOK_TIMEOUT_ENV] = prevTimeout;
@@ -798,6 +810,93 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       expect(warnLines.some((l) => l.includes('catch-all event hook failed'))).toBe(true);
     } finally {
       warnSpy.mockRestore();
+    }
+  });
+
+  test('debounces transient PENDING status writes and atomically flushes terminal states', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+
+    const statusFile = path.join(root, 'status.json');
+    const logFile = path.join(root, 'logs.jsonl');
+
+    let renameCount = 0;
+    const origRenameSync = fs.renameSync;
+    const renameSpy = spyOn(fs, 'renameSync').mockImplementation((oldPath, newPath) => {
+      if (typeof newPath === 'string' && newPath.includes('status.json')) {
+        renameCount += 1;
+      }
+      return origRenameSync(oldPath, newPath);
+    });
+
+    try {
+      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+      expect(renameCount).toBe(1);
+
+      await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
+      expect(renameCount).toBe(2);
+
+      const status = readHookStatusSnapshot(statusFile);
+      expect(status.kind).toBe('ok');
+      if (status.kind === 'ok') {
+        expect(status.snapshot.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
+      }
+
+      wrapper.dispose();
+    } finally {
+      renameSpy.mockRestore();
+    }
+  });
+
+  test('flushes PENDING status after debounce delay for slow hooks and clears timer on dispose', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nsleep 0.12\nexit 0\n', { mode: 0o755 });
+
+    const statusFile = path.join(root, 'status-slow.json');
+    const logFile = path.join(root, 'logs-slow.jsonl');
+
+    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+    const dispatchPromise = wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
+
+    await new Promise((r) => setTimeout(r, 15));
+    let status = readHookStatusSnapshot(statusFile);
+    expect(status.kind === 'ok' && status.snapshot.hooks[HookEvent.ToolExecuteBefore]).toBeUndefined();
+
+    await new Promise((r) => setTimeout(r, 65));
+    status = readHookStatusSnapshot(statusFile);
+    expect(status.kind).toBe('ok');
+    if (status.kind === 'ok') {
+      expect(status.snapshot.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.PENDING);
+    }
+
+    await dispatchPromise;
+    status = readHookStatusSnapshot(statusFile);
+    expect(status.kind).toBe('ok');
+    if (status.kind === 'ok') {
+      expect(status.snapshot.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
+    }
+
+    wrapper.dispose();
+  });
+
+  test('flushStatusFileAtomic cleans up .tmp file when write or rename throws', () => {
+    const root = makeTempDir();
+    const statusFile = path.join(root, 'atomic-status.json');
+    const tmpFile = `${statusFile}.${process.pid}.tmp`;
+
+    const renameSpy = spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw new Error('EACCES: mock rename failure');
+    });
+
+    try {
+      flushStatusFileAtomic(statusFile, root, new Map());
+      expect(fs.existsSync(tmpFile)).toBe(false);
+    } finally {
+      renameSpy.mockRestore();
     }
   });
 });

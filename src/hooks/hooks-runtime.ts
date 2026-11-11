@@ -18,7 +18,7 @@ import { hooksDirectory } from '../utils/workflow-paths.js';
 import { appendWithRotation, resolveHooksLatestSymlink, resolveHooksLogFile, resolveHooksStatusFile } from './hooks-persistence.js';
 import { scanHooks } from './hooks-registry.js';
 
-export const DEFAULT_HOOK_TIMEOUT_MS = 30_000;
+export const DEFAULT_HOOK_TIMEOUT_MS = 120_000;
 export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
 export const MAX_STREAM_BUFFER_BYTES = 4 * 1024 * 1024;
@@ -125,10 +125,9 @@ export const readStream = async (
   return result;
 };
 
-// shortcut: synchronous writeFileSync per hook state transition without trailing debounce or .tmp rename;
-// ceiling: >100 hook fires/sec causing tmp file contention or partial reads;
-// upgrade: 50ms trailing debounce with write-to-tmp-and-rename.
-const writeStatusFile = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
+export const STATUS_DEBOUNCE_MS = 50;
+
+export const flushStatusFileAtomic = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     try {
@@ -143,8 +142,19 @@ const writeStatusFile = (file: string, workspace: string, hooks: ReadonlyMap<str
       updatedAt: Date.now(),
       hooks: Object.fromEntries(hooks),
     };
-    fs.writeFileSync(file, JSON.stringify(snapshot), { encoding: 'utf8', mode: 0o600 });
+    const tmpFile = `${file}.${process.pid}.tmp`;
+    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW ?? 0);
+    const fd = fs.openSync(tmpFile, flags, 0o600);
+    try {
+      fs.writeFileSync(fd, JSON.stringify(snapshot), { encoding: 'utf8' });
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmpFile, file);
   } catch {
+    try {
+      fs.unlinkSync(`${file}.${process.pid}.tmp`);
+    } catch {}
     // Best-effort status persistence never affects hook execution.
   }
 };
@@ -164,8 +174,28 @@ export const initializeHooksWrapper = async (
   const breakers = new Map<string, CircuitBreakerEntry>();
   let runCounter = 0;
   const writtenRunRecords = new Set<string>();
+  let statusTimer: ReturnType<typeof setTimeout> | undefined;
 
-  writeStatusFile(statusFile, directory, statuses);
+  const flushStatus = (): void => {
+    if (statusTimer !== undefined) {
+      clearTimeout(statusTimer);
+      statusTimer = undefined;
+    }
+    flushStatusFileAtomic(statusFile, directory, statuses);
+  };
+
+  const schedulePendingStatus = (): void => {
+    if (statusTimer !== undefined) {
+      clearTimeout(statusTimer);
+    }
+    statusTimer = setTimeout(() => {
+      statusTimer = undefined;
+      flushStatusFileAtomic(statusFile, directory, statuses);
+    }, STATUS_DEBOUNCE_MS);
+    statusTimer.unref?.();
+  };
+
+  flushStatus();
 
   const appendLog = (record: HookRunLogRecord): void => {
     try {
@@ -232,7 +262,7 @@ export const initializeHooksWrapper = async (
           reason,
           ...(sessionID ? { sessionID } : {}),
         });
-        writeStatusFile(statusFile, directory, statuses);
+        flushStatus();
         appendLog({
           version: 1,
           runId,
@@ -262,7 +292,7 @@ export const initializeHooksWrapper = async (
           reason,
           ...(sessionID ? { sessionID } : {}),
         });
-        writeStatusFile(statusFile, directory, statuses);
+        flushStatus();
         appendLog({
           version: 1,
           runId,
@@ -291,7 +321,7 @@ export const initializeHooksWrapper = async (
         startedAt,
         ...(sessionID ? { sessionID } : {}),
       });
-      writeStatusFile(statusFile, directory, statuses);
+      schedulePendingStatus();
 
       if (process.env.OWFLOW_DEBUG === '1') {
         console.error(`[owflow:debug] [${event}] Spawning ${entry.path} (stdin: ${stdinText.length} bytes)`);
@@ -318,7 +348,7 @@ export const initializeHooksWrapper = async (
           reason,
           ...(sessionID ? { sessionID } : {}),
         });
-        writeStatusFile(statusFile, directory, statuses);
+        flushStatus();
         appendLog({
           version: 1,
           runId,
@@ -420,7 +450,7 @@ export const initializeHooksWrapper = async (
       if (ok && event === HookEvent.Event && !rawStdout.trim() && !rawStderr.trim()) {
         if (previousStatus) statuses.set(event, previousStatus);
         else statuses.delete(event);
-        writeStatusFile(statusFile, directory, statuses);
+        flushStatus();
         continue;
       }
 
@@ -438,7 +468,7 @@ export const initializeHooksWrapper = async (
         ...(reason ? { reason } : {}),
         ...(sessionID ? { sessionID } : {}),
       });
-      writeStatusFile(statusFile, directory, statuses);
+      flushStatus();
 
       const loggedStdout =
         !sessionID && rawStdout.length > NON_SESSION_STREAM_CAP_BYTES ? rawStdout.slice(0, NON_SESSION_STREAM_CAP_BYTES) : rawStdout;
@@ -480,6 +510,7 @@ export const initializeHooksWrapper = async (
     dispatch,
     snapshot: { entries },
     dispose: () => {
+      flushStatus();
       for (const proc of activeProcs) {
         try {
           proc.kill();
