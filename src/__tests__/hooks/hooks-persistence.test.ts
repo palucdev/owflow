@@ -46,12 +46,21 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     expect(resolveHooksLogFile(root)).toContain(userDir);
     expect(resolveHooksLogFile(root)).toContain('owflow-hook-logs-');
 
+    // Per-hook log file naming and fallback without hookName
+    expect(resolveHooksLogFile(root, 'tool-execute-before')).toBe(
+      path.join(userDir, `owflow-hook-logs-${workspaceKey(root)}-tool-execute-before.jsonl`),
+    );
+    expect(resolveHooksLogFile(root)).toBe(path.join(userDir, `owflow-hook-logs-${workspaceKey(root)}.jsonl`));
+
     // Non-existent workspace still resolves
     const nonExistent = path.join(root, 'does-not-exist');
     expect(resolveHooksStatusFile(nonExistent)).toContain(userDir);
     expect(resolveHooksStatusFile(nonExistent)).toContain('owflow-hooks-');
     expect(resolveHooksLogFile(nonExistent)).toContain(userDir);
     expect(resolveHooksLogFile(nonExistent)).toContain('owflow-hook-logs-');
+    expect(resolveHooksLogFile(nonExistent, 'chat-message')).toBe(
+      path.join(userDir, `owflow-hook-logs-${workspaceKey(nonExistent)}-chat-message.jsonl`),
+    );
 
     const prevStatus = process.env[STATUS_FILE_ENV];
     const prevLog = process.env[LOG_FILE_ENV];
@@ -60,6 +69,7 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     try {
       expect(resolveHooksStatusFile(root)).toBe('/tmp/override-status.json');
       expect(resolveHooksLogFile(root)).toBe('/tmp/override-log.jsonl');
+      expect(resolveHooksLogFile(root, 'tool-execute-before')).toBe('/tmp/override-log.jsonl');
     } finally {
       if (prevStatus === undefined) delete process.env[STATUS_FILE_ENV];
       else process.env[STATUS_FILE_ENV] = prevStatus;
@@ -330,6 +340,12 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     const symlinkPath2 = resolveHooksLatestSymlink(root);
     expect(symlinkPath2).toBe(symlinkPath);
     expect(fs.lstatSync(symlinkPath2).isSymbolicLink()).toBe(true);
+
+    // Calling it with a targetLogFile updates the symlink to that target
+    const targetFile = resolveHooksLogFile(root, 'tool-execute-before');
+    const updatedSymlink = resolveHooksLatestSymlink(root, targetFile);
+    expect(updatedSymlink).toBe(symlinkPath);
+    expect(fs.readlinkSync(symlinkPath)).toBe(targetFile);
   });
 
   test('resolveHooksLatestSymlink maintains distinct symlinks across multiple workspaces without collision', () => {

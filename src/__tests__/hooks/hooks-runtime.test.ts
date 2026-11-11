@@ -18,7 +18,7 @@ import {
   NON_SESSION_STREAM_CAP_BYTES,
   readStream,
 } from '../../hooks/hooks-runtime.js';
-import { readHookLogRecords, readSessionHookLogs } from '../../hooks/hooks-persistence.js';
+import { readHookLogRecords, readSessionHookLogs, resolveHooksLatestSymlink, resolveHooksLogFile } from '../../hooks/hooks-persistence.js';
 import { HookEvent, HookRunState } from '../../types/hook-types.js';
 
 describe('hooks-runtime (execution & dispatch runtime)', () => {
@@ -176,6 +176,52 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       'tool.execute.before#4',
       'tool.execute.before#5',
     ]);
+
+    wrapper.dispose();
+  });
+
+  test('isolates runtime logs into per-hook files and updates latest symlink', async () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+
+    const hook1 = path.join(hooksDir, 'tool-execute-before.sh');
+    const hook2 = path.join(hooksDir, 'chat-message.sh');
+    fs.writeFileSync(hook1, '#!/usr/bin/env bash\necho "tool out"\nexit 0\n', { mode: 0o755 });
+    fs.writeFileSync(hook2, '#!/usr/bin/env bash\necho "chat out"\nexit 0\n', { mode: 0o755 });
+
+    const statusFile = path.join(root, 'status-isolated.json');
+    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile });
+    const sessionID = 'ses_per_hook';
+    const latestSymlink = resolveHooksLatestSymlink(root);
+
+    // Dispatch tool.execute.before
+    await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID }, {});
+
+    const logFileTool = resolveHooksLogFile(root, 'tool-execute-before');
+    const logFileChat = resolveHooksLogFile(root, 'chat-message');
+
+    expect(fs.existsSync(logFileTool)).toBe(true);
+    expect(fs.existsSync(logFileChat)).toBe(false);
+    expect(fs.readlinkSync(latestSymlink)).toBe(logFileTool);
+
+    const toolLogs = readHookLogRecords(logFileTool);
+    expect(toolLogs.kind === 'ok' && toolLogs.records.length).toBe(1);
+    expect(toolLogs.kind === 'ok' && toolLogs.records[0].name).toBe('tool-execute-before');
+
+    // Dispatch chat.message
+    await wrapper.dispatch(HookEvent.ChatMessage, { sessionID }, {});
+
+    expect(fs.existsSync(logFileChat)).toBe(true);
+    expect(fs.readlinkSync(latestSymlink)).toBe(logFileChat);
+
+    const chatLogs = readHookLogRecords(logFileChat);
+    expect(chatLogs.kind === 'ok' && chatLogs.records.length).toBe(1);
+    expect(chatLogs.kind === 'ok' && chatLogs.records[0].name).toBe('chat-message');
+
+    // Verify tool log file still only has its 1 record (isolated!)
+    const toolLogsAfter = readHookLogRecords(logFileTool);
+    expect(toolLogsAfter.kind === 'ok' && toolLogsAfter.records.length).toBe(1);
 
     wrapper.dispose();
   });

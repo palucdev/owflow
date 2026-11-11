@@ -48,7 +48,6 @@ export const registerActiveHooksSidebar = async (
 
   const view = buildActiveHooksView(directory);
   const statusFile = resolveHooksStatusFile(directory);
-  const logFile = resolveHooksLogFile(directory);
   const handles: SidebarRenderHandle[] = [];
   let statuses = new Map<string, HookRuntimeEntry>();
   let lastMtime: number | undefined;
@@ -101,12 +100,14 @@ export const registerActiveHooksSidebar = async (
         const notBefore = sessionEpochs.get(key) ?? (sessionEpochs.set(key, Date.now()), sessionEpochs.get(key)!);
         const initialStates = new Map<string, HookRunState>();
         if (sessionID !== undefined && sessionID.length > 0) {
-          try {
-            const sessionLogs = readSessionLatestLogs(logFile, sessionID);
-            for (const [event, rec] of sessionLogs) {
-              initialStates.set(event, rec.status);
-            }
-          } catch {}
+          for (const row of view.rows) {
+            try {
+              const rowLogFile = resolveHooksLogFile(directory, row.name);
+              const sessionLogs = readSessionLatestLogs(rowLogFile, sessionID);
+              const rec = sessionLogs.get(row.event);
+              if (rec) initialStates.set(row.event, rec.status);
+            } catch {}
+          }
         }
         const handle = materializeSidebar(
           view,
@@ -114,7 +115,8 @@ export const registerActiveHooksSidebar = async (
           solid,
           (row, theme) => {
             if (pollingEnabled) {
-              openHookLogPopup(api, solid, logFile, row, theme, notBefore, sessionID, statusFile, statuses.get(row.event));
+              const rowLogFile = resolveHooksLogFile(directory, row.name);
+              openHookLogPopup(api, solid, rowLogFile, row, theme, notBefore, sessionID, statusFile, statuses.get(row.event));
             }
           },
           () => api.renderer.requestRender(),

@@ -157,7 +157,6 @@ export const initializeHooksWrapper = async (
   const { entries } = scanHooks(hooksDirectory(directory));
   const byEvent = Map.groupBy(entries, (e) => e.event);
   const statusFile = options.statusFile ?? resolveHooksStatusFile(directory);
-  const logFile = options.logFile ?? resolveHooksLogFile(directory);
   resolveHooksLatestSymlink(directory);
   const statuses = new Map<string, HookRuntimeEntry>();
   const activeProcs = new Set<ReturnType<typeof Bun.spawn>>();
@@ -174,7 +173,11 @@ export const initializeHooksWrapper = async (
       const recordKey = `${record.runId}:${record.status}`;
       if (writtenRunRecords.has(recordKey)) return;
 
-      appendWithRotation(logFile, JSON.stringify(record));
+      const targetLogFile = options.logFile ?? resolveHooksLogFile(directory, record.name);
+      appendWithRotation(targetLogFile, JSON.stringify(record));
+      if (!options.logFile) {
+        resolveHooksLatestSymlink(directory, targetLogFile);
+      }
       writtenRunRecords.add(recordKey);
 
       // Bounded set eviction to prevent memory growth across thousands of runs

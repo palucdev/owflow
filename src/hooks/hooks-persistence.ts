@@ -38,12 +38,21 @@ export const getUserTmpDir = (): string => {
 export const resolveHooksStatusFile = (workspace: string): string =>
   process.env[STATUS_FILE_ENV] ?? path.join(getUserTmpDir(), `owflow-hooks-${workspaceKey(workspace)}.json`);
 
-export const resolveHooksLogFile = (workspace: string): string =>
-  process.env[LOG_FILE_ENV] ?? path.join(getUserTmpDir(), `owflow-hook-logs-${workspaceKey(workspace)}.jsonl`);
+const sanitizeHookStem = (hookName?: string): string => {
+  if (!hookName) return '';
+  const cleaned = path
+    .basename(hookName)
+    .replace(/[^a-z0-9-]/gi, '-')
+    .replace(/^-+|-+$/g, '');
+  return cleaned.length > 0 ? `-${cleaned}` : '';
+};
 
-export const resolveHooksLatestSymlink = (workspace: string): string => {
+export const resolveHooksLogFile = (workspace: string, hookName?: string): string =>
+  process.env[LOG_FILE_ENV] ?? path.join(getUserTmpDir(), `owflow-hook-logs-${workspaceKey(workspace)}${sanitizeHookStem(hookName)}.jsonl`);
+
+export const resolveHooksLatestSymlink = (workspace: string, targetLogFile?: string): string => {
   const symlinkPath = path.join(getUserTmpDir(), `owflow-hooks-latest-${workspaceKey(workspace)}.jsonl`);
-  const target = resolveHooksLogFile(workspace);
+  const target = targetLogFile ?? resolveHooksLogFile(workspace);
   try {
     fs.mkdirSync(path.dirname(symlinkPath), { recursive: true, mode: 0o700 });
     try {

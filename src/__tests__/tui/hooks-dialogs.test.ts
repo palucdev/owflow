@@ -34,7 +34,7 @@ describe('TUI hook-dialogs', () => {
       fs.writeFileSync(logFile, `${JSON.stringify(record)}\n`, 'utf8');
 
       spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(path.join(tmpDir, 'status.json'));
-      spyOn(hookLogs, 'resolveHooksLogFile').mockReturnValue(logFile);
+      const logSpy = spyOn(hookLogs, 'resolveHooksLogFile').mockReturnValue(logFile);
       spyOn(Date, 'now').mockReturnValue(0);
 
       const { api, slots, dialogCalls } = makeFakeApi(tmpDir);
@@ -53,6 +53,7 @@ describe('TUI hook-dialogs', () => {
       hookRow!.props.onMouseOut?.();
       (hookRow!.props.onMouseUp as () => void)();
       expect(dialogCalls).toHaveLength(1);
+      expect(logSpy).toHaveBeenCalledWith(tmpDir, 'tool-execute-before');
 
       const detail = dialogCalls[0]!.render() as FakeNode;
       const detailText = collectText(detail);
