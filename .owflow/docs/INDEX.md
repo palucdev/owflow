@@ -32,11 +32,11 @@ Languages, Bun/Node tooling, runtime dependencies, build & runtime flow diagram,
 
 ### Architecture (`project/architecture.md`)
 
-Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown-defined workflow engine with per-task state machine with per-workflow slugs; layered system structure, distribution/context diagram, data flow, and invocation sequence diagram.
+Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown-defined workflow engine with per-task state machine with per-workflow slugs; layered system structure, hooks runtime modular decomposition and interactive TUI bridge, distribution/context diagram, data flow, and invocation sequence diagram.
 
 ### User Hooks (`project/user-hooks.md`)
 
-User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; universal gate fail-closed semantics across all 16 lifecycle events and 32 host events; supported extensions and interpreters (`.sh`/`.ps1` subprocess scripts); event-named files for the 32 v1 host events (`session-idle.sh` → `session.idle`, fanned out from the single `event` hook); the same runnable logging example in both formats; stdin JSON payload and git-hooks exit-code semantics; strict-digest fail-fast vs report mode (the hooks directory may contain only hook scripts) and the `OWFLOW_HOOKS_DISABLED=1` bypass; visibility surfaces (startup banner, always-on TUI Active hooks sidebar panel with click-to-open latest-run popup) with restart-to-reload semantics; automatic bounded runtime logs (per-workspace JSONL, stderr capture, caps, one-file rotation, `OWFLOW_HOOK_LOGS_FILE`); one-format-per-hook-name strict digest; and the baseline trust model.
+User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; universal gate fail-closed semantics across all 16 lifecycle events and 32 host events; supported extensions and interpreters (`.sh`/`.ps1` subprocess scripts with PowerShell execution flags); modular execution architecture in `src/hooks/runtime/`; event-named files for the 32 v1 host events (`session-idle.sh` → `session.idle`, fanned out from the single `event` hook); the same runnable logging example in both formats; stdin JSON payload and git-hooks exit-code semantics; strict-digest fail-fast vs report mode (the hooks directory may contain only hook scripts) and the `OWFLOW_HOOKS_DISABLED=1` bypass; visibility surfaces (startup banner, always-on TUI Active hooks sidebar panel with click-to-open latest-run popup) with restart-to-reload semantics; isolated per-hook JSONL runtime logs (`owflow-hook-logs-<workspace-hash>-<hook-name>.jsonl`, 4 MB rotation) with workspace-scoped latest symlink (`owflow-hooks-latest-<workspace-hash>.jsonl`); bounded 256 KB tail-slice reader with mtime/size cache; `runId:status` bounded deduplication set (1,000 entries) preserving complete session run history; atomic temp-file status snapshots with 50ms trailing debounce on transient `PENDING` states and immediate flush on terminal states; and the baseline trust model.
 
 ---
 
@@ -152,5 +152,5 @@ Single release gate (`bun run build`: clean `dist/`, type-check, tests, then cop
 
 ---
 
-**Last Generated**: 2026-11-05
+**Last Generated**: 2026-11-11
 **Maintained by**: Documentation Manager skill + Repo owner

@@ -8,7 +8,7 @@ This document describes the technology choices and rationale for owflow, an Open
 
 ### TypeScript 5 (peer `^5`)
 
-- **Usage**: ~100% of source code (`src/`, 24 modules)
+- **Usage**: ~100% of source code (`src/`, 28 modules)
 - **Rationale**: The OpenCode plugin API is typed; strict typing protects a logic-heavy registration and state-machine layer; declarations (`dist/index.d.ts`, `dist/tui.d.ts`) are emitted alongside ESM JavaScript
 - **Key Features Used**: ESM (`"type": "module"`, NodeNext resolution, explicit `.js` import extensions), `declaration`, `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`, `import type`
 
@@ -127,5 +127,5 @@ Not applicable — modern stack throughout (Bun >= 1.3, TypeScript 5, Node >= 22
 
 ---
 
-_Last Updated_: 2026-11-05
+_Last Updated_: 2026-11-11
 _Auto-detected_: languages, versions, dependencies, build/test tooling, absence of CI/linting/containers, distribution model — all from repository inspection

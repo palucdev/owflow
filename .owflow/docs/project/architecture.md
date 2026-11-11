@@ -15,7 +15,7 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 ### Plugin Entry & Lifecycle
 - **Location**: `src/index.ts`, `src/hooks/`
 - **Purpose**: Wire all capabilities into the OpenCode config/hooks lifecycle
-- **Key Files**: `src/index.ts` (`OwflowPlugin`), `src/hooks/internal/before-tool.ts` (blocks destructive bash commands for non-whitelisted agents), `src/hooks/internal/session-compaction.ts` (post-compaction state re-read reminder), `src/hooks/hooks-runtime.ts` (subprocess execution and lifecycle dispatch), `src/hooks/hooks-registry.ts` (discovery and validation), `src/hooks/hooks-diagnostics.ts` (startup banner snapshot), `src/hooks/hooks-persistence.ts` (runtime log files and readers)
+- **Key Files**: `src/index.ts` (`OwflowPlugin`), `src/hooks/internal/before-tool.ts` (blocks destructive bash commands for non-whitelisted agents), `src/hooks/internal/session-compaction.ts` (post-compaction state re-read reminder), `src/hooks/hooks-runtime.ts` (subprocess execution and lifecycle dispatch), `src/hooks/runtime/` (`circuit-breaker.ts`, `process-executor.ts`, `status-recorder.ts`, `failure-policy.ts`), `src/hooks/hooks-registry.ts` (discovery and validation), `src/hooks/hooks-diagnostics.ts` (startup banner snapshot), `src/hooks/hooks-persistence.ts` (runtime log files and readers)
 
 ### Configuration Layer
 - **Location**: `src/configuration/`
@@ -174,11 +174,12 @@ Structural connections between user hook execution (`src/hooks/`), the filesyste
                     | (FailFast mode)                           | (Report mode)
                     v                                           v
 +---------------------------------------+   +---------------------------------------+
-|          hooks-runtime.ts             |   |        tui/hooks-presenter.ts         |
+|  hooks-runtime.ts & runtime/*         |   |        tui/hooks-presenter.ts         |
 |---------------------------------------|   |---------------------------------------|
-| - Runs hook subprocesses              |   | - buildActiveHooksView()              |
-| - Writes status & streams to disk     |   | - statusLabelFor() / colorForStatus() |
-| - Abort cooldown & circuit breaker    |   | - formatHookRunSummary/LogsMessage()  |
+| - process-executor.ts (spawn & flags) |   | - buildActiveHooksView()              |
+| - status-recorder.ts (atomic/debounce)|   | - statusLabelFor() / colorForStatus() |
+| - circuit-breaker.ts (loop guard)     |   | - formatHookRunSummary/LogsMessage()  |
+| - failure-policy.ts (abort cooldown)  |   |                                       |
 +-------------------+-------------------+   +--------+--------------------+---------+
                     |                                |                    |
           writes / appends                           |                    |
@@ -189,8 +190,8 @@ Structural connections between user hook execution (`src/hooks/`), the filesyste
 |         (/tmp/opencode/)              | | - materialize-     | | - openHookLog-     |
 |---------------------------------------| |   Sidebar()        | |   Popup()          |
 | - owflow-hooks-*.json   (snapshot)    | | - Renders status   | | - Detail modal     |
-| - owflow-hook-logs-*.jsonl (runs)     | |   orbs & labels    | | - Logs scrollbox   |
-| - *.stdout.log / *.stderr.log         | +---------+----------+ +---------+----------+
+| - owflow-hook-logs-*-[hook].jsonl     | |   orbs & labels    | | - Logs scrollbox   |
+| - owflow-hooks-latest-*.jsonl (link)  | +---------+----------+ +---------+----------+
 +-------------------+-------------------+           |                      |
                     ^                               |                      |
          path resolution & readers                  |                      |
@@ -199,10 +200,10 @@ Structural connections between user hook execution (`src/hooks/`), the filesyste
 |        hooks-persistence.ts           |           |                      |
 |---------------------------------------|           |                      |
 | - resolveHooksStatusFile() / LogFile()|           |                      |
+| - resolveHooksLatestSymlink()         |           |                      |
 | - readHookStatusSnapshot()            |           |                      |
-| - readSessionLatestLogs()             |           |                      |
-| - readSessionHookLogs()               |           |                      |
-| - readHookStreamLogs()                |           |                      |
+| - readHookLogRecords() (tail slice)   |           |                      |
+| - readSessionLatestLogs() / HookLogs()|           |                      |
 +---------+-------------------+---------+           |                      |
           |                   |                     |                      |
           | reads snapshot    +-------------+       |                      |
@@ -217,7 +218,7 @@ Structural connections between user hook execution (`src/hooks/`), the filesyste
 +-----------------------------------------------------------------------------------+
 ```
 
-Note: `hooks-diagnostics.ts` (`renderSnapshot`, `interpreterLabel`) provides console reporting for plugin startup banners (`src/index.ts`) rather than direct TUI rendering.
+Note: `hooks-diagnostics.ts` (`renderSnapshot`, `interpreterLabel`) provides console reporting for plugin startup banners (`src/index.ts`) rather than direct TUI rendering. Subprocess execution in `src/hooks/runtime/` isolates process spawning (`process-executor.ts`), atomic status/log persistence (`status-recorder.ts`), failure suppression (`circuit-breaker.ts`), and abort policy enforcement (`failure-policy.ts`).
 
 ## External Integrations
 - **OpenCode host runtime** — plugin config, hooks, tools, skill/agent/command registration
