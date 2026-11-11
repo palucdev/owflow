@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ABORT_COOLDOWN_MS,
+  buildExecutionArgs,
   buildStdinPayload,
   canAbortSessionForEvent,
   CIRCUIT_BREAKER_COOLDOWN_MS,
@@ -26,7 +27,7 @@ import {
   resolveHooksLatestSymlink,
   resolveHooksLogFile,
 } from '../../hooks/hooks-persistence.js';
-import { HookEvent, HookRunState } from '../../types/hook-types.js';
+import { HookEvent, HookRunState, type HookRegistryEntry } from '../../types/hook-types.js';
 
 describe('hooks-runtime (execution & dispatch runtime)', () => {
   const tempDirs: string[] = [];
@@ -898,5 +899,137 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     } finally {
       renameSpy.mockRestore();
     }
+  });
+
+  describe('buildExecutionArgs', () => {
+    test('prepends PowerShell execution flags for .ps1 scripts', () => {
+      const entry: HookRegistryEntry = {
+        path: '/workspace/.owflow/hooks/tool-execute-before.ps1',
+        event: HookEvent.ToolExecuteBefore,
+        interpreter: {
+          resolved: '/usr/bin/pwsh',
+          expected: 'pwsh',
+          available: true,
+        },
+        status: 'registered',
+      };
+
+      expect(buildExecutionArgs(entry)).toEqual([
+        '/usr/bin/pwsh',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        '/workspace/.owflow/hooks/tool-execute-before.ps1',
+      ]);
+    });
+
+    test('prepends PowerShell execution flags when interpreter is powershell.exe', () => {
+      const entry: HookRegistryEntry = {
+        path: 'C:\\workspace\\.owflow\\hooks\\session-idle.ps1',
+        event: HookEvent.SessionIdle,
+        interpreter: {
+          resolved: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+          expected: 'powershell.exe',
+          available: true,
+        },
+        status: 'registered',
+      };
+
+      expect(buildExecutionArgs(entry)).toEqual([
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        'C:\\workspace\\.owflow\\hooks\\session-idle.ps1',
+      ]);
+    });
+
+    test('prepends PowerShell execution flags when expected interpreter is pwsh even with non-standard path', () => {
+      const entry: HookRegistryEntry = {
+        path: '/workspace/.owflow/hooks/custom-script',
+        event: HookEvent.ToolExecuteBefore,
+        interpreter: {
+          resolved: '/opt/microsoft/powershell/7/pwsh',
+          expected: 'pwsh',
+          available: true,
+        },
+        status: 'registered',
+      };
+
+      expect(buildExecutionArgs(entry)).toEqual([
+        '/opt/microsoft/powershell/7/pwsh',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        '/workspace/.owflow/hooks/custom-script',
+      ]);
+    });
+
+    test('returns standard [resolved, path] arguments for non-PowerShell scripts', () => {
+      const entry: HookRegistryEntry = {
+        path: '/workspace/.owflow/hooks/tool-execute-before.sh',
+        event: HookEvent.ToolExecuteBefore,
+        interpreter: {
+          resolved: '/bin/bash',
+          expected: 'bash',
+          available: true,
+        },
+        status: 'registered',
+      };
+
+      expect(buildExecutionArgs(entry)).toEqual(['/bin/bash', '/workspace/.owflow/hooks/tool-execute-before.sh']);
+    });
+
+    test('spawns PowerShell scripts with execution flags during dispatch', async () => {
+      const root = makeTempDir();
+      const hooksDir = path.join(root, '.owflow', 'hooks');
+      fs.mkdirSync(hooksDir, { recursive: true });
+      const hookPath = path.join(hooksDir, 'tool-execute-before.ps1');
+      fs.writeFileSync(hookPath, 'Write-Output "ok"\n');
+
+      const whichSpy = spyOn(Bun, 'which').mockImplementation(((cmd: string) => {
+        if (cmd === 'pwsh') return '/usr/bin/pwsh';
+        return null;
+      }) as any);
+
+      let capturedArgs: string[] | undefined;
+      const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(((args: string[]) => {
+        capturedArgs = args;
+        return {
+          pid: 99999,
+          kill: () => {},
+          exited: Promise.resolve(0),
+          stdout: new Response('ok').body,
+          stderr: new Response('').body,
+          signalCode: null,
+        } as any;
+      }) as any);
+
+      try {
+        const wrapper = await initializeHooksWrapper(root, undefined, {
+          statusFile: path.join(root, 'status.json'),
+          logFile: path.join(root, 'log.jsonl'),
+        });
+        await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
+        wrapper.dispose();
+
+        expect(capturedArgs).toBeDefined();
+        expect(capturedArgs).toContain('-NoProfile');
+        expect(capturedArgs).toContain('-NonInteractive');
+        expect(capturedArgs).toContain('-ExecutionPolicy');
+        expect(capturedArgs).toContain('Bypass');
+        expect(capturedArgs).toContain('-File');
+        expect(capturedArgs![capturedArgs!.length - 1]).toBe(hookPath);
+      } finally {
+        whichSpy.mockRestore();
+        spawnSpy.mockRestore();
+      }
+    });
   });
 });

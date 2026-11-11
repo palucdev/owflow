@@ -8,6 +8,7 @@ import {
   type DispatchableEvent,
   type Dispatcher,
   type HookEventName,
+  type HookRegistryEntry,
   type HookRunLogRecord,
   type HookRuntimeEntry,
   type HookStatusSnapshot,
@@ -157,6 +158,18 @@ export const flushStatusFileAtomic = (file: string, workspace: string, hooks: Re
     } catch {}
     // Best-effort status persistence never affects hook execution.
   }
+};
+
+export const buildExecutionArgs = (entry: HookRegistryEntry): string[] => {
+  const resolvedLower = (entry.interpreter.resolved ?? '').toLowerCase();
+  const isPowerShell =
+    entry.path.endsWith('.ps1') || entry.interpreter.expected === 'pwsh' || resolvedLower.includes('powershell') || resolvedLower.includes('pwsh');
+
+  if (isPowerShell) {
+    return [entry.interpreter.resolved!, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', entry.path];
+  }
+
+  return [entry.interpreter.resolved!, entry.path];
 };
 
 export const initializeHooksWrapper = async (
@@ -329,7 +342,7 @@ export const initializeHooksWrapper = async (
 
       let proc: ReturnType<typeof Bun.spawn>;
       try {
-        proc = Bun.spawn([entry.interpreter.resolved, entry.path], {
+        proc = Bun.spawn(buildExecutionArgs(entry), {
           cwd: directory,
           stdin: Buffer.from(stdinText),
           stdout: 'pipe',
