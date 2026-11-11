@@ -19,6 +19,15 @@ import {
   NON_SESSION_STREAM_CAP_BYTES,
   readStream,
   STATUS_DEBOUNCE_MS,
+  CircuitBreakerTracker,
+  SessionAbortController,
+  StatusRecorder,
+  HookSpawnError,
+  executeHookProcess,
+  buildCircuitBreakerError,
+  buildInterpreterUnavailableError,
+  buildSpawnError,
+  buildProcessFailureError,
 } from '../../hooks/hooks-runtime.js';
 import {
   readHookLogRecords,
@@ -1030,6 +1039,128 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
         whichSpy.mockRestore();
         spawnSpy.mockRestore();
       }
+    });
+  });
+
+  describe('modular runtime components', () => {
+    test('CircuitBreakerTracker tracks, trips, resets on success, and clears', () => {
+      const tracker = new CircuitBreakerTracker();
+      expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+
+      const now = Date.now();
+      tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now, now + 10);
+      expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+
+      tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + 20, now + 30);
+      tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + 40, now + 50);
+      const res = tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + 60, now + 70);
+      expect(res.rapidFailures).toBe(4);
+      expect(res.trippedUntil).toBeGreaterThan(0);
+
+      const checkTripped = tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1');
+      expect(checkTripped.tripped).toBe(true);
+      expect(checkTripped.reason).toContain('Circuit breaker active for /test/hook.sh');
+
+      tracker.recordSuccess(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1');
+      expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+
+      tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + 80, now + 90);
+      tracker.clear();
+      expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+    });
+
+    test('SessionAbortController manages cooldown, session clearing, and disposal', async () => {
+      const aborted: string[] = [];
+      const controller = new SessionAbortController((sessionID) => {
+        aborted.push(sessionID);
+      });
+
+      await controller.abortSession(HookEvent.ToolExecuteBefore, 'ses_abc', '/path/to/script.sh');
+      expect(aborted).toEqual(['ses_abc']);
+
+      // Within cooldown, second abort is suppressed
+      await controller.abortSession(HookEvent.ToolExecuteBefore, 'ses_abc', '/path/to/script.sh');
+      expect(aborted).toEqual(['ses_abc']);
+
+      // Clearing session cooldown allows another abort
+      controller.clearSession('ses_abc');
+      await controller.abortSession(HookEvent.ToolExecuteBefore, 'ses_abc', '/path/to/script.sh');
+      expect(aborted).toEqual(['ses_abc', 'ses_abc']);
+
+      controller.dispose();
+    });
+
+    test('StatusRecorder manages statuses in memory and on disk', () => {
+      const root = makeTempDir();
+      const statusFile = path.join(root, 'rec-status.json');
+      const recorder = new StatusRecorder({ directory: root, statusFile });
+
+      expect(recorder.getStatus(HookEvent.ToolExecuteBefore)).toBeUndefined();
+      expect(recorder.getAllStatuses().size).toBe(0);
+
+      recorder.setStatus(HookEvent.ToolExecuteBefore, {
+        status: HookRunState.SUCCESS,
+        startedAt: 1000,
+        finishedAt: 1050,
+        durationMs: 50,
+      });
+
+      expect(recorder.getStatus(HookEvent.ToolExecuteBefore)?.status).toBe(HookRunState.SUCCESS);
+      expect(recorder.getAllStatuses().size).toBe(1);
+
+      recorder.deleteStatus(HookEvent.ToolExecuteBefore);
+      expect(recorder.getStatus(HookEvent.ToolExecuteBefore)).toBeUndefined();
+
+      recorder.dispose();
+    });
+
+    test('executeHookProcess throws HookSpawnError when process cannot be spawned', async () => {
+      const root = makeTempDir();
+      const entry: HookRegistryEntry = {
+        path: path.join(root, 'nonexistent.sh'),
+        event: HookEvent.ToolExecuteBefore,
+        interpreter: {
+          resolved: '/nonexistent/interpreter',
+          expected: 'bash',
+          available: false,
+        },
+        status: 'registered',
+      };
+
+      const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
+        throw new Error('ENOENT: spawn failed');
+      });
+
+      try {
+        await expect(
+          executeHookProcess({
+            entry,
+            directory: root,
+            stdinText: '{}',
+            event: HookEvent.ToolExecuteBefore,
+          }),
+        ).rejects.toBeInstanceOf(HookSpawnError);
+      } finally {
+        spawnSpy.mockRestore();
+      }
+    });
+
+    test('error builders generate expected Blocked error messages and hints', () => {
+      const cbErr = buildCircuitBreakerError('/path/hook.sh', 'too many failures');
+      expect(cbErr.message).toBe('Blocked: too many failures. Hint: fix /path/hook.sh or wait for cooldown.');
+
+      const interpErr = buildInterpreterUnavailableError('/path/hook.sh', 'pwsh');
+      expect(interpErr.message).toContain('the pwsh interpreter is not available');
+
+      const spawnErr = buildSpawnError('/path/hook.sh', 'permission denied', HookEvent.ToolExecuteBefore);
+      expect(spawnErr.message).toContain('failed to spawn hook /path/hook.sh: permission denied');
+      expect(spawnErr.message).toContain('failure ends the current session; fail closed');
+
+      const procErr = buildProcessFailureError('/path/hook.sh', 'exit 1', HookEvent.ToolExecuteBefore);
+      expect(procErr.message).toContain('Blocked: exit 1. Hint: fix the failing script');
+
+      const nonAbortProcErr = buildProcessFailureError('/path/hook.sh', 'exit 1', 'session.idle');
+      expect(nonAbortProcErr.message).toContain('failure recorded; fail closed');
     });
   });
 });

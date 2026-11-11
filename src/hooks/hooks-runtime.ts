@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import type { Hooks } from '@opencode-ai/plugin';
 import {
@@ -8,36 +7,81 @@ import {
   type DispatchableEvent,
   type Dispatcher,
   type HookEventName,
-  type HookRegistryEntry,
-  type HookRunLogRecord,
-  type HookRuntimeEntry,
-  type HookStatusSnapshot,
   type HooksWrapper,
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
-import { appendWithRotation, resolveHooksLatestSymlink, resolveHooksLogFile, resolveHooksStatusFile } from './hooks-persistence.js';
 import { scanHooks } from './hooks-registry.js';
+import {
+  CIRCUIT_BREAKER_COOLDOWN_MS,
+  CIRCUIT_BREAKER_RAPID_GAP_MS,
+  CIRCUIT_BREAKER_THRESHOLD,
+  CircuitBreakerTracker,
+  type CircuitBreakerEntry,
+} from './runtime/circuit-breaker.js';
+import {
+  ABORT_COOLDOWN_MS,
+  SessionAbortController,
+  buildCircuitBreakerError,
+  buildInterpreterUnavailableError,
+  buildProcessFailureError,
+  buildSpawnError,
+  canAbortSessionForEvent,
+} from './runtime/failure-policy.js';
+import {
+  DEFAULT_HOOK_TIMEOUT_MS,
+  HOOK_TIMEOUT_ENV,
+  HookSpawnError,
+  MAX_STREAM_BUFFER_BYTES,
+  buildExecutionArgs,
+  executeHookProcess,
+  readStream,
+  resolveHookTimeoutMs,
+} from './runtime/process-executor.js';
+import {
+  MAX_LOG_FILE_BYTES,
+  NON_SESSION_STREAM_CAP_BYTES,
+  STATUS_DEBOUNCE_MS,
+  StatusRecorder,
+  flushStatusFileAtomic,
+} from './runtime/status-recorder.js';
 
-export const DEFAULT_HOOK_TIMEOUT_MS = 120_000;
-export const HOOK_TIMEOUT_ENV = 'OWFLOW_HOOK_TIMEOUT_MS';
-export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
-export const MAX_STREAM_BUFFER_BYTES = 4 * 1024 * 1024;
-export const NON_SESSION_STREAM_CAP_BYTES = 16 * 1024;
-export const ABORT_COOLDOWN_MS = 2_000;
-export const CIRCUIT_BREAKER_THRESHOLD = 4;
-export const CIRCUIT_BREAKER_RAPID_GAP_MS = 500;
-export const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000;
+export {
+  CIRCUIT_BREAKER_THRESHOLD,
+  CIRCUIT_BREAKER_RAPID_GAP_MS,
+  CIRCUIT_BREAKER_COOLDOWN_MS,
+  CircuitBreakerTracker,
+  type CircuitBreakerEntry,
+} from './runtime/circuit-breaker.js';
 
-interface CircuitBreakerEntry {
-  rapidFailures: number;
-  lastFinishedAt: number;
-  trippedUntil: number;
-}
+export {
+  ABORT_COOLDOWN_MS,
+  canAbortSessionForEvent,
+  SessionAbortController,
+  buildCircuitBreakerError,
+  buildInterpreterUnavailableError,
+  buildSpawnError,
+  buildProcessFailureError,
+} from './runtime/failure-policy.js';
 
-// Reactive host events (e.g. session.idle) and the catch-all event hook notify after state transitions;
-// aborting a session on session.idle forces OpenCode back to idle and re-emits session.idle in a tight loop.
-export const canAbortSessionForEvent = (event: HookEventName): boolean => !isHostEventName(event) && event !== HookEvent.Event;
+export {
+  DEFAULT_HOOK_TIMEOUT_MS,
+  HOOK_TIMEOUT_ENV,
+  MAX_STREAM_BUFFER_BYTES,
+  HookSpawnError,
+  buildExecutionArgs,
+  readStream,
+  resolveHookTimeoutMs,
+  executeHookProcess,
+} from './runtime/process-executor.js';
+
+export {
+  STATUS_DEBOUNCE_MS,
+  MAX_LOG_FILE_BYTES,
+  NON_SESSION_STREAM_CAP_BYTES,
+  flushStatusFileAtomic,
+  StatusRecorder,
+} from './runtime/status-recorder.js';
 
 const IDENTITY_KEYS = ['id', 'sessionID', 'messageID', 'partID', 'callID', 'providerID', 'type', 'name', 'tool'];
 
@@ -86,92 +130,6 @@ const sessionIDFrom = (input: unknown): string | undefined => {
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
 };
 
-export const readStream = async (
-  stream: ReadableStream<Uint8Array> | null | undefined,
-  onChunk?: (chunk: string) => void,
-  maxBytes = MAX_STREAM_BUFFER_BYTES,
-): Promise<string> => {
-  if (!stream) return '';
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let result = '';
-  let totalBytes = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value.byteLength;
-      const chunk = decoder.decode(value, { stream: true });
-      if (chunk) {
-        if (result.length < maxBytes) {
-          result += chunk.slice(0, maxBytes - result.length);
-        }
-        onChunk?.(chunk);
-      }
-      if (totalBytes >= maxBytes) {
-        try {
-          await reader.cancel('Stream limit exceeded');
-        } catch {}
-        break;
-      }
-    }
-    const tail = decoder.decode();
-    if (tail) {
-      if (result.length < maxBytes) {
-        result += tail.slice(0, maxBytes - result.length);
-      }
-      onChunk?.(tail);
-    }
-  } catch {}
-  return result;
-};
-
-export const STATUS_DEBOUNCE_MS = 50;
-
-export const flushStatusFileAtomic = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-    try {
-      if (fs.lstatSync(file).isSymbolicLink()) return;
-    } catch (err: any) {
-      if (err?.code !== 'ENOENT') return;
-    }
-    const snapshot: HookStatusSnapshot = {
-      version: 1,
-      pid: process.pid,
-      workspace,
-      updatedAt: Date.now(),
-      hooks: Object.fromEntries(hooks),
-    };
-    const tmpFile = `${file}.${process.pid}.tmp`;
-    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW ?? 0);
-    const fd = fs.openSync(tmpFile, flags, 0o600);
-    try {
-      fs.writeFileSync(fd, JSON.stringify(snapshot), { encoding: 'utf8' });
-    } finally {
-      fs.closeSync(fd);
-    }
-    fs.renameSync(tmpFile, file);
-  } catch {
-    try {
-      fs.unlinkSync(`${file}.${process.pid}.tmp`);
-    } catch {}
-    // Best-effort status persistence never affects hook execution.
-  }
-};
-
-export const buildExecutionArgs = (entry: HookRegistryEntry): string[] => {
-  const resolvedLower = (entry.interpreter.resolved ?? '').toLowerCase();
-  const isPowerShell =
-    entry.path.endsWith('.ps1') || entry.interpreter.expected === 'pwsh' || resolvedLower.includes('powershell') || resolvedLower.includes('pwsh');
-
-  if (isPowerShell) {
-    return [entry.interpreter.resolved!, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', entry.path];
-  }
-
-  return [entry.interpreter.resolved!, entry.path];
-};
-
 export const initializeHooksWrapper = async (
   directory: string,
   endSession?: (sessionID: string) => Promise<void> | void,
@@ -179,78 +137,21 @@ export const initializeHooksWrapper = async (
 ): Promise<HooksWrapper> => {
   const { entries } = scanHooks(hooksDirectory(directory));
   const byEvent = Map.groupBy(entries, (e) => e.event);
-  const statusFile = options.statusFile ?? resolveHooksStatusFile(directory);
-  resolveHooksLatestSymlink(directory);
-  const statuses = new Map<string, HookRuntimeEntry>();
+
+  const statusRecorder = new StatusRecorder({
+    directory,
+    statusFile: options.statusFile,
+    logFile: options.logFile,
+  });
+  const abortController = new SessionAbortController(endSession);
+  const circuitBreaker = new CircuitBreakerTracker();
   const activeProcs = new Set<ReturnType<typeof Bun.spawn>>();
-  const abortingSessions = new Map<string, number>();
-  const breakers = new Map<string, CircuitBreakerEntry>();
   let runCounter = 0;
-  const writtenRunRecords = new Set<string>();
-  let statusTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const flushStatus = (): void => {
-    if (statusTimer !== undefined) {
-      clearTimeout(statusTimer);
-      statusTimer = undefined;
-    }
-    flushStatusFileAtomic(statusFile, directory, statuses);
-  };
-
-  const schedulePendingStatus = (): void => {
-    if (statusTimer !== undefined) {
-      clearTimeout(statusTimer);
-    }
-    statusTimer = setTimeout(() => {
-      statusTimer = undefined;
-      flushStatusFileAtomic(statusFile, directory, statuses);
-    }, STATUS_DEBOUNCE_MS);
-    statusTimer.unref?.();
-  };
-
-  flushStatus();
-
-  const appendLog = (record: HookRunLogRecord): void => {
-    try {
-      // Distinguish distinct runs by runId and terminal status
-      const recordKey = `${record.runId}:${record.status}`;
-      if (writtenRunRecords.has(recordKey)) return;
-
-      const targetLogFile = options.logFile ?? resolveHooksLogFile(directory, record.name);
-      appendWithRotation(targetLogFile, JSON.stringify(record));
-      if (!options.logFile) {
-        resolveHooksLatestSymlink(directory, targetLogFile);
-      }
-      writtenRunRecords.add(recordKey);
-
-      // Bounded set eviction to prevent memory growth across thousands of runs
-      if (writtenRunRecords.size > 1000) {
-        const oldest = writtenRunRecords.values().next().value;
-        if (oldest) writtenRunRecords.delete(oldest);
-      }
-    } catch {
-      // Best-effort log persistence never affects hook execution.
-    }
-  };
-
-  const abortSession = async (event: HookEventName, sessionID: string | undefined, scriptPath: string): Promise<void> => {
-    if (!endSession || !sessionID || !canAbortSessionForEvent(event)) return;
-    const now = Date.now();
-    const lastAbort = abortingSessions.get(sessionID);
-    if (lastAbort !== undefined && now - lastAbort < ABORT_COOLDOWN_MS) return;
-    abortingSessions.set(sessionID, now);
-    try {
-      await endSession(sessionID);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.warn(`[owflow] hooks: failed to end session ${sessionID} after ${scriptPath} failed: ${msg}`);
-    }
-  };
 
   const dispatch: Dispatcher = async (event, input, output) => {
     const sessionID = sessionIDFrom(input);
     if (event === HookEvent.ChatMessage && sessionID) {
-      abortingSessions.delete(sessionID);
+      abortController.clearSession(sessionID);
     }
 
     const hooks = byEvent.get(event);
@@ -263,11 +164,11 @@ export const initializeHooksWrapper = async (
       const runId = `${event}#${runCounter}`;
       const startedAt = Date.now();
       const name = path.basename(entry.path, path.extname(entry.path));
-      const breakerKey = `${event}::${entry.path}::${sessionID ?? 'global'}`;
-      const breaker = breakers.get(breakerKey);
-      if (breaker && startedAt < breaker.trippedUntil) {
-        const reason = `Circuit breaker active for ${entry.path} after ${CIRCUIT_BREAKER_THRESHOLD} rapid consecutive failures (cooldown until ${new Date(breaker.trippedUntil).toISOString()})`;
-        statuses.set(event, {
+
+      const cbCheck = circuitBreaker.check(event, entry.path, sessionID, startedAt);
+      if (cbCheck.tripped) {
+        const reason = cbCheck.reason!;
+        statusRecorder.setStatus(event, {
           status: HookRunState.FAILURE,
           startedAt,
           finishedAt: startedAt,
@@ -275,8 +176,8 @@ export const initializeHooksWrapper = async (
           reason,
           ...(sessionID ? { sessionID } : {}),
         });
-        flushStatus();
-        appendLog({
+        statusRecorder.flushStatus();
+        statusRecorder.appendLog({
           version: 1,
           runId,
           pid: process.pid,
@@ -291,13 +192,13 @@ export const initializeHooksWrapper = async (
           status: HookRunState.FAILURE,
           reason,
         });
-        throw new Error(`Blocked: ${reason}. Hint: fix ${entry.path} or wait for cooldown.`);
+        throw buildCircuitBreakerError(entry.path, reason);
       }
 
       if (!entry.interpreter.available || !entry.interpreter.resolved) {
         const label = entry.interpreter.resolved ?? entry.interpreter.expected;
         const reason = `${label} is not available`;
-        statuses.set(event, {
+        statusRecorder.setStatus(event, {
           status: HookRunState.FAILURE,
           startedAt,
           finishedAt: startedAt,
@@ -305,8 +206,8 @@ export const initializeHooksWrapper = async (
           reason,
           ...(sessionID ? { sessionID } : {}),
         });
-        flushStatus();
-        appendLog({
+        statusRecorder.flushStatus();
+        statusRecorder.appendLog({
           version: 1,
           runId,
           pid: process.pid,
@@ -321,159 +222,80 @@ export const initializeHooksWrapper = async (
           status: HookRunState.FAILURE,
           reason,
         });
-        await abortSession(event, sessionID, entry.path);
-        throw new Error(
-          `Blocked: hook ${entry.path} cannot run: the ${label} interpreter is not available. ` +
-            `Hint: install ${label} and restart OpenCode, or remove the script to stop failing closed.`,
-        );
+        await abortController.abortSession(event, sessionID, entry.path);
+        throw buildInterpreterUnavailableError(entry.path, label);
       }
 
-      const previousStatus = statuses.get(event);
-      statuses.set(event, {
+      const previousStatus = statusRecorder.getStatus(event);
+      statusRecorder.setStatus(event, {
         status: HookRunState.PENDING,
         startedAt,
         ...(sessionID ? { sessionID } : {}),
       });
-      schedulePendingStatus();
+      statusRecorder.schedulePendingStatus();
 
-      if (process.env.OWFLOW_DEBUG === '1') {
-        console.error(`[owflow:debug] [${event}] Spawning ${entry.path} (stdin: ${stdinText.length} bytes)`);
-      }
-
-      let proc: ReturnType<typeof Bun.spawn>;
+      let execResult;
       try {
-        proc = Bun.spawn(buildExecutionArgs(entry), {
-          cwd: directory,
-          stdin: Buffer.from(stdinText),
-          stdout: 'pipe',
-          stderr: 'pipe',
-        });
-        activeProcs.add(proc);
-      } catch (spawnError) {
-        const finishedAt = Date.now();
-        const spawnErrMsg = spawnError instanceof Error ? spawnError.message : String(spawnError);
-        const reason = `failed to spawn ${entry.path}: ${spawnErrMsg}`;
-        statuses.set(event, {
-          status: HookRunState.FAILURE,
-          startedAt,
-          finishedAt,
-          durationMs: 0,
-          reason,
-          ...(sessionID ? { sessionID } : {}),
-        });
-        flushStatus();
-        appendLog({
-          version: 1,
-          runId,
-          pid: process.pid,
-          workspace: directory,
+        execResult = await executeHookProcess({
+          entry,
+          directory,
+          stdinText,
           event,
-          hook: entry.path,
-          name,
-          ...(sessionID ? { sessionID } : {}),
           startedAt,
-          finishedAt,
-          durationMs: 0,
-          status: HookRunState.FAILURE,
-          reason,
+          activeProcs,
         });
-        await abortSession(event, sessionID, entry.path);
-        const failPosture = canAbortSessionForEvent(event) ? 'failure ends the current session; fail closed' : 'failure recorded; fail closed';
-        throw new Error(
-          `Blocked: failed to spawn hook ${entry.path}: ${spawnErrMsg}. Hint: fix the failing script ${entry.path} (${failPosture}), or remove it and restart OpenCode to proceed.`,
-        );
-      }
-
-      const rawTimeout = process.env[HOOK_TIMEOUT_ENV];
-      let timeoutMs = DEFAULT_HOOK_TIMEOUT_MS;
-      if (rawTimeout !== undefined) {
-        const parsed = Number(rawTimeout);
-        if (Number.isFinite(parsed) && parsed <= 0) {
-          timeoutMs = 0;
-        } else if (Number.isFinite(parsed)) {
-          timeoutMs = parsed;
+      } catch (spawnError) {
+        if (spawnError instanceof HookSpawnError) {
+          const finishedAt = Date.now();
+          const spawnErrMsg = spawnError.originalError instanceof Error ? spawnError.originalError.message : String(spawnError.originalError);
+          const reason = `failed to spawn ${entry.path}: ${spawnErrMsg}`;
+          statusRecorder.setStatus(event, {
+            status: HookRunState.FAILURE,
+            startedAt,
+            finishedAt,
+            durationMs: 0,
+            reason,
+            ...(sessionID ? { sessionID } : {}),
+          });
+          statusRecorder.flushStatus();
+          statusRecorder.appendLog({
+            version: 1,
+            runId,
+            pid: process.pid,
+            workspace: directory,
+            event,
+            hook: entry.path,
+            name,
+            ...(sessionID ? { sessionID } : {}),
+            startedAt,
+            finishedAt,
+            durationMs: 0,
+            status: HookRunState.FAILURE,
+            reason,
+          });
+          await abortController.abortSession(event, sessionID, entry.path);
+          throw buildSpawnError(entry.path, spawnErrMsg, event);
         }
+        throw spawnError;
       }
 
-      let timedOut = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let rawStdout = '';
-      let rawStderr = '';
-      const ioPromise = Promise.all([
-        readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined),
-        readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined),
-        proc.exited,
-      ]);
-
-      let exitCode: number | null = null;
-      try {
-        const res =
-          timeoutMs > 0
-            ? await Promise.race([
-                ioPromise,
-                new Promise<'timeout'>((resolve) => {
-                  timer = setTimeout(() => {
-                    timedOut = true;
-                    try {
-                      proc.kill();
-                    } catch {}
-                    resolve('timeout');
-                  }, Math.floor(timeoutMs));
-                  timer.unref?.();
-                }),
-              ])
-            : await ioPromise;
-        if (res !== 'timeout') [rawStdout, rawStderr, exitCode] = res;
-      } finally {
-        if (timer !== undefined) clearTimeout(timer);
-        activeProcs.delete(proc);
-      }
-
-      const finishedAt = Date.now();
-      const durationMs = Math.max(0, finishedAt - startedAt);
-      const signal = proc.signalCode ?? null;
-      const ok = !timedOut && exitCode === 0 && signal === null;
-
-      if (process.env.OWFLOW_DEBUG === '1') {
-        console.error(`[owflow:debug] [${event}] Finished ${entry.path} in ${durationMs}ms (exitCode: ${exitCode}, ok: ${ok})`);
-      }
+      const { ok, exitCode, signal, reason, durationMs, finishedAt, rawStdout, rawStderr } = execResult;
 
       if (ok) {
-        breakers.delete(breakerKey);
+        circuitBreaker.recordSuccess(event, entry.path, sessionID);
       } else {
-        const prev = breakers.get(breakerKey);
-        const isRapid = prev !== undefined && startedAt - prev.lastFinishedAt <= CIRCUIT_BREAKER_RAPID_GAP_MS;
-        const rapidFailures = isRapid ? prev.rapidFailures + 1 : 1;
-        const trippedUntil = rapidFailures >= CIRCUIT_BREAKER_THRESHOLD ? finishedAt + CIRCUIT_BREAKER_COOLDOWN_MS : 0;
-
-        breakers.set(breakerKey, {
-          rapidFailures,
-          lastFinishedAt: finishedAt,
-          trippedUntil,
-        });
-
-        if (trippedUntil > 0) {
-          console.warn(
-            `[owflow] hooks: circuit breaker tripped for ${entry.path} on event "${event}" after ${rapidFailures} rapid failures; pausing for ${CIRCUIT_BREAKER_COOLDOWN_MS}ms.`,
-          );
-        }
+        circuitBreaker.recordFailure(event, entry.path, sessionID, startedAt, finishedAt);
       }
 
       // Silent successful catch-all `event` runs leave no status/log trace so hot bus events don't flood.
       if (ok && event === HookEvent.Event && !rawStdout.trim() && !rawStderr.trim()) {
-        if (previousStatus) statuses.set(event, previousStatus);
-        else statuses.delete(event);
-        flushStatus();
+        if (previousStatus) statusRecorder.setStatus(event, previousStatus);
+        else statusRecorder.deleteStatus(event);
+        statusRecorder.flushStatus();
         continue;
       }
 
-      const reason = ok
-        ? undefined
-        : timedOut
-          ? `process timed out after ${Math.floor(timeoutMs)}ms`
-          : rawStderr.trim() || rawStdout.trim() || (signal ? `process terminated by signal ${signal}` : `process exited with code ${exitCode}`);
-
-      statuses.set(event, {
+      statusRecorder.setStatus(event, {
         status: ok ? HookRunState.SUCCESS : HookRunState.FAILURE,
         startedAt,
         finishedAt,
@@ -481,14 +303,14 @@ export const initializeHooksWrapper = async (
         ...(reason ? { reason } : {}),
         ...(sessionID ? { sessionID } : {}),
       });
-      flushStatus();
+      statusRecorder.flushStatus();
 
       const loggedStdout =
         !sessionID && rawStdout.length > NON_SESSION_STREAM_CAP_BYTES ? rawStdout.slice(0, NON_SESSION_STREAM_CAP_BYTES) : rawStdout;
       const loggedStderr =
         !sessionID && rawStderr.length > NON_SESSION_STREAM_CAP_BYTES ? rawStderr.slice(0, NON_SESSION_STREAM_CAP_BYTES) : rawStderr;
 
-      appendLog({
+      statusRecorder.appendLog({
         version: 1,
         runId,
         pid: process.pid,
@@ -509,12 +331,8 @@ export const initializeHooksWrapper = async (
       });
 
       if (!ok) {
-        await abortSession(event, sessionID, entry.path);
-        const body = reason?.startsWith('Blocked:') ? reason : `Blocked: ${reason || `hook ${entry.path} failed`}`;
-        const failPosture = canAbortSessionForEvent(event) ? 'failure ends the current session; fail closed' : 'failure recorded; fail closed';
-        throw new Error(
-          `${body.endsWith('.') ? body : `${body}.`} Hint: fix the failing script ${entry.path} (${failPosture}), or remove it and restart OpenCode to proceed.`,
-        );
+        await abortController.abortSession(event, sessionID, entry.path);
+        throw buildProcessFailureError(entry.path, reason, event);
       }
     }
   };
@@ -523,7 +341,7 @@ export const initializeHooksWrapper = async (
     dispatch,
     snapshot: { entries },
     dispose: () => {
-      flushStatus();
+      statusRecorder.dispose();
       for (const proc of activeProcs) {
         try {
           proc.kill();
