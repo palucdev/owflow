@@ -125,20 +125,36 @@ export const readHookStatusSnapshot = (file: string): HookStatusReadResult => {
   }
 };
 
-// shortcut: reads full JSONL file via readFileSync instead of a 512KB fd tail-seek and relies on 16KB stream caps;
-// ceiling: log files >4MB rotation cap;
-// upgrade: fs.openSync tail-slice reader.
-export const readHookLogRecords = (file: string): HookLogReadResult => {
+export const MAX_LOG_TAIL_READ_BYTES = 256 * 1024;
+export const DEFAULT_MAX_LOG_RECORDS = 500;
+
+export const readHookLogRecords = (file: string, maxRecords = DEFAULT_MAX_LOG_RECORDS): HookLogReadResult => {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isFile()) return { kind: 'invalid' };
+
     const cached = logRecordsCache.get(file);
     if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
       return cached.value;
     }
-    const raw = fs.readFileSync(file, 'utf8');
+
+    const startOffset = Math.max(0, stat.size - MAX_LOG_TAIL_READ_BYTES);
+    const readLength = stat.size - startOffset;
+
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    const buffer = Buffer.alloc(readLength);
+    try {
+      fs.readSync(fd, buffer, 0, readLength, startOffset);
+    } finally {
+      fs.closeSync(fd);
+    }
+
+    const raw = buffer.toString('utf8');
+    const lines = raw.split('\n');
+    if (startOffset > 0) lines.shift();
+
     const records: HookRunLogRecord[] = [];
-    for (const line of raw.split('\n')) {
+    for (const line of lines) {
       if (!line.trim()) continue;
       try {
         const rec = JSON.parse(line);
@@ -149,7 +165,9 @@ export const readHookLogRecords = (file: string): HookLogReadResult => {
         // skip malformed lines
       }
     }
-    const result: HookLogReadResult = { kind: 'ok', records, truncated: false };
+
+    const trimmed = records.slice(-maxRecords);
+    const result: HookLogReadResult = { kind: 'ok', records: trimmed, truncated: startOffset > 0 };
     logRecordsCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value: result });
     return result;
   } catch (error) {

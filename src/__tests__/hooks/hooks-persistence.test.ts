@@ -4,8 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   appendWithRotation,
+  DEFAULT_MAX_LOG_RECORDS,
   getUserTmpDir,
   LOG_FILE_ENV,
+  MAX_LOG_TAIL_READ_BYTES,
   readHookLogRecords,
   readHookStatusSnapshot,
   readSessionHookLogs,
@@ -393,5 +395,118 @@ describe('hooks-persistence (status and log file readers and resolvers)', () => 
     const firstStatus = readHookStatusSnapshot(statusFile);
     const secondStatus = readHookStatusSnapshot(statusFile);
     expect(firstStatus).toBe(secondStatus);
+  });
+
+  test('readHookLogRecords bounds read to 256KB tail slice, sets truncated, and drops leading partial line', () => {
+    const root = makeTempDir();
+    const logFile = path.join(root, 'tail-test.jsonl');
+
+    expect(DEFAULT_MAX_LOG_RECORDS).toBe(500);
+    expect(MAX_LOG_TAIL_READ_BYTES).toBe(256 * 1024);
+
+    // 1. Empty file
+    fs.writeFileSync(logFile, '');
+    expect(readHookLogRecords(logFile)).toEqual({ kind: 'ok', records: [], truncated: false });
+
+    // 2. File smaller than MAX_LOG_TAIL_READ_BYTES
+    const recordA: HookRunLogRecord = {
+      version: 1,
+      runId: 'tool.execute.before#1',
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: '/hook.sh',
+      name: 'tool-execute-before',
+      startedAt: 1_000,
+      finishedAt: 1_050,
+      durationMs: 50,
+      status: 'success',
+    };
+    const recordB: HookRunLogRecord = {
+      version: 1,
+      runId: 'tool.execute.before#2',
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: '/hook.sh',
+      name: 'tool-execute-before',
+      startedAt: 2_000,
+      finishedAt: 2_050,
+      durationMs: 50,
+      status: 'success',
+    };
+    fs.writeFileSync(logFile, `${JSON.stringify(recordA)}\n${JSON.stringify(recordB)}\n`);
+    const smallResult = readHookLogRecords(logFile);
+    expect(smallResult).toEqual({ kind: 'ok', records: [recordA, recordB], truncated: false });
+
+    // 3. File larger than MAX_LOG_TAIL_READ_BYTES
+    const largeLogFile = path.join(root, 'large-tail.jsonl');
+    const oldRecord: HookRunLogRecord = {
+      version: 1,
+      runId: 'tool.execute.before#old',
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: '/hook.sh',
+      name: 'tool-execute-before',
+      startedAt: 500,
+      finishedAt: 550,
+      durationMs: 50,
+      status: 'success',
+    };
+    const oldLine = JSON.stringify(oldRecord) + '\n';
+    const padding = oldLine.repeat(Math.ceil((260 * 1024) / oldLine.length));
+    const splitLineFragment = '{"version":1,"event":"truncated-before-slice"';
+    const trailingRecord1: HookRunLogRecord = {
+      version: 1,
+      runId: 'tool.execute.before#tail1',
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: '/hook.sh',
+      name: 'tool-execute-before',
+      startedAt: 10_000,
+      finishedAt: 10_050,
+      durationMs: 50,
+      status: 'success',
+    };
+    const trailingRecord2: HookRunLogRecord = {
+      version: 1,
+      runId: 'tool.execute.before#tail2',
+      pid: 1,
+      workspace: root,
+      event: HookEvent.ToolExecuteBefore,
+      hook: '/hook.sh',
+      name: 'tool-execute-before',
+      startedAt: 11_000,
+      finishedAt: 11_050,
+      durationMs: 50,
+      status: 'success',
+    };
+    fs.writeFileSync(
+      largeLogFile,
+      padding + splitLineFragment + '\n' + JSON.stringify(trailingRecord1) + '\n' + JSON.stringify(trailingRecord2) + '\n',
+    );
+
+    const largeStat = fs.statSync(largeLogFile);
+    expect(largeStat.size).toBeGreaterThan(MAX_LOG_TAIL_READ_BYTES);
+
+    const largeResult = readHookLogRecords(largeLogFile);
+    expect(largeResult.kind).toBe('ok');
+    if (largeResult.kind === 'ok') {
+      expect(largeResult.truncated).toBe(true);
+      const lastTwo = largeResult.records.slice(-2);
+      expect(lastTwo).toEqual([trailingRecord1, trailingRecord2]);
+    }
+
+    // 4. Custom maxRecords trims output to requested count on a fresh file
+    const customMaxFile = path.join(root, 'custom-max.jsonl');
+    fs.writeFileSync(customMaxFile, `${JSON.stringify(recordA)}\n${JSON.stringify(recordB)}\n`);
+    const trimmedResult = readHookLogRecords(customMaxFile, 1);
+    expect(trimmedResult.kind).toBe('ok');
+    if (trimmedResult.kind === 'ok') {
+      expect(trimmedResult.records.length).toBe(1);
+      expect(trimmedResult.records[0]).toEqual(recordB);
+    }
   });
 });
