@@ -14,10 +14,10 @@ import { guardAgainstDestructiveActions } from './hooks/internal/before-tool.js'
 import { configureSkills } from './configuration/skills-config.js';
 import { configureCommands } from './configuration/commands-config.js';
 import { configureAgents } from './configuration/agents-config.js';
-import { createDispatchHandlers, initializeHooksWrapper } from './hooks/hooks-runtime.js';
-import { HookEvent, type HookReportInput, type HooksWrapper } from './types/hook-types.js';
+import { HookEvent, type HookReportInput } from './types/hook-types.js';
 import { renderSnapshot } from './hooks/hooks-diagnostics.js';
 import { writeHookCrashLog } from './hooks/hooks-persistence.js';
+import HooksWrapper from './hooks/hooks-wrapper.js';
 
 // Only the plugin factory method should be exported from this file due to OpenCode plugin handling
 
@@ -45,7 +45,7 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
 
   if (!hooksDisabled) {
     try {
-      wrapper = await initializeHooksWrapper(directory, endSession);
+      wrapper = new HooksWrapper(directory, endSession);
       snapshot = wrapper.snapshot;
     } catch (error) {
       writeHookCrashLog(directory, 'startup_digest_failed', error);
@@ -128,7 +128,7 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
   if (wrapper === undefined) return hooks;
 
   // Return full plugin configuration with user hooks support
-  const dispatchHandlers = createDispatchHandlers(wrapper.dispatch);
+  const dispatchHandlers = wrapper.createDispatchHandlers();
   const userDispose = dispatchHandlers.dispose;
   return {
     ...hooks,

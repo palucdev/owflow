@@ -36,7 +36,7 @@ Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown
 
 ### User Hooks (`project/user-hooks.md`)
 
-User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; universal gate fail-closed semantics across all 16 lifecycle events and 32 host events; supported extensions and interpreters (`.sh`/`.ps1` subprocess scripts with PowerShell execution flags); modular execution architecture in `src/hooks/runtime/`; event-named files for the 32 v1 host events (`session-idle.sh` → `session.idle`, fanned out from the single `event` hook); the same runnable logging example in both formats; stdin JSON payload and git-hooks exit-code semantics; strict-digest fail-fast vs report mode (the hooks directory may contain only hook scripts) and the `OWFLOW_HOOKS_DISABLED=1` bypass; visibility surfaces (startup banner, always-on TUI Active hooks sidebar panel with click-to-open latest-run popup) with restart-to-reload semantics; isolated per-hook JSONL runtime logs (`owflow-hook-logs-<workspace-hash>-<hook-name>.jsonl`, 4 MB rotation) with workspace-scoped latest symlink (`owflow-hooks-latest-<workspace-hash>.jsonl`); bounded 256 KB tail-slice reader with mtime/size cache; `runId:status` bounded deduplication set (1,000 entries) preserving complete session run history; atomic temp-file status snapshots with 50ms trailing debounce on transient `PENDING` states and immediate flush on terminal states; and the baseline trust model.
+User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; universal gate fail-closed semantics across all 16 lifecycle events and 32 host events; supported extensions and interpreters (`.sh`/`.ps1` subprocess scripts with PowerShell execution flags).
 
 ---
 
@@ -112,7 +112,7 @@ Category overview: custom project workflow-design standards category (no built-i
 
 #### Skill, Agent, and Command Authoring (`standards/workflow-design/authoring.md`)
 
-SKILL.md frontmatter/naming contract (always `owflow:`-prefixed, `user-invocable` flags), agent frontmatter contract (`mode: subagent`, `hidden: true`, omitted model for session inheritance), thin command wrappers over skills, runtime synthesis of slash commands from invocable skill frontmatter (`argument-hint` is documentation-only; behavior-changing flags are restated in skill bodies), anti-duplication and single source of truth, documentation length targets, references that guide rather than implement (<10-line examples), reference file placement, HR-separated agent bodies with YAML result blocks, and structured workflow/step documentation.
+SKILL.md frontmatter/naming contract, agent frontmatter contract, thin command wrappers over skills, runtime synthesis of slash commands from invocable skill frontmatter, anti-duplication and single source of truth, documentation length targets, references that guide rather than implement (<10-line examples), reference file placement, HR-separated agent bodies with YAML result blocks, and structured workflow/step documentation.
 
 #### State Management and Gates (`standards/workflow-design/state-and-gates.md`)
 

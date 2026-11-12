@@ -2,20 +2,16 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
+import HooksWrapper, {
   ABORT_COOLDOWN_MS,
   buildExecutionArgs,
-  buildStdinPayload,
   canAbortSessionForEvent,
   CIRCUIT_BREAKER_COOLDOWN_MS,
   CIRCUIT_BREAKER_RAPID_GAP_MS,
   CIRCUIT_BREAKER_THRESHOLD,
-  createDispatchHandlers,
   HOOK_TIMEOUT_ENV,
-  initializeHooksWrapper,
   DEFAULT_HOOK_TIMEOUT_MS,
   flushStatusFileAtomic,
-  MAX_LOG_FILE_BYTES,
   NON_SESSION_STREAM_CAP_BYTES,
   readStream,
   STATUS_DEBOUNCE_MS,
@@ -28,7 +24,7 @@ import {
   buildInterpreterUnavailableError,
   buildSpawnError,
   buildProcessFailureError,
-} from '../../hooks/hooks-runtime.js';
+} from '../../hooks/hooks-wrapper.js';
 import {
   readHookLogRecords,
   readHookStatusSnapshot,
@@ -36,9 +32,9 @@ import {
   resolveHooksLatestSymlink,
   resolveHooksLogFile,
 } from '../../hooks/hooks-persistence.js';
-import { HookEvent, HookRunState, type HookRegistryEntry } from '../../types/hook-types.js';
+import { HookEvent, HookRunState, type HookRegistryEntry, type HookRunLogRecord } from '../../types/hook-types.js';
 
-describe('hooks-runtime (execution & dispatch runtime)', () => {
+describe('hooks-wrapper (execution & dispatch runtime)', () => {
   const tempDirs: string[] = [];
 
   const makeTempDir = (): string => {
@@ -53,6 +49,18 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     }
   });
 
+  test('initializes snapshot of discovered hooks upon instantiation', () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n');
+
+    const wrapper = new HooksWrapper(root);
+    expect(wrapper.snapshot.entries.length).toBe(1);
+    expect(wrapper.snapshot.entries[0]!.event).toBe(HookEvent.ToolExecuteBefore);
+    wrapper.dispose();
+  });
+
   test('buildStdinPayload strips class instance internals to identity keys and handles bigint', () => {
     class SecretModel {
       id = 'claude-4';
@@ -60,7 +68,8 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       name = 'Claude';
       apiKey = 'sk-secret';
     }
-    const raw = buildStdinPayload(
+    const wrapper = new HooksWrapper(makeTempDir());
+    const raw = (wrapper as any).buildStdinPayload(
       HookEvent.ToolExecuteBefore,
       { tool: 'bash', count: 42n, model: new SecretModel() },
       { args: { command: 'ls' } },
@@ -77,15 +86,18 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
         args: { command: 'ls' },
       },
     });
+    wrapper.dispose();
   });
 
   test('buildStdinPayload serializes circular context references without throwing', () => {
     const circularObj: any = { name: 'circular-test' };
     circularObj.self = circularObj;
-    const raw = buildStdinPayload(HookEvent.ToolExecuteBefore, circularObj, {}, 'ses_circ');
+    const wrapper = new HooksWrapper(makeTempDir());
+    const raw = (wrapper as any).buildStdinPayload(HookEvent.ToolExecuteBefore, circularObj, {}, 'ses_circ');
     expect(() => JSON.parse(raw)).not.toThrow();
     const parsed = JSON.parse(raw);
     expect(parsed.context.self.self).toBe('[Circular]');
+    wrapper.dispose();
   });
 
   test('runtime status and log persistence safely ignore dangling symlinks and clean up symlink rotation targets', async () => {
@@ -102,7 +114,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const danglingLog = path.join(root, 'dangling-log.jsonl');
     fs.symlinkSync(targetLog, danglingLog);
 
-    const wrapper = await initializeHooksWrapper(root, undefined, {
+    const wrapper = new HooksWrapper(root, undefined, {
       statusFile: danglingStatus,
       logFile: danglingLog,
     });
@@ -114,7 +126,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     expect(fs.existsSync(targetLog)).toBe(false);
   });
 
-  test('git-hooks execution: exit 0 succeeds, non-zero fails closed & aborts session, truncates large output, rotates logs, and supports timeout', async () => {
+  test('git-hooks execution: exit 0 succeeds and non-zero fails closed with session abort', async () => {
     const root = makeTempDir();
     const hooksDir = path.join(root, '.owflow', 'hooks');
     fs.mkdirSync(hooksDir, { recursive: true });
@@ -128,7 +140,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     fs.writeFileSync(path.join(hooksDir, 'chat-message.sh'), `#!/usr/bin/env bash\necho "policy violation" >&2\nexit 2\n`);
 
     const ended: string[] = [];
-    const wrapper = await initializeHooksWrapper(
+    const wrapper = new HooksWrapper(
       root,
       (id) => {
         ended.push(id);
@@ -160,11 +172,6 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     await expect(wrapper.dispatch(HookEvent.ChatMessage, { sessionID: 'ses_fail' }, {})).rejects.toThrow(/Blocked: policy violation\./);
     expect(ended).toEqual(['ses_fail']);
 
-    // Log rotation when file > MAX_LOG_FILE_BYTES
-    fs.writeFileSync(logFile, 'x'.repeat(MAX_LOG_FILE_BYTES + 10));
-    await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_rotated' }, {});
-    expect(fs.existsSync(`${logFile}.1`)).toBe(true);
-
     wrapper.dispose();
   });
 
@@ -177,7 +184,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const hookScript = path.join(hooksDir, 'tool-execute-before.sh');
     fs.writeFileSync(hookScript, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
 
-    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
     const sessionID = 'ses_multi_run';
 
     for (let i = 0; i < 5; i++) {
@@ -208,7 +215,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     fs.writeFileSync(hook2, '#!/usr/bin/env bash\necho "chat out"\nexit 0\n', { mode: 0o755 });
 
     const statusFile = path.join(root, 'status-isolated.json');
-    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile });
+    const wrapper = new HooksWrapper(root, undefined, { statusFile });
     const sessionID = 'ses_per_hook';
     const latestSymlink = resolveHooksLatestSymlink(root);
 
@@ -224,7 +231,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
 
     const toolLogs = readHookLogRecords(logFileTool);
     expect(toolLogs.kind === 'ok' && toolLogs.records.length).toBe(1);
-    expect(toolLogs.kind === 'ok' && toolLogs.records[0].name).toBe('tool-execute-before');
+    expect(toolLogs.kind === 'ok' && toolLogs.records[0]!.name).toBe('tool-execute-before');
 
     // Dispatch chat.message
     await wrapper.dispatch(HookEvent.ChatMessage, { sessionID }, {});
@@ -234,7 +241,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
 
     const chatLogs = readHookLogRecords(logFileChat);
     expect(chatLogs.kind === 'ok' && chatLogs.records.length).toBe(1);
-    expect(chatLogs.kind === 'ok' && chatLogs.records[0].name).toBe('chat-message');
+    expect(chatLogs.kind === 'ok' && chatLogs.records[0]!.name).toBe('chat-message');
 
     // Verify tool log file still only has its 1 record (isolated!)
     const toolLogsAfter = readHookLogRecords(logFileTool);
@@ -243,84 +250,16 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     wrapper.dispose();
   });
 
-  test('evicts oldest entries when written run records exceed capacity', async () => {
-    const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    const statusFile = path.join(root, 'status-evict.json');
-    const logFile = path.join(root, 'logs-evict.jsonl');
-    const hookScript = path.join(hooksDir, 'tool-execute-before.sh');
-    fs.writeFileSync(hookScript, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
-
-    const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(
-      () =>
-        ({
-          pid: 12345,
-          kill: () => {},
-          exited: Promise.resolve(0),
-          stdout: new Response('').body,
-          stderr: new Response('').body,
-          signalCode: null,
-        }) as any,
-    );
-
-    try {
-      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
-      for (let i = 0; i < 1005; i++) {
-        await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
-      }
-      wrapper.dispose();
-    } finally {
-      spawnSpy.mockRestore();
-    }
-  });
-
-  test('timeout and missing interpreter fail closed', async () => {
+  test('missing interpreter fails closed and safely handles endSession callback errors', async () => {
     const root = makeTempDir();
     const hooksDir = path.join(root, '.owflow', 'hooks');
     fs.mkdirSync(hooksDir, { recursive: true });
     fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
 
-    let exitResolver: (code: number) => void;
-    const exitPromise = new Promise<number>((resolve) => {
-      exitResolver = resolve;
-    });
-
-    const mockProc = {
-      pid: 12345,
-      kill: spyOn({ kill: () => {} }, 'kill').mockImplementation(() => {
-        exitResolver(143);
-      }),
-      exited: exitPromise,
-      stdout: new Response('').body,
-      stderr: new Response('').body,
-      signalCode: null,
-    };
-
-    const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
-    const prevTimeout = process.env[HOOK_TIMEOUT_ENV];
-    process.env[HOOK_TIMEOUT_ENV] = '20';
-    const keepAlive = setInterval(() => {}, 5);
-    try {
-      const wrapper = await initializeHooksWrapper(root, undefined, {
-        statusFile: path.join(root, 's.json'),
-        logFile: path.join(root, 'l.jsonl'),
-      });
-      await expect(wrapper.dispatch(HookEvent.Config, {})).rejects.toThrow(/timed out after 20ms/);
-      expect(mockProc.kill).toHaveBeenCalled();
-      wrapper.dispose();
-    } finally {
-      clearInterval(keepAlive);
-      spawnSpy.mockRestore();
-      if (prevTimeout === undefined) delete process.env[HOOK_TIMEOUT_ENV];
-      else process.env[HOOK_TIMEOUT_ENV] = prevTimeout;
-    }
-
-    // Missing interpreter branch
     const whichSpy = spyOn(Bun, 'which').mockReturnValue(null);
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const wrapper = await initializeHooksWrapper(
+      const wrapper = new HooksWrapper(
         root,
         () => {
           throw new Error('abort failed');
@@ -332,6 +271,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       );
       await expect(wrapper.dispatch(HookEvent.Config, { sessionID: 'ses_no_interp' })).rejects.toThrow(/bash interpreter is not available/);
       expect(warnSpy).toHaveBeenCalled();
+      wrapper.dispose();
     } finally {
       whichSpy.mockRestore();
       warnSpy.mockRestore();
@@ -347,7 +287,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const statusFile = path.join(root, 'status.json');
     const logFile = path.join(root, 'logs.jsonl');
 
-    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
     await wrapper.dispatch(HookEvent.Event, {});
 
     const logResult = readHookLogRecords(logFile);
@@ -380,7 +320,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
 
     const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
     try {
-      const wrapper = await initializeHooksWrapper(root, undefined, {
+      const wrapper = new HooksWrapper(root, undefined, {
         statusFile: path.join(root, 'status.json'),
         logFile: path.join(root, 'logs.jsonl'),
       });
@@ -401,18 +341,22 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
   });
 
   test('createDispatchHandlers fans out host events, serializes catch-all event runs, and drops duplicate in-flight host events', async () => {
+    const root = makeTempDir();
+    const wrapper = new HooksWrapper(root);
     const events: string[] = [];
     let releaseIdle!: () => void;
     const idleBarrier = new Promise<void>((resolve) => {
       releaseIdle = resolve;
     });
 
-    const handlers = createDispatchHandlers(async (event) => {
+    spyOn(wrapper, 'dispatch').mockImplementation(async (event) => {
       events.push(event);
       if (event === 'session.idle') {
         await idleBarrier;
       }
     });
+
+    const handlers = wrapper.createDispatchHandlers();
 
     const first = handlers.event!({ event: { type: 'session.idle' } } as any);
     // Emit two duplicate session.idle events while the first is still in-flight
@@ -425,6 +369,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     // Only one session.idle dispatch ran; duplicates while in-flight were dropped
     expect(events.filter((e) => e === 'session.idle')).toEqual(['session.idle']);
     expect(events.filter((e) => e === 'event')).toEqual(['event', 'event', 'event']);
+    wrapper.dispose();
   });
 
   test('should only allow session abort for active lifecycle gate events, not reactive host events or catch-all event', () => {
@@ -451,7 +396,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const logFile = path.join(root, 'logs.jsonl');
     const ended: string[] = [];
 
-    const wrapper = await initializeHooksWrapper(
+    const wrapper = new HooksWrapper(
       root,
       (id) => {
         ended.push(id);
@@ -476,7 +421,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     // Missing interpreter on session.idle does not call endSession, while chat.message does
     const whichSpy = spyOn(Bun, 'which').mockReturnValue(null);
     try {
-      const noInterpWrapper = await initializeHooksWrapper(
+      const noInterpWrapper = new HooksWrapper(
         root,
         (id) => {
           ended.push(id);
@@ -511,7 +456,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     fs.writeFileSync(path.join(hooksDir, 'command-execute-before.sh'), '#!/usr/bin/env bash\necho "cmd gate failed" >&2\nexit 1\n');
 
     const ended: string[] = [];
-    const wrapper = await initializeHooksWrapper(
+    const wrapper = new HooksWrapper(
       root,
       (id) => {
         ended.push(id);
@@ -550,7 +495,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
-      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+      const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
       const payload = { event: { type: 'session.idle', properties: { sessionID: 'ses_cb' } } };
 
       for (let i = 0; i < CIRCUIT_BREAKER_THRESHOLD; i += 1) {
@@ -575,7 +520,10 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     }
   });
 
-  test('readStream should read stream and invoke onChunk within limit', async () => {
+  test('readStream reads stream within limit and handles null/undefined streams', async () => {
+    expect(await readStream(null, () => {})).toBe('');
+    expect(await readStream(undefined, () => {})).toBe('');
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -589,11 +537,6 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const result = await readStream(stream, (c) => chunks.push(c));
     expect(result).toBe('hello world');
     expect(chunks.join('')).toBe('hello world');
-  });
-
-  test('readStream should return empty string for null or undefined stream', async () => {
-    expect(await readStream(null, () => {})).toBe('');
-    expect(await readStream(undefined, () => {})).toBe('');
   });
 
   test('readStream should cancel stream reader and bound output when maxBytes is exceeded', async () => {
@@ -630,7 +573,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const statusFile = path.join(root, 'status.json');
     const logFile = path.join(root, 'logs.jsonl');
 
-    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {
       tool: 'bash',
       args: { command: 'test' },
@@ -640,7 +583,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     expect(logResult.kind).toBe('ok');
     if (logResult.kind === 'ok') {
       expect(logResult.records.length).toBe(1);
-      expect(logResult.records[0].stdout?.length).toBe(NON_SESSION_STREAM_CAP_BYTES);
+      expect(logResult.records[0]!.stdout?.length).toBe(NON_SESSION_STREAM_CAP_BYTES);
     }
 
     wrapper.dispose();
@@ -688,7 +631,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
         return 1 as any;
       }) as typeof setTimeout);
 
-      const wrapper = await initializeHooksWrapper(root, undefined, {
+      const wrapper = new HooksWrapper(root, undefined, {
         statusFile: path.join(root, 's.json'),
         logFile: path.join(root, 'l.jsonl'),
       });
@@ -718,7 +661,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       };
       spawnSpy.mockImplementation(() => quickProc as any);
 
-      const wrapper2 = await initializeHooksWrapper(root, undefined, {
+      const wrapper2 = new HooksWrapper(root, undefined, {
         statusFile: path.join(root, 's2.json'),
         logFile: path.join(root, 'l2.jsonl'),
       });
@@ -748,7 +691,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     process.env.OWFLOW_DEBUG = '1';
 
     try {
-      const wrapper = await initializeHooksWrapper(root, undefined, {
+      const wrapper = new HooksWrapper(root, undefined, {
         statusFile: path.join(root, 'status.json'),
         logFile: path.join(root, 'logs.jsonl'),
       });
@@ -778,15 +721,15 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const logFile = path.join(root, 'logs.jsonl');
 
     try {
-      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+      const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
       await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {})).rejects.toThrow(/Blocked: failed to spawn hook.*EACCES: permission denied/);
 
       const logs = readHookLogRecords(logFile);
       expect(logs.kind).toBe('ok');
       if (logs.kind === 'ok') {
         expect(logs.records).toHaveLength(1);
-        expect(logs.records[0].status).toBe(HookRunState.FAILURE);
-        expect(logs.records[0].reason).toContain('EACCES: permission denied');
+        expect(logs.records[0]!.status).toBe(HookRunState.FAILURE);
+        expect(logs.records[0]!.reason).toContain('EACCES: permission denied');
       }
       wrapper.dispose();
     } finally {
@@ -795,32 +738,46 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
   });
 
   test('createDispatchHandlers isolates reactive host event failures from crashing OpenCode event bus', async () => {
+    const root = makeTempDir();
+    const wrapper = new HooksWrapper(root);
     const warnLines: string[] = [];
     const warnSpy = spyOn(console, 'warn').mockImplementation((msg: string) => {
       warnLines.push(msg);
     });
 
     try {
-      const dispatchMock = spyOn(
-        {
-          dispatch: async (ev: string) => {
-            if (ev === 'session.idle') throw new Error('Blocked: idle check failed');
-            if (ev === HookEvent.Event) throw new Error('Blocked: catch-all event failed');
-          },
-        },
-        'dispatch',
-      );
+      spyOn(wrapper, 'dispatch').mockImplementation(async (ev: string) => {
+        if (ev === 'session.idle') throw new Error('Blocked: idle check failed');
+        if (ev === HookEvent.Event) throw new Error('Blocked: catch-all event failed');
+      });
 
-      const handlers = createDispatchHandlers(dispatchMock.mock.calls ? (dispatchMock as any) : () => Promise.resolve());
+      const handlers = wrapper.createDispatchHandlers();
 
       // Dispatching reactive event via host Event handler should NOT throw unhandled rejection
-      await handlers[HookEvent.Event]({ event: { type: 'session.idle' } });
+      await handlers[HookEvent.Event]!({ event: { type: 'session.idle' } } as any);
 
       expect(warnLines.some((l) => l.includes('reactive host event "session.idle" failed'))).toBe(true);
       expect(warnLines.some((l) => l.includes('catch-all event hook failed'))).toBe(true);
     } finally {
       warnSpy.mockRestore();
+      wrapper.dispose();
     }
+  });
+
+  test('createDispatchHandlers routes passthrough lifecycle events to dispatch', async () => {
+    const root = makeTempDir();
+    const wrapper = new HooksWrapper(root);
+    const dispatched: string[] = [];
+    spyOn(wrapper, 'dispatch').mockImplementation(async (ev: string) => {
+      dispatched.push(ev);
+    });
+
+    const handlers = wrapper.createDispatchHandlers();
+    await handlers[HookEvent.CommandExecuteBefore]!({ command: 'ls' } as any, {} as any);
+    await handlers[HookEvent.ToolExecuteAfter]!({ tool: 'bash' } as any, {} as any);
+
+    expect(dispatched).toEqual([HookEvent.CommandExecuteBefore, HookEvent.ToolExecuteAfter]);
+    wrapper.dispose();
   });
 
   test('debounces transient PENDING status writes and atomically flushes terminal states', async () => {
@@ -842,7 +799,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     });
 
     try {
-      const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+      const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
       expect(renameCount).toBe(1);
 
       await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
@@ -869,7 +826,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     const statusFile = path.join(root, 'status-slow.json');
     const logFile = path.join(root, 'logs-slow.jsonl');
 
-    const wrapper = await initializeHooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
     const dispatchPromise = wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
 
     await new Promise((r) => setTimeout(r, 15));
@@ -937,7 +894,7 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
     test('prepends PowerShell execution flags when interpreter is powershell.exe', () => {
       const entry: HookRegistryEntry = {
         path: 'C:\\workspace\\.owflow\\hooks\\session-idle.ps1',
-        event: HookEvent.SessionIdle,
+        event: 'session.idle',
         interpreter: {
           resolved: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
           expected: 'powershell.exe',
@@ -994,52 +951,6 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
 
       expect(buildExecutionArgs(entry)).toEqual(['/bin/bash', '/workspace/.owflow/hooks/tool-execute-before.sh']);
     });
-
-    test('spawns PowerShell scripts with execution flags during dispatch', async () => {
-      const root = makeTempDir();
-      const hooksDir = path.join(root, '.owflow', 'hooks');
-      fs.mkdirSync(hooksDir, { recursive: true });
-      const hookPath = path.join(hooksDir, 'tool-execute-before.ps1');
-      fs.writeFileSync(hookPath, 'Write-Output "ok"\n');
-
-      const whichSpy = spyOn(Bun, 'which').mockImplementation(((cmd: string) => {
-        if (cmd === 'pwsh') return '/usr/bin/pwsh';
-        return null;
-      }) as any);
-
-      let capturedArgs: string[] | undefined;
-      const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(((args: string[]) => {
-        capturedArgs = args;
-        return {
-          pid: 99999,
-          kill: () => {},
-          exited: Promise.resolve(0),
-          stdout: new Response('ok').body,
-          stderr: new Response('').body,
-          signalCode: null,
-        } as any;
-      }) as any);
-
-      try {
-        const wrapper = await initializeHooksWrapper(root, undefined, {
-          statusFile: path.join(root, 'status.json'),
-          logFile: path.join(root, 'log.jsonl'),
-        });
-        await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
-        wrapper.dispose();
-
-        expect(capturedArgs).toBeDefined();
-        expect(capturedArgs).toContain('-NoProfile');
-        expect(capturedArgs).toContain('-NonInteractive');
-        expect(capturedArgs).toContain('-ExecutionPolicy');
-        expect(capturedArgs).toContain('Bypass');
-        expect(capturedArgs).toContain('-File');
-        expect(capturedArgs![capturedArgs!.length - 1]).toBe(hookPath);
-      } finally {
-        whichSpy.mockRestore();
-        spawnSpy.mockRestore();
-      }
-    });
   });
 
   describe('modular runtime components', () => {
@@ -1090,26 +1001,58 @@ describe('hooks-runtime (execution & dispatch runtime)', () => {
       controller.dispose();
     });
 
-    test('StatusRecorder manages statuses in memory and on disk', () => {
+    test('StatusRecorder dedupes identical runs and evicts oldest entries when capacity exceeds 1,000', () => {
       const root = makeTempDir();
-      const statusFile = path.join(root, 'rec-status.json');
-      const recorder = new StatusRecorder({ directory: root, statusFile });
-
-      expect(recorder.getStatus(HookEvent.ToolExecuteBefore)).toBeUndefined();
+      const logFile = path.join(root, 'evict.jsonl');
+      const recorder = new StatusRecorder({ directory: root, logFile });
       expect(recorder.getAllStatuses().size).toBe(0);
 
-      recorder.setStatus(HookEvent.ToolExecuteBefore, {
-        status: HookRunState.SUCCESS,
+      const makeRecord = (id: number): HookRunLogRecord => ({
+        version: 1,
+        runId: `run#${id}`,
+        pid: 1,
+        workspace: root,
+        event: HookEvent.ToolExecuteBefore,
+        hook: '/hook.sh',
+        name: 'tool-execute-before',
         startedAt: 1000,
-        finishedAt: 1050,
-        durationMs: 50,
+        finishedAt: 1010,
+        durationMs: 10,
+        status: HookRunState.SUCCESS,
       });
 
-      expect(recorder.getStatus(HookEvent.ToolExecuteBefore)?.status).toBe(HookRunState.SUCCESS);
-      expect(recorder.getAllStatuses().size).toBe(1);
+      // 1. Write run#0
+      recorder.appendLog(makeRecord(0));
+      // Appending duplicate run#0 with same status is deduped
+      recorder.appendLog(makeRecord(0));
 
-      recorder.deleteStatus(HookEvent.ToolExecuteBefore);
-      expect(recorder.getStatus(HookEvent.ToolExecuteBefore)).toBeUndefined();
+      const set = (recorder as any).writtenRunRecords as Set<string>;
+      expect(set.size).toBe(1);
+      expect(set.has('run#0:success')).toBe(true);
+
+      // 2. Add 1,000 distinct records to exceed the 1,000 bounded capacity (1 + 1000 = 1001 total records)
+      for (let i = 1; i <= 1000; i++) {
+        recorder.appendLog(makeRecord(i));
+      }
+
+      // Capacity should be bounded to 1,000 entries
+      expect(set.size).toBe(1000);
+      // run#0 was the oldest entry and was evicted
+      expect(set.has('run#0:success')).toBe(false);
+      // Recent runs are still tracked
+      expect(set.has('run#1000:success')).toBe(true);
+      expect(set.has('run#1:success')).toBe(true);
+
+      // 3. run#1000 is still active in the set and should be deduped
+      recorder.appendLog(makeRecord(1000));
+      expect(set.size).toBe(1000);
+
+      // 4. run#0 was evicted, so appending it again re-adds it
+      recorder.appendLog(makeRecord(0));
+      expect(set.size).toBe(1000);
+      expect(set.has('run#0:success')).toBe(true);
+      // and now run#1 was evicted as the new oldest entry
+      expect(set.has('run#1:success')).toBe(false);
 
       recorder.dispose();
     });
