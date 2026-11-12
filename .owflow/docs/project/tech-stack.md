@@ -44,7 +44,7 @@ None. Persistence is file-based: orchestrator state lives in `orchestrator-state
 - **`bun tsc`** — type-check and emit ESM JavaScript + `.d.ts` declarations to `dist/`
 - **`scripts/copy-markdowns.js`** — copies skills, agents, commands, and templates into `dist/` (128 markdown assets; the published `dist/` also contains the compiled JS, `.d.ts` declarations, and html-renderer assets — 189 files total in the payload)
 - **npm** — publish path only (`prepack` runs the full build as a publish guard); `package-lock.json` has been removed, leaving `bun.lock` as the single lockfile
-- **Bun >= 1.3.0 / Node >= 22** — host engine requirement (`engines` field)
+- **Bun >= 1.3.0** — host engine requirement (`engines` field)
 
 ## Build & Runtime Flow
 
@@ -79,7 +79,7 @@ flowchart TD
   copy --> dist
   dist --> payload["Package payload<br/>dist + README + LICENSE"]
   payload --> publish["npm publish<br/>(prepack runs full build)"]
-  publish --> host["OpenCode host (Node ^25)<br/>loads dist/index.js"]
+  publish --> host["OpenCode host (Bun)<br/>loads dist/index.js"]
 ```
 
 ## Infrastructure
@@ -123,7 +123,7 @@ Semver in `package.json`. `CHANGELOG.md` follows Keep a Changelog and records re
 
 ## Migration Path (for legacy projects)
 
-Not applicable — modern stack throughout (Bun >= 1.3, TypeScript 5, Node >= 22). Type declarations (`dist/index.d.ts`, `dist/tui.d.ts`) are emitted at build time via `declaration: true` in `tsconfig.json`.
+Not applicable — modern stack throughout (Bun >= 1.3, TypeScript 5). Type declarations (`dist/index.d.ts`, `dist/tui.d.ts`) are emitted at build time via `declaration: true` in `tsconfig.json`.
 
 ---
 

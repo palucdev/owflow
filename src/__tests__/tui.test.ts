@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import tuiModule, { registerActiveHooksSidebar } from '../tui.js';
+import { loadSolidRuntime } from '../tui/primitives.js';
 import { makeFakeApi, makeSolid } from './tui/primitives.js';
 
 describe('TUI module', () => {
@@ -54,5 +55,69 @@ describe('TUI module', () => {
     await tuiModule.tui(api);
     expect(slots).toHaveLength(1);
     expect(slots[0].order).toBe(50);
+  });
+
+  describe('loadSolidRuntime', () => {
+    test('should resolve onCleanup directly from @opentui/solid when available', async () => {
+      const onCleanup = () => {};
+      const solidModule = {
+        createElement: () => ({}),
+        insert: () => {},
+        setProp: () => {},
+        onCleanup,
+      };
+
+      const runtime = await loadSolidRuntime(async () => solidModule);
+      expect(runtime).not.toBeNull();
+      expect(runtime?.onCleanup).toBe(onCleanup);
+    });
+
+    test('should fall back to solid-js for onCleanup when @opentui/solid does not export it', async () => {
+      const onCleanup = () => {};
+      const solidModule = {
+        createElement: () => ({}),
+        insert: () => {},
+        setProp: () => {},
+      };
+      const solidJsModule = {
+        onCleanup,
+      };
+
+      const runtime = await loadSolidRuntime(
+        async () => solidModule,
+        async () => solidJsModule,
+      );
+      expect(runtime).not.toBeNull();
+      expect(runtime?.onCleanup).toBe(onCleanup);
+    });
+
+    test('should return runtime without onCleanup when neither exports it', async () => {
+      const solidModule = {
+        createElement: () => ({}),
+        insert: () => {},
+        setProp: () => {},
+      };
+      const solidJsModule = {};
+
+      const runtime = await loadSolidRuntime(
+        async () => solidModule,
+        async () => solidJsModule,
+      );
+      expect(runtime).not.toBeNull();
+      expect(runtime?.onCleanup).toBeUndefined();
+    });
+
+    test('should return null and warn when importing @opentui/solid fails', async () => {
+      const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const runtime = await loadSolidRuntime(async () => {
+          throw new Error('Module not found');
+        });
+        expect(runtime).toBeNull();
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to import @opentui/solid'), expect.any(Error));
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 });

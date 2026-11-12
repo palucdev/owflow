@@ -100,6 +100,9 @@ describe('hooks-registry (scanHooks and validation)', () => {
     fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.ps1'), '');
 
     expect(() => scanHooks(hooksDir)).toThrow(/7 invalid entries/);
+    expect(() => scanHooks(hooksDir)).toThrow(
+      /User hooks are bypassed until the hooks directory validates; the built-in destructive-command guard remains active/,
+    );
     const report = scanHooks(hooksDir, { mode: HookDigestMode.Report });
     expect(report.entries.map((e) => e.event)).toEqual(['session.idle']);
     expect(report.failures.length).toBe(7);

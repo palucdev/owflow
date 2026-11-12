@@ -9,6 +9,7 @@ export interface SidebarRenderHandle {
   readonly root: unknown;
   readonly applyStatuses: (snapshotEntries: ReadonlyMap<string, HookRuntimeEntry>) => boolean;
   readonly disposed: () => boolean;
+  readonly dispose: () => void;
 }
 
 export const materializeSidebar = (
@@ -26,6 +27,21 @@ export const materializeSidebar = (
   const colors = new Map<string, string>();
   const sessionStates = new Map<string, HookRunState>(initialStates);
   const root = el(solid, 'box', { flexDirection: 'column' }, [el(solid, 'text', { fg: theme.text }, [view.title])]);
+  let isDisposed = false;
+
+  const dispose = (): void => {
+    if (isDisposed) return;
+    isDisposed = true;
+    rows.clear();
+    colors.clear();
+    sessionStates.clear();
+  };
+
+  if (typeof solid.onCleanup === 'function') {
+    try {
+      solid.onCleanup(dispose);
+    } catch {}
+  }
 
   if (view.rows.length === 0) {
     solid.insert(root, txt(solid, EMPTY_HOOKS_NAME, theme.textMuted));
@@ -45,14 +61,18 @@ export const materializeSidebar = (
           gap: 1,
           ...(interactive
             ? {
-                onMouseUp: () => onRowClick(row, theme),
+                onMouseUp: () => {
+                  if (!isDisposed) onRowClick(row, theme);
+                },
                 onMouseOver: () => {
+                  if (isDisposed) return;
                   solid.setProp(line, 'backgroundColor', theme.backgroundElement);
                   solid.setProp(name, 'fg', theme.primary);
                   solid.setProp(hint, 'fg', theme.primary);
                   onRowHover();
                 },
                 onMouseOut: () => {
+                  if (isDisposed) return;
                   solid.setProp(line, 'backgroundColor', undefined);
                   solid.setProp(name, 'fg', theme.text);
                   solid.setProp(hint, 'fg', theme.textMuted);
@@ -70,6 +90,7 @@ export const materializeSidebar = (
   }
 
   const applyStatuses = (snapshotEntries: ReadonlyMap<string, HookRuntimeEntry>): boolean => {
+    if (isDisposed) return false;
     try {
       let changed = false;
       for (const [event, entry] of snapshotEntries) {
@@ -99,6 +120,7 @@ export const materializeSidebar = (
   return {
     root,
     applyStatuses,
-    disposed: () => Boolean((root as { isDestroyed?: unknown } | null)?.isDestroyed),
+    disposed: () => isDisposed || Boolean((root as { isDestroyed?: unknown } | null)?.isDestroyed),
+    dispose,
   };
 };

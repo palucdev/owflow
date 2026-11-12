@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-- **Strict digest** — `.owflow/hooks/` may contain only `.sh` and `.ps1` hook scripts, one file per hook name: any other entry (directory, symlink, `.md` readme, dotfile, or unsupported extension) or duplicate stem is a fatal registration error that drops the owflow plugin until resolved or bypassed via `OWFLOW_HOOKS_DISABLED=1`. Notes and fixtures belong elsewhere.
+- **Strict digest** — `.owflow/hooks/` may contain only `.sh` and `.ps1` hook scripts, one file per hook name: any other entry (directory, symlink, `.md` readme, dotfile, or unsupported extension) or duplicate stem fails validation, bypassing user hooks while the built-in destructive-command guard remains active, until resolved or bypassed via `OWFLOW_HOOKS_DISABLED=1`. Notes and fixtures belong elsewhere.
 - **Baseline trust** — scripts are the host project's own code, executed with the user's full privileges and inherited environment (the git-hooks/husky convention); `OWFLOW_HOOKS_DISABLED=1` and opt-in `OWFLOW_HOOK_TIMEOUT_MS` are the operator controls.
 - **Restart to reload** — hooks are digested once at plugin startup (there is no file watcher). Registration is fail-fast; a broken gate hook blocks the operation when it fires and is never silently skipped.
 - **Transitive dependency audit** — `bun audit` reports 4 high-severity advisories on transitive dependencies (`toml@4.2.0` and `zod@4.1.8` pulled in by `@opencode-ai/plugin@^1.18.4`); neither package is imported or reachable by owflow's own code, and resolution is tracked upstream in `@opencode-ai/plugin`.

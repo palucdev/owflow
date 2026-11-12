@@ -8,13 +8,18 @@ export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
 export const NON_SESSION_STREAM_CAP_BYTES = 16 * 1024;
 
 export const flushStatusFileAtomic = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
+  const nonce = crypto.randomUUID();
+  const tmpFile = `${file}.${process.pid}.${nonce}.tmp`;
+
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+
     try {
       if (fs.lstatSync(file).isSymbolicLink()) return;
     } catch (err: any) {
       if (err?.code !== 'ENOENT') return;
     }
+
     const snapshot: HookStatusSnapshot = {
       version: 1,
       pid: process.pid,
@@ -22,7 +27,7 @@ export const flushStatusFileAtomic = (file: string, workspace: string, hooks: Re
       updatedAt: Date.now(),
       hooks: Object.fromEntries(hooks),
     };
-    const tmpFile = `${file}.${process.pid}.tmp`;
+
     const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW ?? 0);
     const fd = fs.openSync(tmpFile, flags, 0o600);
     try {
@@ -32,9 +37,7 @@ export const flushStatusFileAtomic = (file: string, workspace: string, hooks: Re
     }
     fs.renameSync(tmpFile, file);
   } catch {
-    try {
-      fs.unlinkSync(`${file}.${process.pid}.tmp`);
-    } catch {}
+    fs.unlinkSync(tmpFile);
     // Best-effort status persistence never affects hook execution.
   }
 };

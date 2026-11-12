@@ -23,7 +23,7 @@ const isIgnoredFile = (name: string): boolean => {
 };
 
 const RECOVERY_HINT =
-  'Hint: fix or remove the invalid file(s) and restart OpenCode. The owflow plugin — including the destructive-command guard — has been dropped until the hooks directory validates. To start without user hooks, set OWFLOW_HOOKS_DISABLED=1.';
+  'Hint: fix or remove the invalid file(s) and restart OpenCode. User hooks are bypassed until the hooks directory validates; the built-in destructive-command guard remains active. To start without user hooks, set OWFLOW_HOOKS_DISABLED=1.';
 
 export const scanHooks = (hooksDir: string, options: { mode?: HookDigestMode; which?: (cmd: string) => string | null } = {}): HookScan => {
   const mode = options.mode ?? HookDigestMode.FailFast;

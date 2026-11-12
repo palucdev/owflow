@@ -86,7 +86,13 @@ export const appendWithRotation = (filePath: string, line: string, maxBytes = DE
       if (err?.code !== 'ENOENT') return;
     }
     const content = line.endsWith('\n') ? line : `${line}\n`;
-    fs.appendFileSync(filePath, content, { encoding: 'utf8', mode: 0o600 });
+    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND | (fs.constants.O_NOFOLLOW ?? 0);
+    const fd = fs.openSync(filePath, flags, 0o600);
+    try {
+      fs.writeFileSync(fd, content, 'utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     // Best-effort log persistence never affects hook execution.
   }

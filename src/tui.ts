@@ -88,6 +88,18 @@ export const registerActiveHooksSidebar = async (
     api.lifecycle.onDispose(() => {
       clearInterval(timer);
       getActiveDialogHandle()?.dispose();
+      for (const handle of handles) {
+        handle.dispose();
+      }
+      handles.length = 0;
+    });
+  } else {
+    api.lifecycle.onDispose(() => {
+      getActiveDialogHandle()?.dispose();
+      for (const handle of handles) {
+        handle.dispose();
+      }
+      handles.length = 0;
     });
   }
 
@@ -127,6 +139,17 @@ export const registerActiveHooksSidebar = async (
         );
         handle.applyStatuses(statuses);
         handles.push(handle);
+        if (typeof solid.onCleanup === 'function') {
+          try {
+            solid.onCleanup(() => {
+              handle.dispose();
+              const idx = handles.indexOf(handle);
+              if (idx !== -1) {
+                handles.splice(idx, 1);
+              }
+            });
+          } catch {}
+        }
         return handle.root;
       },
     },

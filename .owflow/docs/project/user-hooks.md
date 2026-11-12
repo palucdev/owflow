@@ -11,7 +11,7 @@ owflow exposes OpenCode's lifecycle events to the host project as git-style scri
 - A stem may also name a v1 **host event** (`HOST_EVENT_NAMES`, 32 events), firing when the single `event` hook receives that type (`session-idle.sh` → `session.idle`).
 - Each hook name may appear **exactly once**, in one format (`.sh` via `bash`, or `.ps1` via `pwsh`/`powershell.exe`). PowerShell invocations automatically include `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File` to prevent profile load latency, interactive hangs, and execution policy rejections. Any non-regular file, unroutable extension, ill-formed stem, duplicate stem, or unknown/excluded event fails the strict startup digest loudly with a recovery `Hint:`.
 - **Digest Modes (`HookDigestMode`)**:
-  - `FailFast` (runtime default): Enforces strict startup integrity (`initializeHooksWrapper`). Any validation failure immediately throws an error and halts plugin startup, preventing ambiguous or malformed hook configurations from silently running.
+  - `FailFast` (runtime default): Enforces strict startup integrity (`initializeHooksWrapper`). If validation fails during startup, user hooks are bypassed while the built-in destructive-command guard remains active, preventing ambiguous or malformed hook configurations from silently running.
   - `Report` (diagnostic mode): Non-throwing scan used by inspection surfaces like the TUI sidebar (`buildActiveHooksView`) and test suites, returning all collected failures alongside valid entries without interrupting the UI process.
 
 ## Hooks Contract

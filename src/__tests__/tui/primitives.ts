@@ -20,6 +20,7 @@ export const THEME: SidebarTheme = {
 
 export const makeSolid = () => {
   const roots: FakeNode[] = [];
+  const cleanups: (() => void)[] = [];
   const runtime = {
     createElement: (tag: string): FakeNode => {
       const node: FakeNode = { tag, props: {}, children: [] };
@@ -32,8 +33,17 @@ export const makeSolid = () => {
     setProp: (node: any, name: string, value: any) => {
       node.props[name] = value;
     },
+    onCleanup: (fn: () => void) => {
+      cleanups.push(fn);
+    },
   };
-  return { runtime, roots };
+  const triggerCleanup = () => {
+    while (cleanups.length > 0) {
+      const fn = cleanups.shift();
+      fn?.();
+    }
+  };
+  return { runtime, roots, cleanups, triggerCleanup };
 };
 
 export const makeFakeApi = (directory: string) => {
