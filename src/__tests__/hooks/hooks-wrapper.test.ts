@@ -14,6 +14,9 @@ import HooksWrapper, {
   buildSpawnError,
   buildProcessFailureError,
 } from '../../hooks/hooks-wrapper.js';
+import { canAbortSessionForEvent } from '../../hooks/runtime/failure-policy.js';
+import { DEFAULT_HOOK_TIMEOUT_MS, HOOK_TIMEOUT_ENV, buildExecutionArgs, readStream } from '../../hooks/runtime/process-executor.js';
+import { STATUS_DEBOUNCE_MS } from '../../hooks/runtime/status-recorder.js';
 import {
   readHookLogRecords,
   readHookStatusSnapshot,
@@ -34,6 +37,14 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
     return dir;
   };
 
+  const writeHook = (root: string, filename: string, content = '#!/usr/bin/env bash\nexit 0\n', mode = 0o755): string => {
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    const scriptPath = path.join(hooksDir, filename);
+    fs.writeFileSync(scriptPath, content, { mode });
+    return scriptPath;
+  };
+
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -42,9 +53,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('initializes snapshot of discovered hooks upon instantiation', () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n');
+    writeHook(root, 'tool-execute-before.sh');
 
     const wrapper = new HooksWrapper(root);
     expect(wrapper.snapshot.entries.length).toBe(1);
@@ -93,9 +102,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('runtime status and log persistence safely ignore dangling symlinks and clean up symlink rotation targets', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n');
+    writeHook(root, 'tool-execute-before.sh');
 
     const targetFile = path.join(root, 'target-status.txt');
     const danglingStatus = path.join(root, 'dangling-status.json');
@@ -119,25 +126,16 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('git-hooks execution: exit 0 succeeds and non-zero fails closed with session abort', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-
     const statusFile = path.join(root, 'status.json');
     const logFile = path.join(root, 'logs.jsonl');
 
     // 1. Successful hook with stdout and stderr
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), `#!/usr/bin/env bash\necho "out line"\necho "warn line" >&2\nexit 0\n`);
+    writeHook(root, 'tool-execute-before.sh', `#!/usr/bin/env bash\necho "out line"\necho "warn line" >&2\nexit 0\n`);
     // 2. Failing hook (non-zero exit)
-    fs.writeFileSync(path.join(hooksDir, 'chat-message.sh'), `#!/usr/bin/env bash\necho "policy violation" >&2\nexit 2\n`);
+    writeHook(root, 'chat-message.sh', `#!/usr/bin/env bash\necho "policy violation" >&2\nexit 2\n`);
 
     const ended: string[] = [];
-    const wrapper = new HooksWrapper(
-      root,
-      (id) => {
-        ended.push(id);
-      },
-      { statusFile, logFile },
-    );
+    const wrapper = new HooksWrapper(root, (id) => ended.push(id), { statusFile, logFile });
 
     // Session hook run writes stdout and stderr directly to JSONL records
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_ok' }, {});
@@ -168,12 +166,9 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('preserves full run history across consecutive successful runs in the same session', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
     const statusFile = path.join(root, 'status-dedup.json');
     const logFile = path.join(root, 'logs-dedup.jsonl');
-    const hookScript = path.join(hooksDir, 'tool-execute-before.sh');
-    fs.writeFileSync(hookScript, '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
+    writeHook(root, 'tool-execute-before.sh');
 
     const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
     const sessionID = 'ses_multi_run';
@@ -197,13 +192,8 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('isolates runtime logs into per-hook files and updates latest symlink', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-
-    const hook1 = path.join(hooksDir, 'tool-execute-before.sh');
-    const hook2 = path.join(hooksDir, 'chat-message.sh');
-    fs.writeFileSync(hook1, '#!/usr/bin/env bash\necho "tool out"\nexit 0\n', { mode: 0o755 });
-    fs.writeFileSync(hook2, '#!/usr/bin/env bash\necho "chat out"\nexit 0\n', { mode: 0o755 });
+    writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\necho "tool out"\nexit 0\n');
+    writeHook(root, 'chat-message.sh', '#!/usr/bin/env bash\necho "chat out"\nexit 0\n');
 
     const statusFile = path.join(root, 'status-isolated.json');
     const wrapper = new HooksWrapper(root, undefined, { statusFile });
@@ -243,23 +233,14 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('missing interpreter fails closed and safely handles endSession callback errors', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
+    writeHook(root, 'config.sh');
 
     const whichSpy = spyOn(Bun, 'which').mockReturnValue(null);
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const wrapper = new HooksWrapper(
-        root,
-        () => {
-          throw new Error('abort failed');
-        },
-        {
-          statusFile: path.join(root, 's2.json'),
-          logFile: path.join(root, 'l2.jsonl'),
-        },
-      );
+      const wrapper = new HooksWrapper(root, () => {
+        throw new Error('abort failed');
+      });
       await expect(wrapper.dispatch(HookEvent.Config, { sessionID: 'ses_no_interp' })).rejects.toThrow(/bash interpreter is not available/);
       expect(warnSpy).toHaveBeenCalled();
       wrapper.dispose();
@@ -271,30 +252,23 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('silent successful event runs leave no status or log trace', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'event.sh'), '#!/usr/bin/env bash\nexit 0\n');
-
-    const statusFile = path.join(root, 'status.json');
+    writeHook(root, 'event.sh');
     const logFile = path.join(root, 'logs.jsonl');
 
-    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, undefined, { logFile });
     await wrapper.dispatch(HookEvent.Event, {});
 
-    const logResult = readHookLogRecords(logFile);
-    expect(logResult).toEqual({ kind: 'missing' });
+    expect(readHookLogRecords(logFile)).toEqual({ kind: 'missing' });
     wrapper.dispose();
   });
 
   test('dispose kills active running processes', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
+    writeHook(root, 'config.sh');
 
     let exitResolver: (code: number) => void;
-    const exitPromise = new Promise<number>((resolve) => {
-      exitResolver = resolve;
+    const exitPromise = new Promise<number>((r) => {
+      exitResolver = r;
     });
 
     const mockProc = {
@@ -311,10 +285,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
     const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
     try {
-      const wrapper = new HooksWrapper(root, undefined, {
-        statusFile: path.join(root, 'status.json'),
-        logFile: path.join(root, 'logs.jsonl'),
-      });
+      const wrapper = new HooksWrapper(root);
       const dispatchPromise = wrapper.dispatch(HookEvent.Config, {});
       expect(mockProc.kill).not.toHaveBeenCalled();
 
@@ -378,22 +349,14 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('should not call endSession when session.idle fails or lacks an interpreter', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'session-idle.sh'), '#!/usr/bin/env bash\necho "test failed" >&2\nexit 1\n');
-    fs.writeFileSync(path.join(hooksDir, 'chat-message.sh'), '#!/usr/bin/env bash\necho "gate failed" >&2\nexit 1\n');
+    writeHook(root, 'session-idle.sh', '#!/usr/bin/env bash\necho "test failed" >&2\nexit 1\n');
+    writeHook(root, 'chat-message.sh', '#!/usr/bin/env bash\necho "gate failed" >&2\nexit 1\n');
 
     const statusFile = path.join(root, 'status.json');
     const logFile = path.join(root, 'logs.jsonl');
     const ended: string[] = [];
 
-    const wrapper = new HooksWrapper(
-      root,
-      (id) => {
-        ended.push(id);
-      },
-      { statusFile, logFile },
-    );
+    const wrapper = new HooksWrapper(root, (id) => ended.push(id), { statusFile, logFile });
 
     await expect(wrapper.dispatch('session.idle', { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_1' } } })).rejects.toThrow(
       /Blocked: test failed\. Hint: fix the failing script .* \(failure recorded; fail closed\)/,
@@ -412,17 +375,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
     // Missing interpreter on session.idle does not call endSession, while chat.message does
     const whichSpy = spyOn(Bun, 'which').mockReturnValue(null);
     try {
-      const noInterpWrapper = new HooksWrapper(
-        root,
-        (id) => {
-          ended.push(id);
-        },
-        {
-          statusFile: path.join(root, 'status-no-interp.json'),
-          logFile: path.join(root, 'logs-no-interp.jsonl'),
-        },
-      );
-
+      const noInterpWrapper = new HooksWrapper(root, (id) => ended.push(id));
       await expect(
         noInterpWrapper.dispatch('session.idle', { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_no_bash' } } }),
       ).rejects.toThrow(/bash interpreter is not available/);
@@ -439,24 +392,12 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
   });
 
   test('should deduplicate endSession calls per session within cooldown window and reset on chat.message', async () => {
-    expect(ABORT_COOLDOWN_MS).toBe(2_000);
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\necho "tool gate failed" >&2\nexit 1\n');
-    fs.writeFileSync(path.join(hooksDir, 'command-execute-before.sh'), '#!/usr/bin/env bash\necho "cmd gate failed" >&2\nexit 1\n');
+    writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\necho "tool gate failed" >&2\nexit 1\n');
+    writeHook(root, 'command-execute-before.sh', '#!/usr/bin/env bash\necho "cmd gate failed" >&2\nexit 1\n');
 
     const ended: string[] = [];
-    const wrapper = new HooksWrapper(
-      root,
-      (id) => {
-        ended.push(id);
-      },
-      {
-        statusFile: path.join(root, 'status.json'),
-        logFile: path.join(root, 'logs.jsonl'),
-      },
-    );
+    const wrapper = new HooksWrapper(root, (id) => ended.push(id));
 
     await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/tool gate failed/);
     await expect(wrapper.dispatch(HookEvent.CommandExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/cmd gate failed/);
@@ -471,34 +412,27 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
   });
 
   test('should trip circuit breaker after 4 rapid consecutive failures and suppress spawns during cooldown', async () => {
-    expect(CIRCUIT_BREAKER_THRESHOLD).toBe(4);
-    expect(CIRCUIT_BREAKER_RAPID_GAP_MS).toBe(500);
-    expect(CIRCUIT_BREAKER_COOLDOWN_MS).toBe(30_000);
-
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'session-idle.sh'), '#!/usr/bin/env bash\necho "check failed" >&2\nexit 1\n');
+    writeHook(root, 'session-idle.sh', '#!/usr/bin/env bash\necho "check failed" >&2\nexit 1\n');
 
     const statusFile = path.join(root, 'status.json');
-    const logFile = path.join(root, 'logs.jsonl');
     const spawnSpy = spyOn(Bun, 'spawn');
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
-      const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
+      const wrapper = new HooksWrapper(root, undefined, { statusFile });
       const payload = { event: { type: 'session.idle', properties: { sessionID: 'ses_cb' } } };
 
-      for (let i = 0; i < CIRCUIT_BREAKER_THRESHOLD; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         await expect(wrapper.dispatch('session.idle', payload)).rejects.toThrow(/Blocked: check failed\./);
       }
 
-      expect(spawnSpy).toHaveBeenCalledTimes(CIRCUIT_BREAKER_THRESHOLD);
+      expect(spawnSpy).toHaveBeenCalledTimes(4);
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('circuit breaker tripped'));
 
       // 5th rapid attempt is blocked before spawning a subprocess
       await expect(wrapper.dispatch('session.idle', payload)).rejects.toThrow(/Blocked: Circuit breaker active for .*session-idle\.sh/);
-      expect(spawnSpy).toHaveBeenCalledTimes(CIRCUIT_BREAKER_THRESHOLD);
+      expect(spawnSpy).toHaveBeenCalledTimes(4);
 
       const snapshot = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
       expect(snapshot.hooks['session.idle']?.status).toBe(HookRunState.FAILURE);
@@ -515,15 +449,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
     expect(await readStream(null, () => {})).toBe('');
     expect(await readStream(undefined, () => {})).toBe('');
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode('hello '));
-        controller.enqueue(encoder.encode('world'));
-        controller.close();
-      },
-    });
-
+    const stream = new Response('hello world').body;
     const chunks: string[] = [];
     const result = await readStream(stream, (c) => chunks.push(c));
     expect(result).toBe('hello world');
@@ -531,15 +457,12 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
   });
 
   test('readStream should cancel stream reader and bound output when maxBytes is exceeded', async () => {
-    const encoder = new TextEncoder();
     let cancelCalled = false;
     let cancelReason: unknown;
 
     const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode('chunk-one-12345-'));
-        controller.enqueue(encoder.encode('chunk-two-67890-'));
-        controller.enqueue(encoder.encode('chunk-three-should-not-be-buffered-'));
+      start(c) {
+        c.enqueue(new TextEncoder().encode('chunk-one-12345-chunk-two-67890-chunk-three-ignored'));
       },
       cancel(reason) {
         cancelCalled = true;
@@ -547,24 +470,18 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
       },
     });
 
-    const chunks: string[] = [];
-    const maxBytes = 15;
-    const result = await readStream(stream, (c) => chunks.push(c), maxBytes);
-
+    const result = await readStream(stream, undefined, 15);
     expect(cancelCalled).toBe(true);
     expect(cancelReason).toBe('Stream limit exceeded');
-    expect(result.length).toBeLessThanOrEqual(maxBytes);
+    expect(result.length).toBeLessThanOrEqual(15);
   });
 
   test('non-session hook dispatch caps logged stdout to NON_SESSION_STREAM_CAP_BYTES in jsonl logs', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), "#!/usr/bin/env bash\nhead -c 32768 < /dev/zero | tr '\\0' 'A'\nexit 0\n");
-    const statusFile = path.join(root, 'status.json');
+    writeHook(root, 'tool-execute-before.sh', "#!/usr/bin/env bash\nhead -c 32768 < /dev/zero | tr '\\0' 'A'\nexit 0\n");
     const logFile = path.join(root, 'logs.jsonl');
 
-    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, undefined, { logFile });
     await wrapper.dispatch(HookEvent.ToolExecuteBefore, {
       tool: 'bash',
       args: { command: 'test' },
@@ -573,7 +490,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
     const logResult = readHookLogRecords(logFile);
     expect(logResult.kind).toBe('ok');
     if (logResult.kind === 'ok') {
-      expect(logResult.records.length).toBe(1);
+      expect(logResult.records).toHaveLength(1);
       expect(logResult.records[0]!.stdout?.length).toBe(NON_SESSION_STREAM_CAP_BYTES);
     }
 
@@ -582,9 +499,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('default 2m timeout triggers when OWFLOW_HOOK_TIMEOUT_MS is unset, and is disabled when set to 0', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '#!/usr/bin/env bash\nexit 0\n');
+    writeHook(root, 'config.sh');
 
     expect(DEFAULT_HOOK_TIMEOUT_MS).toBe(120_000);
 
@@ -616,23 +531,18 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
       setTimeoutSpy.mockImplementation(((fn: () => void, ms?: number) => {
         if (ms !== STATUS_DEBOUNCE_MS) {
           recordedDelay = ms;
-          // do not wait 2m in test, trigger immediately
           fn();
         }
         return 1 as any;
       }) as typeof setTimeout);
 
-      const wrapper = new HooksWrapper(root, undefined, {
-        statusFile: path.join(root, 's.json'),
-        logFile: path.join(root, 'l.jsonl'),
-      });
-
+      const wrapper = new HooksWrapper(root);
       await expect(wrapper.dispatch(HookEvent.Config, {})).rejects.toThrow(/timed out after 120000ms/);
       expect(recordedDelay).toBe(120_000);
       expect(killed).toBe(true);
       wrapper.dispose();
 
-      // Now verify timeout is disabled when set to 0
+      // Disabled when set to 0
       process.env[HOOK_TIMEOUT_ENV] = '0';
       let timeoutScheduled = false;
       setTimeoutSpy.mockImplementation(((fn: () => void, ms?: number) => {
@@ -642,20 +552,19 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
         return 1 as any;
       }) as typeof setTimeout);
 
-      const quickProc = {
-        pid: 12346,
-        kill: () => {},
-        exited: Promise.resolve(0),
-        stdout: new Response('').body,
-        stderr: new Response('').body,
-        signalCode: null,
-      };
-      spawnSpy.mockImplementation(() => quickProc as any);
+      spawnSpy.mockImplementation(
+        () =>
+          ({
+            pid: 12346,
+            kill: () => {},
+            exited: Promise.resolve(0),
+            stdout: new Response('').body,
+            stderr: new Response('').body,
+            signalCode: null,
+          }) as any,
+      );
 
-      const wrapper2 = new HooksWrapper(root, undefined, {
-        statusFile: path.join(root, 's2.json'),
-        logFile: path.join(root, 'l2.jsonl'),
-      });
+      const wrapper2 = new HooksWrapper(root);
       await wrapper2.dispatch(HookEvent.Config, {});
       expect(timeoutScheduled).toBe(false);
       wrapper2.dispose();
@@ -669,9 +578,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('OWFLOW_DEBUG=1 logs real-time trace messages to console.error', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\necho "debug-ok"\nexit 0\n');
+    writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\necho "debug-ok"\nexit 0\n');
 
     const errLines: string[] = [];
     const errSpy = spyOn(console, 'error').mockImplementation((msg: string) => {
@@ -682,10 +589,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
     process.env.OWFLOW_DEBUG = '1';
 
     try {
-      const wrapper = new HooksWrapper(root, undefined, {
-        statusFile: path.join(root, 'status.json'),
-        logFile: path.join(root, 'logs.jsonl'),
-      });
+      const wrapper = new HooksWrapper(root);
       await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
 
       expect(errLines.some((l) => l.includes('[owflow:debug] [tool.execute.before] Spawning'))).toBe(true);
@@ -700,19 +604,16 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('Bun.spawn throwing fails closed with clean Blocked error and records failure in logs', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n');
+    writeHook(root, 'tool-execute-before.sh');
 
     const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => {
       throw new Error('EACCES: permission denied');
     });
 
-    const statusFile = path.join(root, 'status.json');
     const logFile = path.join(root, 'logs.jsonl');
 
     try {
-      const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
+      const wrapper = new HooksWrapper(root, undefined, { logFile });
       await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {})).rejects.toThrow(/Blocked: failed to spawn hook.*EACCES: permission denied/);
 
       const logs = readHookLogRecords(logFile);
@@ -778,12 +679,8 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('debounces transient PENDING status writes and atomically flushes terminal states', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nexit 0\n', { mode: 0o755 });
-
+    writeHook(root, 'tool-execute-before.sh');
     const statusFile = path.join(root, 'status.json');
-    const logFile = path.join(root, 'logs.jsonl');
 
     let renameCount = 0;
     const origRenameSync = fs.renameSync;
@@ -795,7 +692,7 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
     });
 
     try {
-      const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
+      const wrapper = new HooksWrapper(root, undefined, { statusFile });
       expect(renameCount).toBe(1);
 
       await wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
@@ -815,14 +712,10 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('flushes PENDING status after debounce delay for slow hooks and clears timer on dispose', async () => {
     const root = makeTempDir();
-    const hooksDir = path.join(root, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '#!/usr/bin/env bash\nsleep 0.12\nexit 0\n', { mode: 0o755 });
-
+    writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\nsleep 0.12\nexit 0\n');
     const statusFile = path.join(root, 'status-slow.json');
-    const logFile = path.join(root, 'logs-slow.jsonl');
 
-    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, undefined, { statusFile });
     const dispatchPromise = wrapper.dispatch(HookEvent.ToolExecuteBefore, {}, {});
 
     await new Promise((r) => setTimeout(r, 15));
@@ -849,103 +742,53 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
   test('flushStatusFileAtomic cleans up .tmp file when write or rename throws', () => {
     const root = makeTempDir();
     const statusFile = path.join(root, 'atomic-status.json');
-    const tmpFile = `${statusFile}.${process.pid}.tmp`;
+    const recorder = new StatusRecorder({ directory: root, statusFile });
 
     const renameSpy = spyOn(fs, 'renameSync').mockImplementation(() => {
       throw new Error('EACCES: mock rename failure');
     });
 
     try {
-      flushStatusFileAtomic(statusFile, root, new Map());
-      expect(fs.existsSync(tmpFile)).toBe(false);
+      recorder.flushStatusFileAtomic(statusFile, root, new Map());
+      const tmpFiles = fs.readdirSync(root).filter((f) => f.endsWith('.tmp'));
+      expect(tmpFiles).toHaveLength(0);
     } finally {
       renameSpy.mockRestore();
+      recorder.dispose();
     }
   });
 
   describe('buildExecutionArgs', () => {
-    test('prepends PowerShell execution flags for .ps1 scripts', () => {
-      const entry: HookRegistryEntry = {
-        path: '/workspace/.owflow/hooks/tool-execute-before.ps1',
-        event: HookEvent.ToolExecuteBefore,
-        interpreter: {
-          resolved: '/usr/bin/pwsh',
-          expected: 'pwsh',
-          available: true,
-        },
-        status: 'registered',
-      };
+    const pwshFlags = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File'];
+    const makeEntry = (path: string, resolved: string, expected: string): HookRegistryEntry => ({
+      path,
+      event: HookEvent.ToolExecuteBefore,
+      interpreter: { resolved, expected, available: true },
+      status: 'registered',
+    });
 
-      expect(buildExecutionArgs(entry)).toEqual([
-        '/usr/bin/pwsh',
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        '/workspace/.owflow/hooks/tool-execute-before.ps1',
-      ]);
+    test('prepends PowerShell execution flags for .ps1 scripts', () => {
+      const entry = makeEntry('/workspace/.owflow/hooks/tool-execute-before.ps1', '/usr/bin/pwsh', 'pwsh');
+      expect(buildExecutionArgs(entry)).toEqual(['/usr/bin/pwsh', ...pwshFlags, entry.path]);
     });
 
     test('prepends PowerShell execution flags when interpreter is powershell.exe', () => {
-      const entry: HookRegistryEntry = {
-        path: 'C:\\workspace\\.owflow\\hooks\\session-idle.ps1',
-        event: 'session.idle',
-        interpreter: {
-          resolved: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-          expected: 'powershell.exe',
-          available: true,
-        },
-        status: 'registered',
-      };
-
-      expect(buildExecutionArgs(entry)).toEqual([
-        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
+      const entry = makeEntry(
         'C:\\workspace\\.owflow\\hooks\\session-idle.ps1',
-      ]);
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        'powershell.exe',
+      );
+      expect(buildExecutionArgs(entry)).toEqual(['C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', ...pwshFlags, entry.path]);
     });
 
     test('prepends PowerShell execution flags when expected interpreter is pwsh even with non-standard path', () => {
-      const entry: HookRegistryEntry = {
-        path: '/workspace/.owflow/hooks/custom-script',
-        event: HookEvent.ToolExecuteBefore,
-        interpreter: {
-          resolved: '/opt/microsoft/powershell/7/pwsh',
-          expected: 'pwsh',
-          available: true,
-        },
-        status: 'registered',
-      };
-
-      expect(buildExecutionArgs(entry)).toEqual([
-        '/opt/microsoft/powershell/7/pwsh',
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        '/workspace/.owflow/hooks/custom-script',
-      ]);
+      const entry = makeEntry('/workspace/.owflow/hooks/custom-script', '/opt/microsoft/powershell/7/pwsh', 'pwsh');
+      expect(buildExecutionArgs(entry)).toEqual(['/opt/microsoft/powershell/7/pwsh', ...pwshFlags, entry.path]);
     });
 
     test('returns standard [resolved, path] arguments for non-PowerShell scripts', () => {
-      const entry: HookRegistryEntry = {
-        path: '/workspace/.owflow/hooks/tool-execute-before.sh',
-        event: HookEvent.ToolExecuteBefore,
-        interpreter: {
-          resolved: '/bin/bash',
-          expected: 'bash',
-          available: true,
-        },
-        status: 'registered',
-      };
-
-      expect(buildExecutionArgs(entry)).toEqual(['/bin/bash', '/workspace/.owflow/hooks/tool-execute-before.sh']);
+      const entry = makeEntry('/workspace/.owflow/hooks/tool-execute-before.sh', '/bin/bash', 'bash');
+      expect(buildExecutionArgs(entry)).toEqual(['/bin/bash', entry.path]);
     });
   });
 
