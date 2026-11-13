@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-11-13
+
+### Added
+
+- **ESLint configuration (`eslint.config.mjs`)** — Added strict Flat Config setup for TypeScript/JavaScript with `typescript-eslint`, `@eslint/js`, `eslint-plugin-sonarjs`, `eslint-plugin-unicorn`, and `eslint-plugin-security`. Configured rules enforcing architectural constraints, code quality, and maintainability:
+  - Architecture: Forbidden direct `process.env` access via `no-restricted-syntax` to mandate dependency injection.
+  - Maintainability & complexity: `max-params` (2), `max-lines-per-function` (50), `max-lines` (250), `complexity` (10), `max-depth` (4), `max-statements` (20), `max-classes-per-file` (1).
+  - Code hygiene: `id-length` (min 2, exception `_`), strict equality (`eqeqeq: always`), and `@typescript-eslint/no-magic-numbers` (ignoring 0, 1, -1).
+- **ESLint npm scripts** — Added `"lint"` (`eslint .`), `"lint:fix"` (`eslint . --fix`), and `"lint:file"` (`eslint`) scripts to `package.json`.
+- **Config protection hook (`.owflow/hooks/tool-execute-before.sh`)** — Lifecycle guard hook blocking tool calls (`edit`, `write`, `bash`) from modifying or deleting `eslint.config.mjs`.
+- **Automated per-file linting hook (`.owflow/hooks/tool-execute-after.sh`)** — Post-execution hook that automatically lints modified source files (`.ts`, `.tsx`, `.js`, etc.) using Bun/ESLint with stateful attempt tracking (`/tmp/owflow-lint-state-*.json`), prompting fixes on attempts 1–2 and halting with a critical escalation to the user on attempt 3.
+
 ## [0.7.0] - 2026-11-13
 
 ### Added
