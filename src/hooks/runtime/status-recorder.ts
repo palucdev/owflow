@@ -7,41 +7,6 @@ export const STATUS_DEBOUNCE_MS = 50;
 export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
 export const NON_SESSION_STREAM_CAP_BYTES = 16 * 1024;
 
-export const flushStatusFileAtomic = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
-  const nonce = crypto.randomUUID();
-  const tmpFile = `${file}.${process.pid}.${nonce}.tmp`;
-
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-
-    try {
-      if (fs.lstatSync(file).isSymbolicLink()) return;
-    } catch (err: any) {
-      if (err?.code !== 'ENOENT') return;
-    }
-
-    const snapshot: HookStatusSnapshot = {
-      version: 1,
-      pid: process.pid,
-      workspace,
-      updatedAt: Date.now(),
-      hooks: Object.fromEntries(hooks),
-    };
-
-    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW ?? 0);
-    const fd = fs.openSync(tmpFile, flags, 0o600);
-    try {
-      fs.writeFileSync(fd, JSON.stringify(snapshot), { encoding: 'utf8' });
-    } finally {
-      fs.closeSync(fd);
-    }
-    fs.renameSync(tmpFile, file);
-  } catch {
-    fs.unlinkSync(tmpFile);
-    // Best-effort status persistence never affects hook execution.
-  }
-};
-
 export interface StatusRecorderOptions {
   directory: string;
   statusFile?: string;
@@ -80,12 +45,47 @@ export class StatusRecorder {
     return this.statuses;
   }
 
+  flushStatusFileAtomic = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
+    const nonce = crypto.randomUUID();
+    const tmpFile = `${file}.${process.pid}.${nonce}.tmp`;
+
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+
+      try {
+        if (fs.lstatSync(file).isSymbolicLink()) return;
+      } catch (err: any) {
+        if (err?.code !== 'ENOENT') return;
+      }
+
+      const snapshot: HookStatusSnapshot = {
+        version: 1,
+        pid: process.pid,
+        workspace,
+        updatedAt: Date.now(),
+        hooks: Object.fromEntries(hooks),
+      };
+
+      const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW ?? 0);
+      const fd = fs.openSync(tmpFile, flags, 0o600);
+      try {
+        fs.writeFileSync(fd, JSON.stringify(snapshot), { encoding: 'utf8' });
+      } finally {
+        fs.closeSync(fd);
+      }
+      fs.renameSync(tmpFile, file);
+    } catch {
+      fs.unlinkSync(tmpFile);
+      // Best-effort status persistence never affects hook execution.
+    }
+  };
+
   flushStatus(): void {
     if (this.statusTimer !== undefined) {
       clearTimeout(this.statusTimer);
       this.statusTimer = undefined;
     }
-    flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
+    this.flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
   }
 
   schedulePendingStatus(): void {
@@ -94,7 +94,7 @@ export class StatusRecorder {
     }
     this.statusTimer = setTimeout(() => {
       this.statusTimer = undefined;
-      flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
+      this.flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
     }, STATUS_DEBOUNCE_MS);
     this.statusTimer.unref?.();
   }

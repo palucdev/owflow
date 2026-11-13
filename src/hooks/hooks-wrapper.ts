@@ -23,17 +23,9 @@ import { HookSpawnError, executeHookProcess } from './runtime/process-executor.j
 import { NON_SESSION_STREAM_CAP_BYTES, StatusRecorder } from './runtime/status-recorder.js';
 import { writeHookCrashLog } from './hooks-persistence.js';
 
-export {
-  CIRCUIT_BREAKER_THRESHOLD,
-  CIRCUIT_BREAKER_RAPID_GAP_MS,
-  CIRCUIT_BREAKER_COOLDOWN_MS,
-  CircuitBreakerTracker,
-  type CircuitBreakerEntry,
-} from './runtime/circuit-breaker.js';
+export { CircuitBreakerTracker, type CircuitBreakerEntry } from './runtime/circuit-breaker.js';
 
 export {
-  ABORT_COOLDOWN_MS,
-  canAbortSessionForEvent,
   SessionAbortController,
   buildCircuitBreakerError,
   buildInterpreterUnavailableError,
@@ -41,24 +33,9 @@ export {
   buildProcessFailureError,
 } from './runtime/failure-policy.js';
 
-export {
-  DEFAULT_HOOK_TIMEOUT_MS,
-  HOOK_TIMEOUT_ENV,
-  MAX_STREAM_BUFFER_BYTES,
-  HookSpawnError,
-  buildExecutionArgs,
-  readStream,
-  resolveHookTimeoutMs,
-  executeHookProcess,
-} from './runtime/process-executor.js';
+export { HookSpawnError, executeHookProcess } from './runtime/process-executor.js';
 
-export {
-  STATUS_DEBOUNCE_MS,
-  MAX_LOG_FILE_BYTES,
-  NON_SESSION_STREAM_CAP_BYTES,
-  flushStatusFileAtomic,
-  StatusRecorder,
-} from './runtime/status-recorder.js';
+export { NON_SESSION_STREAM_CAP_BYTES, StatusRecorder } from './runtime/status-recorder.js';
 
 class HooksWrapper {
   private PASSTHROUGH_EVENTS = [
