@@ -234,6 +234,20 @@ Standards live in `.owflow/docs/standards/` and are indexed in `.owflow/docs/IND
 
 Extend OpenCode's lifecycle with your project's own scripts. Drop hook scripts into `.owflow/hooks/` and owflow dispatches them through its hook handlers - no plugin code required.
 
+### TUI status and troubleshooting
+
+![Hooks status on tui](./docs/images/tui_hook_status.png)
+
+Loaded hooks and their statuses are displayed in the top of sidebar menu. Each of the hook item in the list is the clickable button that will open the detail popup. 
+
+![TUI hook status popup](./docs/images/tui_hook_popup.png)
+
+In the hook details popup there are hook run metadata available as well as a button to check errors and info logs for the given run.
+
+![TUI hook logs popup](./docs/images/tui_hook_logs_popup.png)
+
+Hook logs popup is scrollable and displays stderr and stdout logs in a separate blocks. Log file should be present on the disk for more detailed examination. Logs in popup serves as a quick way for human verification of problems during given session.
+
 ### File Placement and Naming Rules
 
 - **Where to place files**: Place all hook scripts directly inside `.owflow/hooks/` at the root of your project (e.g., `<project-root>/.owflow/hooks/tool-execute-before.sh`). Discovery is flat (one directory level only, no subdirectories).
