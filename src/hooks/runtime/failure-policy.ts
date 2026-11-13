@@ -49,7 +49,12 @@ export const buildSpawnError = (scriptPath: string, spawnErrMsg: string, event: 
 };
 
 export const buildProcessFailureError = (scriptPath: string, reason: string | undefined, event: HookEventName): Error => {
-  const body = reason?.startsWith('Blocked:') ? reason : `Blocked: ${reason || `hook ${scriptPath} failed`}`;
+  const firstLine = reason
+    ?.split('\n')
+    .find((l) => l.trim().length > 0)
+    ?.trim();
+  const summary = firstLine ? (firstLine.length > 200 ? `${firstLine.slice(0, 197)}...` : firstLine) : reason || `hook ${scriptPath} failed`;
+  const body = summary.startsWith('Blocked:') ? summary : `Blocked: ${summary}`;
   const failPosture = canAbortSessionForEvent(event) ? 'failure ends the current session; fail closed' : 'failure recorded; fail closed';
   return new Error(
     `${body.endsWith('.') ? body : `${body}.`} Hint: fix the failing script ${scriptPath} (${failPosture}), or remove it and restart OpenCode to proceed.`,

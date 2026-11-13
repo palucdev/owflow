@@ -166,20 +166,23 @@ describe('OwflowPlugin', () => {
         },
       };
 
-      const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation((_dir: any, endSession: any) => ({
-        dispatch: async (_event: any, input: any) => {
-          if (endSession && input?.sessionID) await endSession(input.sessionID);
-          throw new Error('Blocked: gate check failed');
-        },
-        snapshot: { entries: [] },
-        dispose: () => {},
-        createDispatchHandlers: () => ({
-          'tool.execute.before': async (input: any) => {
-            if (endSession && input?.sessionID) await endSession(input.sessionID);
-            throw new Error('Blocked: gate check failed');
-          },
-        }),
-      } as any));
+      const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(
+        (_dir: any, endSession: any) =>
+          ({
+            dispatch: async (_event: any, input: any) => {
+              if (endSession && input?.sessionID) await endSession(input.sessionID);
+              throw new Error('Blocked: gate check failed');
+            },
+            snapshot: { entries: [] },
+            dispose: () => {},
+            createDispatchHandlers: () => ({
+              'tool.execute.before': async (input: any) => {
+                if (endSession && input?.sessionID) await endSession(input.sessionID);
+                throw new Error('Blocked: gate check failed');
+              },
+            }),
+          }) as any,
+      );
       const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
       try {
@@ -204,14 +207,17 @@ describe('OwflowPlugin', () => {
 
     test('should call user dispose and cleanup on dispose', async () => {
       let wrapperDisposed = false;
-      const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(() => ({
-        dispatch: async () => {},
-        snapshot: { entries: [] },
-        dispose: () => {
-          wrapperDisposed = true;
-        },
-        createDispatchHandlers: () => ({}),
-      } as any));
+      const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(
+        () =>
+          ({
+            dispatch: async () => {},
+            snapshot: { entries: [] },
+            dispose: () => {
+              wrapperDisposed = true;
+            },
+            createDispatchHandlers: () => ({}),
+          }) as any,
+      );
 
       try {
         const plugin = await OwflowPlugin(mockPluginInput(tmpDir));

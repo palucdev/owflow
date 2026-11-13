@@ -21,6 +21,7 @@ import {
 } from './runtime/failure-policy.js';
 import { HookSpawnError, executeHookProcess } from './runtime/process-executor.js';
 import { NON_SESSION_STREAM_CAP_BYTES, StatusRecorder } from './runtime/status-recorder.js';
+import { writeHookCrashLog } from './hooks-persistence.js';
 
 export {
   CIRCUIT_BREAKER_THRESHOLD,
@@ -370,8 +371,7 @@ class HooksWrapper {
             try {
               await this.dispatch(type, input);
             } catch (error) {
-              const msg = error instanceof Error ? error.message : String(error);
-              console.warn(`[owflow] reactive host event "${type}" failed: ${msg}`);
+              writeHookCrashLog(this.directory, `reactive_host_event_${type}`, error);
             }
           });
         }
@@ -379,8 +379,7 @@ class HooksWrapper {
           try {
             await this.dispatch(HookEvent.Event, input);
           } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.warn(`[owflow] catch-all event hook failed: ${msg}`);
+            writeHookCrashLog(this.directory, 'catch_all_event_hook', error);
           }
         });
       },

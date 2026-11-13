@@ -31,7 +31,9 @@ import {
   readSessionHookLogs,
   resolveHooksLatestSymlink,
   resolveHooksLogFile,
+  writeHookCrashLog,
 } from '../../hooks/hooks-persistence.js';
+import * as hooksPersistenceModule from '../../hooks/hooks-persistence.js';
 import { HookEvent, HookRunState, type HookRegistryEntry, type HookRunLogRecord } from '../../types/hook-types.js';
 
 describe('hooks-wrapper (execution & dispatch runtime)', () => {
@@ -737,13 +739,14 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
     }
   });
 
-  test('createDispatchHandlers isolates reactive host event failures from crashing OpenCode event bus', async () => {
+  test('createDispatchHandlers isolates reactive host event failures from crashing OpenCode event bus without leaking to console', async () => {
     const root = makeTempDir();
     const wrapper = new HooksWrapper(root);
-    const warnLines: string[] = [];
-    const warnSpy = spyOn(console, 'warn').mockImplementation((msg: string) => {
-      warnLines.push(msg);
+    const crashEvents: Array<{ source: string; error: unknown }> = [];
+    const crashSpy = spyOn(hooksPersistenceModule, 'writeHookCrashLog').mockImplementation((_ws, source, error) => {
+      crashEvents.push({ source, error });
     });
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
       spyOn(wrapper, 'dispatch').mockImplementation(async (ev: string) => {
@@ -756,9 +759,13 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
       // Dispatching reactive event via host Event handler should NOT throw unhandled rejection
       await handlers[HookEvent.Event]!({ event: { type: 'session.idle' } } as any);
 
-      expect(warnLines.some((l) => l.includes('reactive host event "session.idle" failed'))).toBe(true);
-      expect(warnLines.some((l) => l.includes('catch-all event hook failed'))).toBe(true);
+      // Does not leak to console.warn / terminal in the working TUI
+      expect(warnSpy).not.toHaveBeenCalled();
+      // Records failures to persistent crash log instead
+      expect(crashEvents.some((e) => e.source === 'reactive_host_event_session.idle')).toBe(true);
+      expect(crashEvents.some((e) => e.source === 'catch_all_event_hook')).toBe(true);
     } finally {
+      crashSpy.mockRestore();
       warnSpy.mockRestore();
       wrapper.dispose();
     }

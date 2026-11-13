@@ -26,6 +26,7 @@ const MAX_TRACKED_SESSIONS = 256;
 const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
   const agentBySession = new Map<string, string>();
   const hooksDisabled = process.env.OWFLOW_HOOKS_DISABLED === '1';
+  let configLoaded = false;
 
   if (hooksDisabled) {
     console.log('[owflow] User hooks disabled (OWFLOW_HOOKS_DISABLED=1); built-in hooks remain active.');
@@ -66,8 +67,10 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
      * them without requiring manual config file edits.
      */
     [HookEvent.Config]: async (config: unknown) => {
-      console.log(`[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`);
-      for (const line of renderSnapshot(snapshot)) console.log(line);
+      if (!configLoaded) {
+        console.log(`[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`);
+        for (const line of renderSnapshot(snapshot)) console.log(line);
+      }
       let typedConfig = config as OpenCodeConfig;
 
       configureSkills(typedConfig);
@@ -79,7 +82,10 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
         await wrapper.dispatch(HookEvent.Config, typedConfig);
       }
 
-      console.log(`[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`);
+      if (!configLoaded) {
+        console.log(`[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`);
+        configLoaded = true;
+      }
     },
 
     [HookEvent.ExperimentalSessionCompacting]: async (input, output) => {
