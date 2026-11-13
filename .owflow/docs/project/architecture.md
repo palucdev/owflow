@@ -15,7 +15,7 @@ Two modes share one state file per split workflow: an assisted dispatcher (`/owf
 ### Plugin Entry & Lifecycle
 - **Location**: `src/index.ts`, `src/hooks/`
 - **Purpose**: Wire all capabilities into the OpenCode config/hooks lifecycle
-- **Key Files**: `src/index.ts` (`OwflowPlugin`), `src/hooks/before-tool.ts` (blocks destructive bash commands for non-whitelisted agents), `src/hooks/session-compaction.ts` (post-compaction state re-read reminder)
+- **Key Files**: `src/index.ts` (`OwflowPlugin`), `src/hooks/internal/before-tool.ts` (blocks destructive bash commands for non-whitelisted agents), `src/hooks/internal/session-compaction.ts` (post-compaction state re-read reminder), `src/hooks/hooks-runtime.ts` (subprocess execution and lifecycle dispatch), `src/hooks/runtime/` (`circuit-breaker.ts`, `process-executor.ts`, `status-recorder.ts`, `failure-policy.ts`), `src/hooks/hooks-registry.ts` (discovery and validation), `src/hooks/hooks-diagnostics.ts` (startup banner snapshot), `src/hooks/hooks-persistence.ts` (runtime log files and readers)
 
 ### Configuration Layer
 - **Location**: `src/configuration/`
@@ -156,10 +156,74 @@ sequenceDiagram
   Note over Host,State: On session compaction, hook reminds agent to re-read state
 ```
 
+## Hooks System Architecture
+Structural connections between user hook execution (`src/hooks/`), the filesystem state bridge, and the interactive TUI surface (`src/tui/` and `src/tui.ts`):
+
+```text
++-----------------------------------------------------------------------------------+
+|                                HOST FILESYSTEM                                    |
+|                                                                                   |
+|                           .owflow/hooks/*.sh, *.ps1                               |
++---------------------------------------+-------------------------------------------+
+                                        |
+                                        v
++-----------------------------------------------------------------------------------+
+|                        hooks-registry.ts (scanHooks)                              |
++-------------------+-------------------------------------------+-------------------+
+                    |                                           |
+                    | (FailFast mode)                           | (Report mode)
+                    v                                           v
++---------------------------------------+   +---------------------------------------+
+|  hooks-runtime.ts & runtime/*         |   |        tui/hooks-presenter.ts         |
+|---------------------------------------|   |---------------------------------------|
+| - process-executor.ts (spawn & flags) |   | - buildActiveHooksView()              |
+| - status-recorder.ts (atomic/debounce)|   | - statusLabelFor() / colorForStatus() |
+| - circuit-breaker.ts (loop guard)     |   | - formatHookRunSummary/LogsMessage()  |
+| - failure-policy.ts (abort cooldown)  |   |                                       |
++-------------------+-------------------+   +--------+--------------------+---------+
+                    |                                |                    |
+          writes / appends                           |                    |
+                    |                                v                    v
+                    v                     +--------------------+ +--------------------+
++---------------------------------------+ | hooks-sidebar.ts   | | hooks-dialogs.ts   |
+|         SHARED LOG BRIDGE             | |--------------------| |--------------------|
+|         (/tmp/opencode/)              | | - materialize-     | | - openHookLog-     |
+|---------------------------------------| |   Sidebar()        | |   Popup()          |
+| - owflow-hooks-*.json   (snapshot)    | | - Renders status   | | - Detail modal     |
+| - owflow-hook-logs-*-[hook].jsonl     | |   orbs & labels    | | - Logs scrollbox   |
+| - owflow-hooks-latest-*.jsonl (link)  | +---------+----------+ +---------+----------+
++-------------------+-------------------+           |                      |
+                    ^                               |                      |
+         path resolution & readers                  |                      |
+                    |                               |                      |
++-------------------+-------------------+           |                      |
+|        hooks-persistence.ts           |           |                      |
+|---------------------------------------|           |                      |
+| - resolveHooksStatusFile() / LogFile()|           |                      |
+| - resolveHooksLatestSymlink()         |           |                      |
+| - readHookStatusSnapshot()            |           |                      |
+| - readHookLogRecords() (tail slice)   |           |                      |
+| - readSessionLatestLogs() / HookLogs()|           |                      |
++---------+-------------------+---------+           |                      |
+          |                   |                     |                      |
+          | reads snapshot    +-------------+       |                      |
+          | & session logs                  |       |                      |
+          v                                 v       v                      v
++-----------------------------------------------------------------------------------+
+|                                     tui.ts                                        |
+|-----------------------------------------------------------------------------------|
+| - Registers "sidebar_content" slot in OpenCode TUI                                |
+| - 200ms polling tick (detects status file changes, updates active dialog & sidebar)|
+| - Routes click events to openHookLogPopup()                                       |
++-----------------------------------------------------------------------------------+
+```
+
+Note: `hooks-diagnostics.ts` (`renderSnapshot`, `interpreterLabel`) provides console reporting for plugin startup banners (`src/index.ts`) rather than direct TUI rendering. Subprocess execution in `src/hooks/runtime/` isolates process spawning (`process-executor.ts`), atomic status/log persistence (`status-recorder.ts`), failure suppression (`circuit-breaker.ts`), and abort policy enforcement (`failure-policy.ts`).
+
 ## External Integrations
 - **OpenCode host runtime** — plugin config, hooks, tools, skill/agent/command registration
 - **npm registry** — distribution of the `owflow` package
-- **GitHub / Codeberg remotes** — source hosting (GitHub Actions CI added 2026-10-08; Codeberg runner pending)
+- **GitHub / Codeberg remotes** — source hosting
 - No databases, third-party APIs, or network services at runtime
 
 ## Database Schema

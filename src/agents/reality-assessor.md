@@ -1,7 +1,6 @@
 ---
 name: reality-assessor
 description: Reality assessment specialist orchestrating multi-agent validation workflow. Validates functional reality vs claims, ensures work solves actual problems, detects false completions, and creates pragmatic action plans. Strictly read-only.
-model: inherit
 color: pink
 mode: subagent
 hidden: true

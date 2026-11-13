@@ -9,10 +9,6 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": [
-    "**/*"
-  ],
-  "exclude": [
-    "fixtures"
-  ]
+  "include": ["**/*"],
+  "exclude": ["fixtures"]
 }

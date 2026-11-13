@@ -1,7 +1,7 @@
 ## Test Organization
 
 ### bun:test and Mirrored Test Layout
-Tests use `bun:test` exclusively and live under `src/__tests__/`, mirroring the tested module's directory path (e.g., `src/__tests__/hooks/before-tool.test.ts` tests `src/hooks/before-tool.ts`). Cross-cutting fixtures live in `src/__tests__/fixtures/<tool>/`.
+Tests use `bun:test` exclusively and live under `src/__tests__/`, mirroring the tested module's directory path (e.g., `src/__tests__/hooks/internal/before-tool.test.ts` tests `src/hooks/internal/before-tool.ts`). Cross-cutting fixtures live in `src/__tests__/fixtures/<tool>/`.
 
 ### Test Build Isolation
 `bun test src` is the runner. Tests and fixtures are excluded from the root tsconfig so `tsc` never emits them into `dist/`; a nested `src/__tests__/tsconfig.json` extends the root config with `noEmit` to keep editor/type-check parity.

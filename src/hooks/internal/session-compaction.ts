@@ -1,4 +1,6 @@
-import { $ } from "bun";
+import fs from 'node:fs';
+
+import { tasksDirectory } from '../../utils/workflow-paths.js';
 
 /**
  * Post-compaction reminder.
@@ -12,14 +14,15 @@ export const rereadOrchestratorState = async (
     prompt?: string | undefined;
   },
 ): Promise<void> => {
-  const tasksDir = `${directory}/.owflow/tasks`;
+  const tasksDir = tasksDirectory(directory);
   try {
-    await $`test -d ${tasksDir}`;
-    output.context.push(`## owflow Workflow State
+    if (fs.existsSync(tasksDir) && fs.statSync(tasksDir).isDirectory()) {
+      output.context.push(`## owflow Workflow State
 If an orchestrator workflow was active before compaction, you MUST re-read
 orchestrator-state.yml in that task's directory to verify completed_phases
 and determine the next phase. Use the question tool at Phase Gates.`);
+    }
   } catch {
-    // No .owflow/tasks directory — not a owflow project, skip injection
+    // No tasks directory — not an owflow project, skip injection
   }
 };

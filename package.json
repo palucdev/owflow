@@ -1,10 +1,19 @@
 {
   "name": "owflow",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Spec-driven development AI workflow for OpenCode",
   "type": "module",
   "main": "dist/index.js",
-  "exports": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "default": "./dist/tui.js"
+    }
+  },
   "types": "dist/index.d.ts",
   "files": [
     "dist",
@@ -16,6 +25,7 @@
     "copy-markdowns": "bun run ./scripts/copy-markdowns.js",
     "local-install": "bun run build && opencode plugin \"$(pwd)\" --global --force",
     "prepack": "bun run build",
+    "prettify": "prettier --write .",
     "test": "bun test src",
     "type-check": "bun tsc"
   },
@@ -31,18 +41,28 @@
     "email": "palucdev@gmail.com"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/palucdev/owflow.git"
+  },
+  "homepage": "https://github.com/palucdev/owflow#readme",
+  "bugs": {
+    "url": "https://github.com/palucdev/owflow/issues"
+  },
   "dependencies": {
     "@opencode-ai/plugin": "^1.18.4",
     "gray-matter": "^4.0.3",
     "yaml": "^2.4.1"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.13"
+    "@types/bun": "^1.3.13",
+    "prettier": "^3.9.10"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "engines": {
-    "node": "^25"
+    "node": ">=22",
+    "bun": ">=1.3.0"
   }
 }

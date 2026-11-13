@@ -51,10 +51,10 @@ All workflows in this plugin follow this pattern when failures occur:
 
 ## Hooks
 
-The plugin registers OpenCode lifecycle hooks from its entry point (`src/index.ts`), implemented in `src/hooks/` and shipped in `dist/hooks/`:
+The plugin registers OpenCode lifecycle hooks from its entry point (`src/index.ts`), implemented in `src/hooks/internal/` and shipped in `dist/hooks/internal/`:
 
-- `src/hooks/before-tool.ts` — `tool.execute.before`
-- `src/hooks/session-compaction.ts` — `experimental.session.compacting`
+- `src/hooks/internal/before-tool.ts` — `tool.execute.before`
+- `src/hooks/internal/session-compaction.ts` — `experimental.session.compacting`
 
 ### Destructive Command Protection (`tool.execute.before`)
 
@@ -67,6 +67,18 @@ All other agents — including the main agent — are checked against destructiv
 ### Post-Compaction State Reminder (`experimental.session.compacting`)
 
 Fires after context compaction. Injects a reminder to re-read `orchestrator-state.yml` and use `question` at phase gates.
+
+### User Hooks Wrapper (`.owflow/hooks/`)
+
+Host-project hook scripts are digested at plugin initialization (strict and fail-fast: the directory may contain only hook scripts, and each hook name in exactly one format) and dispatched through owflow's handlers, guard-first. Discovery and validation live in `src/hooks/hooks-registry.ts`, reporting in `src/hooks/hooks-diagnostics.ts`, and runtime log readers in `src/hooks/hooks-persistence.ts`. Subprocess execution and lifecycle dispatch in `src/hooks/hooks-runtime.ts` are decomposed into focused modular subsystems under `src/hooks/runtime/` (`circuit-breaker.ts`, `process-executor.ts`, `status-recorder.ts`, `failure-policy.ts`); `src/tui.ts` (TUI) provides the interactive surface.
+
+- Scripts are named `kebab-event.ext` (`tool-execute-before.sh` → `tool.execute.before`) and run as subprocesses; supported extensions are `.sh` (via `bash`) and `.ps1` (via `pwsh`/`powershell.exe` with `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File`).
+- A stem may also name a v1 host event (`session-idle.sh` → `session.idle`). These fire only for their matching `event.type` via the single `event` hook, and accept the pinned `HOST_EVENT_NAMES` set (32 events); v2-only `session.next.*` names are rejected.
+- Git-hooks contract: scripts receive `{ event, session?, context }` as JSON on `stdin`. Exit `0` succeeds (`stdout`/`stderr` captured as logs); any non-zero exit (or missing interpreter / timeout) fails closed (`Blocked: <stderr || stdout || exit reason>. Hint: ...`) and ends the active session for lifecycle gate hooks (with per-session abort cooldown), while reactive host events (e.g. `session.idle`) and the catch-all `event` hook record the failure without re-aborting an already-idle session, drop duplicate triggers while in-flight, and trip a 30s circuit breaker after 4 rapid consecutive failures (`<= 500ms` gap).
+- Persistence & Logging: flat per-hook JSONL log files (`owflow-hook-logs-<workspace-hash>-<hook-name>.jsonl`, 4 MB rotation) with workspace-scoped symlink (`owflow-hooks-latest-<workspace-hash>.jsonl`) pointing to the latest active log; bounded 256 KB tail-slice reader with mtime/size cache; `runId:status` bounded deduplication set (1,000 entries) preserving complete session run history; and atomic temp-file status snapshots with 50ms trailing debounce on transient `PENDING` states and immediate flush on terminal states.
+- Visibility: startup `[owflow]` banner snapshot and the always-on TUI **Active hooks** right-sidebar panel — both "effective after next restart". Hooks load once, so restart OpenCode to reload.
+- `OWFLOW_HOOKS_DISABLED=1` bypasses user hooks (built-ins stay active). Baseline trust: scripts are host-project code run with the user's full privileges — inherited environment, no name/path validation, opt-in timeout via `OWFLOW_HOOK_TIMEOUT_MS`; the bypass switch is the operator control.
+- Full operator reference: @.owflow/docs/project/user-hooks.md
 
 ## Workflow Types Supported
 

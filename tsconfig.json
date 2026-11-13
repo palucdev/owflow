@@ -18,6 +18,7 @@
     "verbatimModuleSyntax": true,
     "rootDir": "./src",
     "outDir": "dist",
+    "declaration": true,
     // Best practices
     "strict": true,
     "skipLibCheck": true,

@@ -20,19 +20,23 @@ Located in `.owflow/docs/project/`
 
 ### Vision (`project/vision.md`)
 
-Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status (v0.6.1, pre-1.0, solo-maintained MIT), package surface (51 skills, 23 subagents, 52 commands), test posture (158 tests across 10 suites, ~98% line / 100% function coverage), 6–12 month goals (grow workflow features, deterministic gates, registration smoke test, CI/type declarations), and evolution to four decomposed workflows (development 0.3.0, research 0.4.2, migration 0.5.0, performance 0.6.0) sharing dispatcher + subskill + `goal-*` architecture.
+Project purpose and current state: mission (make a rigorous, spec-driven SDLC the path of least resistance inside OpenCode), status, package surface (skills, subagents, commands), test posture (80%+ coverage), 6–12 month goals (grow workflow features, deterministic gates, CI), and evolution to dispatcher + subskill + `goal-*` architecture.
 
 ### Roadmap (`project/roadmap.md`)
 
-v0.6.1 feature inventory (4 workflows, 51 skills, 23 subagents, 52 commands, 2 custom tools) with recent-update history; high-priority plans (OpenCode v2 port, deterministic entry-gate checks, new workflow capabilities); medium-priority plans (GitHub Actions CI added 2026-10-08 — Codeberg runner pending, type declarations, CONTRIBUTING, internals docs, performance-command docs parity); technical debt (`.gitattributes`/formatter, hook hardening, agent frontmatter consistency; dual lockfiles resolved); and future considerations (ADR records, generated docs counts, skill-corpus scaling).
+Feature inventory with recent-update history; high-priority plans; medium-priority plans; technical debt; and future considerations;
 
 ### Tech Stack (`project/tech-stack.md`)
 
-Languages (TypeScript 5 strict ESM; markdown + YAML frontmatter product surface: 51 skills, ~13.3K lines), Bun/Node tooling (single `bun.lock`), three runtime dependencies, build & runtime flow diagram, testing (bun:test, 158 tests across 10 suites, coverage ≥ 0.8), dist payload (149 files), version management, and infrastructure (GitHub Actions CI added 2026-10-08; no DB, containers, or network services).
+Languages, Bun/Node tooling, runtime dependencies, build & runtime flow diagram, testing (bun:test, coverage ≥ 0.8), dist payload, version management, and infrastructure.
 
 ### Architecture (`project/architecture.md`)
 
-Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown-defined workflow engine with per-task state machine — all four workflows decomposed (dispatcher + subskills + autonomous `goal-*` wrapper) with per-workflow slug counts (development 13, migration 10, performance 9, research 8); layered system structure, distribution/context diagram, data flow, and invocation sequence diagram.
+Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown-defined workflow engine with per-task state machine with per-workflow slugs; layered system structure, hooks runtime modular decomposition and interactive TUI bridge, distribution/context diagram, data flow, and invocation sequence diagram.
+
+### User Hooks (`project/user-hooks.md`)
+
+User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; universal gate fail-closed semantics across all 16 lifecycle events and 32 host events; supported extensions and interpreters (`.sh`/`.ps1` subprocess scripts with PowerShell execution flags).
 
 ---
 
@@ -54,11 +58,11 @@ ESM import discipline (`node:` prefix, explicit `.js` extensions, `import type`)
 
 #### Coding Style (`standards/global/coding-style.md`)
 
-TypeScript specifics: `strict` with `noFallthroughCasesInSwitch`/`noImplicitOverride`/`noUncheckedIndexedAccess`, ESNext target for Node ^25, kebab-case filenames (snake_case MCP tool exceptions), two-space/double-quote/semicolon/trailing-comma formatting, and `const` arrow-function exports with no function declarations.
+TypeScript specifics: `strict` with `noFallthroughCasesInSwitch`/`noImplicitOverride`/`noUncheckedIndexedAccess`, ESNext target for Node ^25, kebab-case filenames (snake_case MCP tool exceptions), two-space/double-quote/semicolon/trailing-comma formatting, and `const` arrow-function exports with no function declarations (plus the host-mandated `{ id, tui }` default export in `src/tui.ts`).
 
 #### Commenting (`standards/global/commenting.md`)
 
-Sparse (~10% of lines) rationale-only comments, no TODO/FIXME/HACK markers, no commented-out code.
+Sparse rationale-only comments, no TODO/FIXME/HACK markers, no commented-out code.
 
 ---
 
@@ -108,7 +112,7 @@ Category overview: custom project workflow-design standards category (no built-i
 
 #### Skill, Agent, and Command Authoring (`standards/workflow-design/authoring.md`)
 
-SKILL.md frontmatter/naming contract (always `owflow:`-prefixed, `user-invocable` flags), agent frontmatter contract (`mode: subagent`, `hidden: true`, inherited model), thin command wrappers over skills, runtime synthesis of slash commands from invocable skill frontmatter (`argument-hint` is documentation-only; behavior-changing flags are restated in skill bodies), anti-duplication and single source of truth, documentation length targets, references that guide rather than implement (<10-line examples), reference file placement, HR-separated agent bodies with YAML result blocks, and structured workflow/step documentation.
+SKILL.md frontmatter/naming contract, agent frontmatter contract, thin command wrappers over skills, runtime synthesis of slash commands from invocable skill frontmatter, anti-duplication and single source of truth, documentation length targets, references that guide rather than implement (<10-line examples), reference file placement, HR-separated agent bodies with YAML result blocks, and structured workflow/step documentation.
 
 #### State Management and Gates (`standards/workflow-design/state-and-gates.md`)
 
@@ -148,5 +152,5 @@ Single release gate (`bun run build`: clean `dist/`, type-check, tests, then cop
 
 ---
 
-**Last Generated**: 2026-10-05
-**Maintained by**: Documentation Manager skill
+**Last Generated**: 2026-11-11
+**Maintained by**: Documentation Manager skill + Repo owner
