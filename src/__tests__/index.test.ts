@@ -11,8 +11,8 @@ import * as hooksWrapperModule from '../hooks/hooks-wrapper.js';
 import * as hooksPersistenceModule from '../hooks/hooks-persistence.js';
 import * as sessionCompaction from '../hooks/internal/session-compaction.js';
 import OwflowPlugin from '../index.js';
-import { fork_task } from '../tools/fork_task.js';
-import { verify_template } from '../tools/verify_template.js';
+import { fork_task } from '../tools/fork-task.js';
+import { verify_template } from '../tools/verify-template.js';
 
 const mockPluginInput = (directory: string, client?: any) =>
   ({

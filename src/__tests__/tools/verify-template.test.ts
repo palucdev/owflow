@@ -1,7 +1,7 @@
 import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verify_template } from '../../tools/verify_template.js';
+import { verify_template } from '../../tools/verify-template.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

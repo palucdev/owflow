@@ -1,5 +1,5 @@
 import type { OpenCodeConfig } from '../types/opencode-types.js';
-import { loadMarkdownDir } from '../utils/file-util.js';
+import { loadMarkdownDir } from '../utils/file-utility.js';
 import matter from 'gray-matter';
 
 const prepareAgent = ({ data, content }: matter.GrayMatterFile<string>) => {

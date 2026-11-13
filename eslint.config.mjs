@@ -1,10 +1,11 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import { defineConfig } from "eslint/config";
 import sonarjs from 'eslint-plugin-sonarjs';
 import unicorn from 'eslint-plugin-unicorn';
 import security from 'eslint-plugin-security';
 
-export default tseslint.config(
+export default defineConfig(
   {
     ignores: [
       'dist/**',
@@ -29,6 +30,9 @@ export default tseslint.config(
         },
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+    linterOptions: {
+      noInlineConfig: true, // Prevents inline comments from silencing rules
     },
     rules: {
       'max-params': ['error', 2],

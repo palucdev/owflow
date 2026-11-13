@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
 import type { OpenCodeConfig } from '../types/opencode-types.js';
-import { loadMarkdownDir } from '../utils/file-util.js';
+import { loadMarkdownDir } from '../utils/file-utility.js';
 import { PLUGIN_ROOT } from '../utils/plugin-info.js';
 
 // Keeps the rendered body independent of the line endings of this file's storage.

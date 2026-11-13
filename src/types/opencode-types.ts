@@ -1,9 +1,9 @@
 // workaround til something is not done with issue https://github.com/anomalyco/opencode/issues/24065
 
 export interface OpenCodeConfig {
-  agent: any;
+  agent: Record<string, unknown>;
   command: Record<string, OpenCodeCommand>;
-  skills: any;
+  skills: { paths?: string[]; [key: string]: unknown };
   small_model?: string;
 }
 

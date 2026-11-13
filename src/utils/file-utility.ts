@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PLUGIN_ROOT } from './plugin-info.js';
 
-export const loadMarkdownDir = (dirPath: string): matter.GrayMatterFile<string>[] => {
+export const loadMarkdownDirectory = (dirPath: string): matter.GrayMatterFile<string>[] => {
   const fullPath = path.join(PLUGIN_ROOT, dirPath);
   let files: string[];
   try {
@@ -22,3 +22,5 @@ export const loadMarkdownDir = (dirPath: string): matter.GrayMatterFile<string>[
   }
   return parsed;
 };
+
+export const loadMarkdownDir = loadMarkdownDirectory;

@@ -7,8 +7,8 @@ import type { Hooks, Plugin } from '@opencode-ai/plugin';
 
 import { PLUGIN_VERSION } from './utils/plugin-info.js';
 import type { OpenCodeConfig } from './types/opencode-types.js';
-import { verify_template } from './tools/verify_template.js';
-import { fork_task } from './tools/fork_task.js';
+import { verify_template } from './tools/verify-template.js';
+import { fork_task } from './tools/fork-task.js';
 import { rereadOrchestratorState } from './hooks/internal/session-compaction.js';
 import { guardAgainstDestructiveActions } from './hooks/internal/before-tool.js';
 import { configureSkills } from './configuration/skills-config.js';
