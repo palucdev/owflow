@@ -18,8 +18,8 @@ export const createDefaultEnvironmentConfig = (): EnvironmentConfig => {
     hookTimeoutMs: Number.isFinite(parsedTimeout) ? parsedTimeout : undefined,
     isDebugEnabled: environmentVariables['OWFLOW_DEBUG'] === '1',
     templatesDirectory: environmentVariables['OWFLOW_TEMPLATES_DIR'],
-    statusFilePath: environmentVariables['OWFLOW_STATUS_FILE'],
-    logFilePath: environmentVariables['OWFLOW_LOG_FILE'],
+    statusFilePath: environmentVariables['OWFLOW_HOOKS_STATUS_FILE'] ?? environmentVariables['OWFLOW_STATUS_FILE'],
+    logFilePath: environmentVariables['OWFLOW_HOOK_LOGS_FILE'] ?? environmentVariables['OWFLOW_LOG_FILE'],
     username: environmentVariables['USER'] ?? environmentVariables['USERNAME'] ?? 'default',
   };
 };

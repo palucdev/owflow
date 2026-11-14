@@ -3,24 +3,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PLUGIN_ROOT } from './plugin-info.js';
 
-export const loadMarkdownDirectory = (dirPath: string): matter.GrayMatterFile<string>[] => {
-  const fullPath = path.join(PLUGIN_ROOT, dirPath);
+export const loadMarkdownDirectory = (directoryPath: string): matter.GrayMatterFile<string>[] => {
+  const fullPath = path.join(PLUGIN_ROOT, directoryPath);
   let files: string[];
   try {
-    files = fs.readdirSync(fullPath).filter((f) => f.endsWith('.md'));
+    files = fs.readdirSync(fullPath).filter((fileName) => fileName.endsWith('.md'));
   } catch {
     return [];
   }
   const parsed: matter.GrayMatterFile<string>[] = [];
-  for (const f of files) {
+  for (const fileName of files) {
     try {
-      const raw = fs.readFileSync(path.join(fullPath, f), 'utf8');
+      const raw = fs.readFileSync(path.join(fullPath, fileName), 'utf8');
       parsed.push(matter(raw));
-    } catch (e) {
-      console.warn(`[owflow] Skipping unparseable markdown file ${f} in ${dirPath}:`, e instanceof Error ? e.message : e);
+    } catch (error) {
+      console.warn(
+        `[owflow] Skipping unparseable markdown file ${fileName} in ${directoryPath}:`,
+        error instanceof Error ? error.message : error,
+      );
     }
   }
   return parsed;
 };
 
-export const loadMarkdownDir = loadMarkdownDirectory;
+export { loadMarkdownDirectory as loadMarkdownDir };

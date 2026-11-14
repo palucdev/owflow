@@ -3,8 +3,8 @@ import type { TuiPluginApi } from '@opencode-ai/plugin/tui';
 export interface SolidRuntime {
   readonly createElement: (tag: string) => unknown;
   readonly insert: (parent: unknown, child: unknown) => unknown;
-  readonly setProp: (node: unknown, name: string, value: unknown) => unknown;
-  readonly onCleanup?: (fn: () => void) => void;
+  readonly setProp: (node: unknown, ...nameAndValue: [string, unknown]) => unknown;
+  readonly onCleanup?: (cleanupFunction: () => void) => void;
 }
 
 export interface SidebarTheme {
@@ -20,23 +20,98 @@ export interface SidebarTheme {
 
 export type SolidElement = ReturnType<TuiPluginApi['ui']['Dialog']>;
 
-export const el = (solid: SolidRuntime, tag: string, props: Record<string, unknown>, children: readonly unknown[] = []): unknown => {
+export interface ElementCreationOptions {
+  readonly solid: SolidRuntime;
+  readonly tag: string;
+  readonly properties?: Record<string, unknown>;
+  readonly children?: readonly unknown[];
+}
+
+const resolveElementCreationOptions = (
+  solidOrOptions: SolidRuntime | ElementCreationOptions,
+  rest: readonly unknown[],
+): ElementCreationOptions => {
+  if ('solid' in solidOrOptions) {
+    return solidOrOptions;
+  }
+  const tag = typeof rest[0] === 'string' ? rest[0] : '';
+  const properties = (rest[1] as Record<string, unknown> | undefined) ?? {};
+  const children = (rest[2] as readonly unknown[] | undefined) ?? [];
+  return { solid: solidOrOptions, tag, properties, children };
+};
+
+export const createElementNode = (
+  solidOrOptions: SolidRuntime | ElementCreationOptions,
+  ...rest: readonly unknown[]
+): unknown => {
+  const { solid, tag, properties = {}, children = [] } = resolveElementCreationOptions(
+    solidOrOptions,
+    rest,
+  );
   const node = solid.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (v !== undefined) {
+  for (const [propertyKey, propertyValue] of Object.entries(properties)) {
+    if (propertyValue !== undefined) {
       try {
-        solid.setProp(node, k, v);
-      } catch {}
+        solid.setProp(node, propertyKey, propertyValue);
+      } catch {
+        // ignore setProp error
+      }
     }
   }
   for (const child of children) {
-    if (child !== undefined) solid.insert(node, child);
+    if (child !== undefined) {
+      solid.insert(node, child);
+    }
   }
   return node;
 };
 
-export const txt = (solid: SolidRuntime, content: string, fg: unknown, extra: Record<string, unknown> = {}): unknown =>
-  el(solid, 'text', { fg, content, ...extra });
+export { createElementNode as el };
+
+export interface TextCreationOptions {
+  readonly solid: SolidRuntime;
+  readonly content: string;
+  readonly foreground?: unknown;
+  readonly extra?: Record<string, unknown>;
+}
+
+const resolveTextOptions = (
+  solidOrOptions: SolidRuntime | TextCreationOptions,
+  rest: readonly unknown[],
+): TextCreationOptions => {
+  if ('solid' in solidOrOptions) {
+    return solidOrOptions;
+  }
+  const content = typeof rest[0] === 'string' ? rest[0] : '';
+  const foreground = rest[1];
+  const extra = (rest[2] as Record<string, unknown> | undefined) ?? {};
+  return { solid: solidOrOptions, content, foreground, extra };
+};
+
+export const createTextNode = (
+  solidOrOptions: SolidRuntime | TextCreationOptions,
+  ...rest: readonly unknown[]
+): unknown => {
+  const { solid, content, foreground, extra = {} } = resolveTextOptions(solidOrOptions, rest);
+  return createElementNode(solid, 'text', { fg: foreground, content, ...extra });
+};
+
+export { createTextNode as txt };
+
+const resolveCleanupFunction = async (
+  runtime: Record<string, unknown>,
+  importSolidJs: () => Promise<unknown>,
+): Promise<((cleanupFunction: () => void) => void) | undefined> => {
+  if (typeof runtime['onCleanup'] === 'function') {
+    return runtime['onCleanup'] as (cleanupFunction: () => void) => void;
+  }
+  try {
+    const solidJs = (await importSolidJs()) as { onCleanup?: (cleanupFunction: () => void) => void };
+    return typeof solidJs.onCleanup === 'function' ? solidJs.onCleanup : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export const loadSolidRuntime = async (
   importSolid: () => Promise<unknown> = () => import('@opentui/solid'),
@@ -44,28 +119,28 @@ export const loadSolidRuntime = async (
 ): Promise<SolidRuntime | null> => {
   try {
     const runtime = (await importSolid()) as Partial<SolidRuntime>;
-    let onCleanup: ((fn: () => void) => void) | undefined;
-    if (typeof (runtime as Record<string, unknown>).onCleanup === 'function') {
-      onCleanup = (runtime as Record<string, unknown>).onCleanup as (fn: () => void) => void;
-    } else {
-      try {
-        const solidJs = (await importSolidJs()) as { onCleanup?: (fn: () => void) => void };
-        if (typeof solidJs.onCleanup === 'function') {
-          onCleanup = solidJs.onCleanup;
-        }
-      } catch {}
+    const onCleanup = await resolveCleanupFunction(
+      runtime as Record<string, unknown>,
+      importSolidJs,
+    );
+
+    const isCompleteRuntime =
+      typeof runtime.createElement === 'function' &&
+      typeof runtime.insert === 'function' &&
+      typeof runtime.setProp === 'function';
+
+    if (!isCompleteRuntime) {
+      return JSON.parse('null') as null;
     }
 
-    return typeof runtime.createElement === 'function' && typeof runtime.insert === 'function' && typeof runtime.setProp === 'function'
-      ? {
-          createElement: runtime.createElement,
-          insert: runtime.insert,
-          setProp: runtime.setProp,
-          ...(onCleanup !== undefined ? { onCleanup } : {}),
-        }
-      : null;
+    return {
+      createElement: runtime.createElement,
+      insert: runtime.insert,
+      setProp: runtime.setProp,
+      ...(onCleanup && { onCleanup }),
+    };
   } catch (error) {
     console.warn('[owflow] Failed to import @opentui/solid', error);
-    return null;
+    return JSON.parse('null') as null;
   }
 };

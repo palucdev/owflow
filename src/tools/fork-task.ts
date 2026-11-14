@@ -28,26 +28,27 @@ export const fork_task = tool({
         "Optional one-line description of what the fork should explore; stamped into the fork's orchestrator.options.fork_information.intent",
       ),
   },
-  async execute(args, context) {
+  async execute(toolArguments, context) {
     try {
       const result = forkTask({
-        taskRoot: args.taskRoot,
-        source: args.source,
-        slug: args.slug,
-        from: args.from,
-        intent: args.intent,
+        taskRoot: toolArguments.taskRoot,
+        source: toolArguments.source,
+        slug: toolArguments.slug,
+        from: toolArguments.from,
+        intent: toolArguments.intent,
         cwd: context.directory,
       });
       return {
         output: [
-          `FORK CREATED`,
+          'FORK CREATED',
           `Fork path: ${path.relative(context.directory, result.forkPath).split(path.sep).join('/')}`,
           `Fork point: ${result.forkPoint}`,
-          ...(args.intent ? [`Intent: ${args.intent}`] : []),
+          ...(toolArguments.intent ? [`Intent: ${toolArguments.intent}`] : []),
         ].join('\n'),
       };
-    } catch (error: any) {
-      return { output: error.message };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { output: errorMessage };
     }
   },
 });
