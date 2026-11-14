@@ -13,6 +13,8 @@ import { hooksDirectory } from '../utils/workflow-paths.js';
 import { scanHooks } from './hooks-registry.js';
 import { CircuitBreakerTracker } from './runtime/circuit-breaker.js';
 import {
+  HookFailureTracker,
+  MAX_HOOK_FAILURES,
   SessionAbortController,
   buildCircuitBreakerError,
   buildInterpreterUnavailableError,
@@ -26,6 +28,8 @@ import { writeHookCrashLog } from './hooks-persistence.js';
 export { CircuitBreakerTracker, type CircuitBreakerEntry } from './runtime/circuit-breaker.js';
 
 export {
+  HookFailureTracker,
+  MAX_HOOK_FAILURES,
   SessionAbortController,
   buildCircuitBreakerError,
   buildInterpreterUnavailableError,
@@ -59,6 +63,7 @@ class HooksWrapper {
   private statusRecorder: StatusRecorder;
   private abortController: SessionAbortController;
   private circuitBreaker: CircuitBreakerTracker;
+  private failureTracker: HookFailureTracker;
   private activeProcs: Set<ReturnType<typeof Bun.spawn>>;
   private directory: string;
   private runCounter = 0;
@@ -74,6 +79,7 @@ class HooksWrapper {
     });
     this.abortController = new SessionAbortController(endSession);
     this.circuitBreaker = new CircuitBreakerTracker();
+    this.failureTracker = new HookFailureTracker();
     this.activeProcs = new Set<ReturnType<typeof Bun.spawn>>();
   }
 
@@ -124,6 +130,7 @@ class HooksWrapper {
 
   public dispose = (): void => {
     this.statusRecorder.dispose();
+    this.failureTracker.clear();
     for (const proc of this.activeProcs) {
       try {
         proc.kill();
@@ -269,6 +276,12 @@ class HooksWrapper {
 
       if (ok) {
         this.circuitBreaker.recordSuccess(event, entry.path, sessionID);
+        this.failureTracker.recordSuccess(event, entry.path, sessionID);
+        if (event === HookEvent.ToolExecuteAfter && rawStdout.trim() && output && typeof output === 'object') {
+          const trimmed = rawStdout.trim();
+          const existing = typeof (output as any).output === 'string' ? (output as any).output : '';
+          (output as any).output = existing ? `${existing}\n\n[Post-Tool Hint]:\n${trimmed}` : trimmed;
+        }
       } else {
         this.circuitBreaker.recordFailure(event, entry.path, sessionID, startedAt, finishedAt);
       }
@@ -317,6 +330,31 @@ class HooksWrapper {
       });
 
       if (!ok) {
+        const isCritical = Boolean(reason?.includes('CRITICAL:'));
+        if (event === HookEvent.ToolExecuteAfter) {
+          const attempt = this.failureTracker.recordFailure(event, entry.path, sessionID);
+          if (attempt < MAX_HOOK_FAILURES && !isCritical) {
+            if (output && typeof output === 'object') {
+              const hintBody = rawStderr.trim() || rawStdout.trim() || reason || 'Check failed';
+              const hintMessage = `[Post-Tool Check Failed (attempt ${attempt}/${MAX_HOOK_FAILURES})]:\n${hintBody}\nHint: Fix the reported issues to keep code quality standards.`;
+              const existing = typeof (output as any).output === 'string' ? (output as any).output : '';
+              (output as any).output = existing ? `${existing}\n\n${hintMessage}` : hintMessage;
+            }
+            continue;
+          }
+          await this.abortController.abortSession(event, sessionID, entry.path);
+          throw buildProcessFailureError(entry.path, reason, event, isCritical ? MAX_HOOK_FAILURES : attempt, MAX_HOOK_FAILURES);
+        }
+
+        if (event === HookEvent.ToolExecuteBefore) {
+          const attempt = this.failureTracker.recordFailure(event, entry.path, sessionID);
+          if (attempt < MAX_HOOK_FAILURES && !isCritical) {
+            throw buildProcessFailureError(entry.path, reason, event, attempt, MAX_HOOK_FAILURES);
+          }
+          await this.abortController.abortSession(event, sessionID, entry.path);
+          throw buildProcessFailureError(entry.path, reason, event, isCritical ? MAX_HOOK_FAILURES : attempt, MAX_HOOK_FAILURES);
+        }
+
         await this.abortController.abortSession(event, sessionID, entry.path);
         throw buildProcessFailureError(entry.path, reason, event);
       }

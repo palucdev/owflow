@@ -260,9 +260,20 @@ Hook logs popup is scrollable and displays stderr and stdout logs in a separate 
 | `.sh` | subprocess via `bash` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
 | `.ps1` | subprocess via `pwsh`/`powershell.exe` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
 
-**All hooks are gate hooks** governed by universal fail-closed semantics (16 lifecycle events and 32 host events) using the standard **git-hooks contract**:
+**All hooks are gate hooks** governed by fail-closed semantics (16 lifecycle events and 32 host events) using the standard **git-hooks contract**:
 - **Input (`stdin`)**: JSON `{ event, session?: { sessionID }, context }`.
-- **Output (`exit code` + `stdout`/`stderr`)**: Exit `0` succeeds; any non-zero exit rejects the operation with a `Blocked:` error (using `stderr` or `stdout` as the reason) and terminates the active session. Missing interpreters fail closed at fire time.
+- **Success (`exit 0`)**: Operation proceeds. For `tool.execute.after`, any non-empty `stdout` is bridged directly into agent context as `[Post-Tool Hint]:\n<stdout>`, providing an advisory warning without interrupting the turn.
+- **Tool Lifecycle Hooks & 3-Attempt Escalation (`tool.execute.before`, `tool.execute.after`)**:
+  - **Warning with Hint (Attempts 1 & 2)**: Non-zero exit codes provide actionable feedback while **keeping the conversation alive** so the agent can self-correct:
+    - `tool.execute.before`: Blocks the tool call with `Blocked: <reason> (attempt N/3). Hint: <hint>` returned to the agent as the tool result, without aborting the session.
+    - `tool.execute.after`: Appends `[Post-Tool Check Failed (attempt N/3)]:\n<output>\nHint: ...` into the tool output without aborting the session.
+  - **Automatic Hard Stop (Attempt 3)**: If a check fails 3 consecutive times in the session without passing in between, it halts the conversation (`client.session.abort`) and fails loudly. Clean runs reset the attempt counter.
+  - **Immediate Hard Stop (`CRITICAL:`)**: A hook can bypass the 3-attempt escalation and **immediately abort the session on the very first attempt** by outputting `CRITICAL:` anywhere in `stderr`, `stdout`, or JSON `{"reason": "CRITICAL: ..."}` with a non-zero exit code:
+    ```bash
+    echo "CRITICAL: Unauthorized modification detected. Halting conversation." >&2
+    exit 1
+    ```
+- **Other Gate Hooks**: Lifecycle hooks like `command.execute.before` fail closed immediately on non-zero exit and abort the active session. Missing interpreters fail closed at fire time.
 
 ### Available Lifecycle Hooks (16)
 

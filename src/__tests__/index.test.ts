@@ -115,6 +115,37 @@ describe('OwflowPlugin', () => {
       ).rejects.toThrow('Blocked: destructive command not permitted for agent "main"');
     });
 
+    test('should track attempts and invoke client.session.abort on 3rd destructive attempt in plugin lifecycle', async () => {
+      const aborted: string[] = [];
+      const mockClient = {
+        session: {
+          abort: async ({ path }: { path: { id: string } }) => {
+            aborted.push(path.id);
+          },
+        },
+      };
+      const plugin = await OwflowPlugin(mockPluginInput(tmpDir, mockClient));
+      const sessionID = 'sess-abort-test';
+
+      // Attempt 1: throws attempt 1/3, does not abort
+      await expect(plugin['tool.execute.before']!({ tool: 'bash', sessionID, callID: 'c-1' }, { args: { command: 'git stash' } })).rejects.toThrow(
+        'attempt 1/3',
+      );
+      expect(aborted).toEqual([]);
+
+      // Attempt 2: throws attempt 2/3, does not abort
+      await expect(plugin['tool.execute.before']!({ tool: 'bash', sessionID, callID: 'c-2' }, { args: { command: 'git clean' } })).rejects.toThrow(
+        'attempt 2/3',
+      );
+      expect(aborted).toEqual([]);
+
+      // Attempt 3: aborts session and throws critical error
+      await expect(plugin['tool.execute.before']!({ tool: 'bash', sessionID, callID: 'c-3' }, { args: { command: 'rm -rf src/' } })).rejects.toThrow(
+        /CRITICAL: Halting conversation/,
+      );
+      expect(aborted).toEqual([sessionID]);
+    });
+
     test("should rethrow 'Blocked:' errors and swallow/warn unexpected errors", async () => {
       const guardSpy = spyOn(beforeTool, 'guardAgainstDestructiveActions').mockImplementation(async () => {
         throw new Error('Unexpected database error');
