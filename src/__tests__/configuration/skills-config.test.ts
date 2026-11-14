@@ -5,21 +5,21 @@ import { PLUGIN_ROOT } from '../../utils/plugin-info.js';
 import type { OpenCodeConfig } from '../../types/opencode-types.js';
 
 describe('configureSkills', () => {
-  const expectedSkillsDir = path.join(PLUGIN_ROOT, 'skills');
+  const expectedSkillsDirectory = path.join(PLUGIN_ROOT, 'skills');
 
   test('should initialize skills and skills.paths when skills is undefined', () => {
     const config = {} as OpenCodeConfig;
     configureSkills(config);
 
     expect(config.skills).toBeDefined();
-    expect(config.skills.paths).toEqual([expectedSkillsDir]);
+    expect(config.skills.paths).toEqual([expectedSkillsDirectory]);
   });
 
   test('should initialize skills.paths when skills object exists but skills.paths is undefined', () => {
     const config = { skills: {} } as OpenCodeConfig;
     configureSkills(config);
 
-    expect(config.skills.paths).toEqual([expectedSkillsDir]);
+    expect(config.skills.paths).toEqual([expectedSkillsDirectory]);
   });
 
   test('should append skills directory to existing paths list without modifying existing entries', () => {
@@ -32,19 +32,19 @@ describe('configureSkills', () => {
 
     configureSkills(config);
 
-    expect(config.skills.paths).toEqual([existingPath, expectedSkillsDir]);
+    expect(config.skills.paths).toEqual([existingPath, expectedSkillsDirectory]);
   });
 
   test('should not add duplicate skills directory if it is already present in skills.paths', () => {
     const config = {
       skills: {
-        paths: [expectedSkillsDir],
+        paths: [expectedSkillsDirectory],
       },
     } as OpenCodeConfig;
 
     configureSkills(config);
 
-    expect(config.skills.paths).toEqual([expectedSkillsDir]);
-    expect(config.skills.paths.length).toBe(1);
+    expect(config.skills.paths).toEqual([expectedSkillsDirectory]);
+    expect(config.skills.paths).toHaveLength(1);
   });
 });
