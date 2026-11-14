@@ -66,12 +66,12 @@ export const EXCLUDED_EVENT_NAMES = ['permission.ask', 'tool', 'auth', 'provider
 export const isHostEventName = (value: string): value is HostEventName => (HOST_EVENT_NAMES as readonly string[]).includes(value);
 
 /**
- * Validation digest mode for `scanHooks`.
- * - `FailFast`: Throws on any validation failure at startup/runtime to prevent
- *   running with invalid or ambiguous hooks (fail-closed contract).
- * - `Report`: Collects failures without throwing, allowing UI surfaces (TUI sidebar)
- *   and test suites to safely inspect hook status without crashing the process.
- */
+Validation digest mode for `scanHooks`.
+- `FailFast`: Throws on any validation failure at startup/runtime to prevent
+  running with invalid or ambiguous hooks (fail-closed contract).
+- `Report`: Collects failures without throwing, allowing UI surfaces (TUI sidebar)
+  and test suites to safely inspect hook status without crashing the process.
+*/
 export enum HookDigestMode {
   FailFast = 'fail-fast',
   Report = 'report',
@@ -149,7 +149,13 @@ export interface HookRunLogRecord {
 export type HookLogReadResult =
   { readonly kind: 'missing' | 'invalid' } | { readonly kind: 'ok'; readonly records: readonly HookRunLogRecord[]; readonly truncated: boolean };
 
-export type Dispatcher = (event: HookEventName, input?: unknown, output?: Record<string, unknown>) => Promise<void>;
+export interface HookDispatchContext {
+  readonly event: HookEventName;
+  readonly sessionID?: string;
+  readonly context?: Record<string, unknown>;
+}
+
+export type HookDispatchCallback = (dispatchContext: HookDispatchContext) => Promise<void>;
 
 export type HookReportRow = Readonly<Record<'path' | 'event' | 'interpreter' | 'status', string>>;
 
@@ -160,7 +166,7 @@ export interface HookReportInput {
 }
 
 export interface HooksWrapper {
-  readonly dispatch: Dispatcher;
+  readonly dispatch: HookDispatchCallback;
   readonly snapshot: HookReportInput;
   dispose(): void;
 }
