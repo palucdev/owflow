@@ -393,19 +393,19 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
   test('should deduplicate endSession calls per session within cooldown window and reset on chat.message', async () => {
     const root = makeTempDir();
-    writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\necho "tool gate failed" >&2\nexit 1\n');
+    writeHook(root, 'shell-env.sh', '#!/usr/bin/env bash\necho "shell env gate failed" >&2\nexit 1\n');
     writeHook(root, 'command-execute-before.sh', '#!/usr/bin/env bash\necho "cmd gate failed" >&2\nexit 1\n');
 
     const ended: string[] = [];
     const wrapper = new HooksWrapper(root, (id) => ended.push(id));
 
-    await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/tool gate failed/);
+    await expect(wrapper.dispatch(HookEvent.ShellEnv, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/shell env gate failed/);
     await expect(wrapper.dispatch(HookEvent.CommandExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/cmd gate failed/);
     expect(ended).toEqual(['ses_dedup']);
 
     // A new chat.message turn clears the session abort cooldown even when no chat-message hook exists
     await wrapper.dispatch(HookEvent.ChatMessage, { sessionID: 'ses_dedup' }, {});
-    await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/tool gate failed/);
+    await expect(wrapper.dispatch(HookEvent.ShellEnv, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/shell env gate failed/);
     expect(ended).toEqual(['ses_dedup', 'ses_dedup']);
 
     wrapper.dispose();
@@ -943,6 +943,121 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
 
       const nonAbortProcErr = buildProcessFailureError('/path/hook.sh', 'exit 1', 'session.idle');
       expect(nonAbortProcErr.message).toContain('failure recorded; fail closed');
+    });
+
+    describe('mutating output and 3-attempt escalation', () => {
+      test('tool.execute.after appends [Post-Tool Hint] on exit 0 with stdout without aborting session', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'tool-execute-after.sh', '#!/usr/bin/env bash\necho "ESLint: 0 errors, 2 warnings"\nexit 0\n');
+
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-after-ok' }, output);
+
+        expect(output.output).toBe('Original tool output\n\n[Post-Tool Hint]:\nESLint: 0 errors, 2 warnings');
+        expect(ended).toEqual([]);
+        wrapper.dispose();
+      });
+
+      test('tool.execute.after non-zero exit mutates output on attempts 1 and 2, and aborts on attempt 3', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'tool-execute-after.sh', '#!/usr/bin/env bash\necho "Parsing error" >&2\nexit 1\n');
+
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        // Attempt 1: does not abort, mutates output, does not throw
+        const output1: Record<string, unknown> = { output: 'Tool executed' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-after-retry' }, output1);
+        expect(output1.output).toContain('[Post-Tool Check Failed (attempt 1/3)]:');
+        expect(output1.output).toContain('Parsing error');
+        expect(output1.output).toContain('Hint: Fix the reported issues to keep code quality standards.');
+        expect(ended).toEqual([]);
+
+        // Attempt 2: does not abort, mutates output, does not throw
+        const output2: Record<string, unknown> = { output: 'Tool executed again' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-after-retry' }, output2);
+        expect(output2.output).toContain('[Post-Tool Check Failed (attempt 2/3)]:');
+        expect(output2.output).toContain('Parsing error');
+        expect(ended).toEqual([]);
+
+        // Attempt 3: aborts session and throws critical error
+        const output3: Record<string, unknown> = { output: 'Tool executed third time' };
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-after-retry' }, output3)).rejects.toThrow(
+          /CRITICAL: Parsing error failed 3 times.*Halting conversation/,
+        );
+        expect(ended).toEqual(['ses-after-retry']);
+        wrapper.dispose();
+      });
+
+      test('tool.execute.after immediately aborts if hook output contains CRITICAL:', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-after.sh',
+          '#!/usr/bin/env bash\necho "CRITICAL: File foo.ts failed linting 3 times. Halting conversation." >&2\nexit 1\n',
+        );
+
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        const output: Record<string, unknown> = { output: 'Tool executed' };
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-after-crit' }, output)).rejects.toThrow(
+          /Blocked: CRITICAL: File foo.ts failed linting 3 times\. Halting conversation\./,
+        );
+        expect(ended).toEqual(['ses-after-crit']);
+        wrapper.dispose();
+      });
+
+      test('tool.execute.before non-zero exit blocks tool without aborting on attempts 1 and 2, aborts on attempt 3', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\necho "Safety check failed" >&2\nexit 1\n');
+
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        // Attempt 1: throws Blocked: with attempt 1/3, does not abort
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-before-retry' }, {})).rejects.toThrow(
+          /Blocked: Safety check failed \(attempt 1\/3\)/,
+        );
+        expect(ended).toEqual([]);
+
+        // Attempt 2: throws Blocked: with attempt 2/3, does not abort
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-before-retry' }, {})).rejects.toThrow(
+          /Blocked: Safety check failed \(attempt 2\/3\)/,
+        );
+        expect(ended).toEqual([]);
+
+        // Attempt 3: aborts session and throws critical error
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-before-retry' }, {})).rejects.toThrow(
+          /CRITICAL: Safety check failed 3 times.*Halting conversation/,
+        );
+        expect(ended).toEqual(['ses-before-retry']);
+        wrapper.dispose();
+      });
+
+      test('tool.execute.before resets failure count on successful execution', async () => {
+        const root = makeTempDir();
+        const scriptPath = writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\nexit 1\n');
+
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        // Attempt 1 fails
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-before-reset' }, {})).rejects.toThrow(/\(attempt 1\/3\)/);
+
+        // Now script succeeds
+        fs.writeFileSync(scriptPath, '#!/usr/bin/env bash\nexit 0\n');
+        await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-before-reset' }, {});
+
+        // Next failure should start back at attempt 1
+        fs.writeFileSync(scriptPath, '#!/usr/bin/env bash\nexit 1\n');
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-before-reset' }, {})).rejects.toThrow(/\(attempt 1\/3\)/);
+        expect(ended).toEqual([]);
+        wrapper.dispose();
+      });
     });
   });
 });

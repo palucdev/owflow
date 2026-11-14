@@ -36,7 +36,7 @@ Runtime plugin lifecycle (entry, config mutation, hooks, custom tools), markdown
 
 ### User Hooks (`project/user-hooks.md`)
 
-User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; universal gate fail-closed semantics across all 16 lifecycle events and 32 host events; supported extensions and interpreters (`.sh`/`.ps1` subprocess scripts with PowerShell execution flags).
+User hook extension channel: host-project `.owflow/hooks/` scripts digested at startup and dispatched through owflow's handlers guard-first; universal gate fail-closed semantics across all 16 lifecycle events and 32 host events; 3-attempt escalation and non-stopping hint loops for tool hooks with `CRITICAL:` signal for immediate session abortion; supported extensions and interpreters (`.sh`/`.ps1` subprocess scripts with PowerShell execution flags).
 
 ---
 

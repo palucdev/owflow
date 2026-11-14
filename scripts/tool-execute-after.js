@@ -231,11 +231,18 @@ function main() {
 
   if (attempt < MAX_ATTEMPTS) {
     // Attempts 1 and 2: provide actionable feedback to agent and exit 0
-    console.log(`Linting failed. Please fix these errors:\n${output}`);
+    console.log(
+      `[ESLint Verification (Attempt ${attempt}/${MAX_ATTEMPTS})]:\n` +
+        `${output}\n\n` +
+        `Hint: Fix the linting violations above in ${path.basename(canonicalPath)} to adhere to project standards.`,
+    );
     process.exit(0);
   } else {
     // Attempt 3: escalate to human and exit with code 1
-    console.error('CRITICAL: File has failed linting 3 times. STOP. Report to user.');
+    console.error(
+      `CRITICAL: File ${path.basename(canonicalPath)} has failed linting 3 times. Halting conversation.\n` +
+        `Hint: Persistent lint failures detected. Report errors to the user.`,
+    );
     process.exit(1);
   }
 }

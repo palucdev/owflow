@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
-import { guardAgainstDestructiveActions } from '../../../hooks/internal/before-tool.js';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { defaultFailureTracker, guardAgainstDestructiveActions } from '../../../hooks/internal/before-tool.js';
+import { HookFailureTracker } from '../../../hooks/runtime/failure-policy.js';
 
 describe('guardAgainstDestructiveActions', () => {
   const defaultInput = {
@@ -7,6 +8,10 @@ describe('guardAgainstDestructiveActions', () => {
     sessionID: 'session-1',
     callID: 'call-1',
   };
+
+  beforeEach(() => {
+    defaultFailureTracker.clear();
+  });
 
   test("should do nothing if tool is not 'bash'", async () => {
     const input = { ...defaultInput, tool: 'write_file' };
@@ -90,6 +95,52 @@ describe('guardAgainstDestructiveActions', () => {
       await expect(guardAgainstDestructiveActions(defaultInput, output, emptyMap)).rejects.toThrow(
         'Blocked: destructive command not permitted for agent "main"',
       );
+    });
+
+    test('should track attempts and escalate on 3rd attempt', async () => {
+      const output = { args: { command: 'git stash' } };
+      const map = new Map<string, string>([['session-1', 'main']]);
+      const endedSessions: string[] = [];
+      const endSession = (id: string) => {
+        endedSessions.push(id);
+      };
+      const customTracker = new HookFailureTracker();
+
+      // Attempt 1
+      await expect(guardAgainstDestructiveActions(defaultInput, output, map, endSession, customTracker)).rejects.toThrow(
+        'Blocked: destructive command not permitted for agent "main" (attempt 1/3). Hint: Destructive commands like git reset --hard, git stash, and rm -rf are prohibited. Inspect files or ask the user instead.',
+      );
+      expect(endedSessions).toEqual([]);
+
+      // Attempt 2
+      await expect(guardAgainstDestructiveActions(defaultInput, output, map, endSession, customTracker)).rejects.toThrow(
+        'Blocked: destructive command not permitted for agent "main" (attempt 2/3). Hint: Destructive commands like git reset --hard, git stash, and rm -rf are prohibited. Inspect files or ask the user instead.',
+      );
+      expect(endedSessions).toEqual([]);
+
+      // Attempt 3
+      await expect(guardAgainstDestructiveActions(defaultInput, output, map, endSession, customTracker)).rejects.toThrow(
+        'Blocked: destructive command attempted 3 times for agent "main". CRITICAL: Halting conversation to prevent repository corruption. Hint: Ask the user for manual intervention.',
+      );
+      expect(endedSessions).toEqual(['session-1']);
+    });
+
+    test('should reset attempt count on successful safe command', async () => {
+      const destructiveOutput = { args: { command: 'git stash' } };
+      const safeOutput = { args: { command: 'git status' } };
+      const map = new Map<string, string>([['session-1', 'main']]);
+      const customTracker = new HookFailureTracker();
+
+      // Attempt 1
+      await expect(guardAgainstDestructiveActions(defaultInput, destructiveOutput, map, undefined, customTracker)).rejects.toThrow(/(attempt 1\/3)/);
+      expect(customTracker.getCount('destructive_guard', 'session-1')).toBe(1);
+
+      // Safe command resets
+      await guardAgainstDestructiveActions(defaultInput, safeOutput, map, undefined, customTracker);
+      expect(customTracker.getCount('destructive_guard', 'session-1')).toBe(0);
+
+      // Next failure should be attempt 1 again
+      await expect(guardAgainstDestructiveActions(defaultInput, destructiveOutput, map, undefined, customTracker)).rejects.toThrow(/(attempt 1\/3)/);
     });
   });
 });
