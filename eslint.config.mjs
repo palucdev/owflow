@@ -4,15 +4,18 @@ import { defineConfig } from "eslint/config";
 import sonarjs from 'eslint-plugin-sonarjs';
 import unicorn from 'eslint-plugin-unicorn';
 import security from 'eslint-plugin-security';
+import globals from 'globals';
 
 export default defineConfig(
   {
     ignores: [
+      '.git/**',
       'dist/**',
       'node_modules/**',
       'coverage/**',
       '.owflow/**',
       '**/*.d.ts',
+      'eslint.config.mjs'
     ],
   },
   js.configs.recommended,
@@ -26,9 +29,13 @@ export default defineConfig(
       parser: tseslint.parser,
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['*.js', '*.mjs', '*.ts'],
+          allowDefaultProject: ['*.js', '*.mjs', '*.ts', 'scripts/*.js'],
         },
         tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.node,
+        ...globals.builtin,
       },
     },
     linterOptions: {
@@ -54,6 +61,13 @@ export default defineConfig(
         {
           selector: "MemberExpression[object.name='process'][property.name='env']",
           message: 'Direct process.env access forbidden. Use DI to get configuration',
+        },
+      ],
+      'unicorn/filename-case': [
+        'error',
+        {
+          cases: { kebabCase: true },
+          ignore: ['^__tests__', '^__mocks__'],
         },
       ],
     },
