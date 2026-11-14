@@ -1,267 +1,239 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import fs from 'node:fs';
-import os from 'node:os';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import path from 'node:path';
 import * as hookLogs from '../../hooks/hooks-persistence.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
 import { materializeSidebar } from '../../tui/hooks-sidebar.js';
 import { buildActiveHooksView } from '../../tui/hooks-presenter.js';
-import { THEME, collectText, findClickableByContent, makeFakeApi, makeSolid, wait } from './primitives.js';
-import type { TimerHandler } from 'bun';
+import { HookRunState, type HookStatusSnapshot } from '../../types/hook-types.js';
+import { createTestEnvironmentConfig } from '../../utils/environment-config.js';
+import {
+  cleanupDialogWorkspaces,
+  createDialogWorkspace,
+  registerSidebar,
+  renderSidebar,
+  writeHookFile,
+  writeStatusSnapshot,
+} from './dialogs-test-helpers.js';
+import { THEME, collectText, findClickableByContent, makeFakeApi, makeSolid, wait, type FakeNode } from './primitives.js';
 
-describe('TUI hooks-sidebar', () => {
-  let tmpDir: string;
-  let hooksDir: string;
+const SIDEBAR_ORDER = 50;
+const POLL_INTERVAL_MS = 10;
+const POLL_WAIT_MS = 30;
+const STARTED_AT = 100;
+const FIRST_RENDER_AT = 0;
+const NOOP = (): void => {};
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'owflow-tui-sidebar-test-'));
-    hooksDir = path.join(tmpDir, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
-  });
+interface StatusSnapshotOptions {
+  readonly workspaceRoot: string;
+  readonly status: HookRunState;
+  readonly sessionID?: string;
+  readonly startedAt?: number;
+}
 
-  afterEach(() => {
-    mock.restore();
-    if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
+const createStatusSnapshot = (options: StatusSnapshotOptions): HookStatusSnapshot => ({
+  version: 1,
+  pid: 1,
+  workspace: options.workspaceRoot,
+  updatedAt: options.startedAt ?? Date.now(),
+  hooks: {
+    'tool.execute.before': {
+      status: options.status,
+      startedAt: options.startedAt ?? Date.now(),
+      ...(options.sessionID !== undefined && { sessionID: options.sessionID }),
+    },
+  },
+});
 
+const mockPollingInterval = (): void => {
+  const realSetInterval = setInterval;
+  spyOn(globalThis, 'setInterval').mockImplementation(((callback: () => void) => realSetInterval(callback, POLL_INTERVAL_MS)) as typeof setInterval);
+};
+
+afterEach(() => {
+  mock.restore();
+  cleanupDialogWorkspaces();
+});
+
+describe('sidebar slot registration', () => {
   test('should register sidebar slot and render active hooks or (none) when empty', async () => {
-    const { api, slots } = makeFakeApi(tmpDir);
+    const workspace = createDialogWorkspace('owflow-tui-sidebar-test-');
+    const { api, slots } = makeFakeApi(workspace.root);
     const { runtime } = makeSolid();
 
     // Empty hooks directory
-    await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
+    await registerActiveHooksSidebar(api, workspace.root, async () => runtime);
     expect(slots).toHaveLength(1);
-    expect(slots[0].order).toBe(50);
-
-    const emptyRender = slots[0].slots.sidebar_content({
-      theme: { current: THEME },
-    });
-    expect(collectText(emptyRender)).toContain('(none)');
+    expect(slots[0].order).toBe(SIDEBAR_ORDER);
+    expect(collectText(renderSidebar({ slots, theme: THEME }))).toContain('(none)');
 
     // With hooks registered and session_id
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-    const { api: apiWithHooks, slots: slotsWithHooks } = makeFakeApi(tmpDir);
-    await registerActiveHooksSidebar(apiWithHooks, tmpDir, async () => runtime);
+    writeHookFile(workspace, 'tool-execute-before.sh');
+    const { api: apiWithHooks, slots: slotsWithHooks } = makeFakeApi(workspace.root);
+    await registerActiveHooksSidebar(apiWithHooks, workspace.root, async () => runtime);
 
-    const hookRender = slotsWithHooks[0].slots.sidebar_content({ theme: { current: THEME } }, { session_id: 'ses-test' });
-    const text = collectText(hookRender);
-    expect(text).toContain('Active hooks:');
-    expect(text).toContain('tool-execute-before');
-    expect(text).toContain('Idle');
+    const hookText = collectText(renderSidebar({ slots: slotsWithHooks, theme: THEME, sessionID: 'ses-test' }));
+    expect(hookText).toContain('Active hooks:');
+    expect(hookText).toContain('tool-execute-before');
+    expect(hookText).toContain('Idle');
+  });
+});
+
+describe('sidebar status polling', () => {
+  test('should update status from status file and clean up on dispose', async () => {
+    const workspace = createDialogWorkspace('owflow-tui-sidebar-test-');
+    writeHookFile(workspace, 'tool-execute-before.sh');
+    const statusFile = path.join(workspace.root, 'status.json');
+    mockPollingInterval();
+
+    const { slots, disposeCallbacks, getRenders } = await registerSidebar({
+      workspace,
+      statusFile,
+      logFile: path.join(workspace.root, 'logs.jsonl'),
+    });
+    const rendered = renderSidebar({ slots, theme: THEME });
+    expect(collectText(rendered)).toContain('Idle');
+
+    writeStatusSnapshot(statusFile, createStatusSnapshot({ workspaceRoot: workspace.root, status: HookRunState.PENDING }));
+    await wait(POLL_WAIT_MS);
+
+    expect(collectText(rendered)).toContain('In progress');
+    expect(getRenders()).toBeGreaterThan(0);
+
+    for (const callback of disposeCallbacks) callback();
+    const rendersBefore = getRenders();
+
+    writeStatusSnapshot(statusFile, createStatusSnapshot({ workspaceRoot: workspace.root, status: HookRunState.SUCCESS }));
+    await wait(POLL_WAIT_MS);
+
+    expect(getRenders()).toBe(rendersBefore);
+  });
+});
+
+describe('sidebar disabled configuration', () => {
+  test('should disable polling and interactions when hooks are disabled', async () => {
+    const workspace = createDialogWorkspace('owflow-tui-sidebar-test-');
+    writeHookFile(workspace, 'tool-execute-before.sh');
+
+    const { slots } = await registerSidebar({
+      workspace,
+      statusFile: path.join(workspace.root, 'status.json'),
+      logFile: path.join(workspace.root, 'logs.jsonl'),
+      config: createTestEnvironmentConfig({ isHooksDisabled: true }),
+    });
+    const rendered = renderSidebar({ slots, theme: THEME });
+    expect(findClickableByContent(rendered, 'tool-execute-before')).toBeUndefined();
+  });
+});
+
+describe('sidebar handle disposal', () => {
+  test('should explicitly dispose handle and clean up via solid onCleanup', () => {
+    const workspace = createDialogWorkspace('owflow-tui-sidebar-test-');
+    writeHookFile(workspace, 'tool-execute-before.sh');
+    const view = buildActiveHooksView(workspace.root);
+    const { runtime, triggerCleanup } = makeSolid();
+
+    const handle = materializeSidebar({
+      view,
+      theme: THEME,
+      solid: runtime,
+      onRowClick: NOOP,
+      onRowHover: NOOP,
+      isInteractive: true,
+      notBefore: FIRST_RENDER_AT,
+    });
+
+    expect(typeof handle.dispose).toBe('function');
+    expect(handle.disposed()).toBe(false);
+
+    triggerCleanup();
+
+    expect(handle.disposed()).toBe(true);
+    expect(handle.applyStatuses(new Map([['tool.execute.before', { status: HookRunState.PENDING, startedAt: STARTED_AT }]]))).toBe(false);
+  });
+});
+
+describe('sidebar handle cleanup integration', () => {
+  test('should deregister disposed handles on slot unmount and prevent memory accumulation', async () => {
+    const workspace = createDialogWorkspace('owflow-tui-sidebar-test-');
+    writeHookFile(workspace, 'tool-execute-before.sh');
+    const statusFile = path.join(workspace.root, 'status.json');
+    const { runtime, triggerCleanup } = makeSolid();
+    mockPollingInterval();
+
+    const { slots } = await registerSidebar({ workspace, statusFile, logFile: path.join(workspace.root, 'logs.jsonl'), runtime });
+
+    const firstRendered = renderSidebar({ slots, theme: THEME, sessionID: 's1' });
+    expect(collectText(firstRendered)).toContain('Idle');
+
+    triggerCleanup();
+
+    const secondRendered = renderSidebar({ slots, theme: THEME, sessionID: 's2' });
+    expect(collectText(secondRendered)).toContain('Idle');
+
+    writeStatusSnapshot(statusFile, createStatusSnapshot({ workspaceRoot: workspace.root, status: HookRunState.PENDING, sessionID: 's1' }));
+    await wait(POLL_WAIT_MS);
+
+    expect(collectText(firstRendered)).toContain('Idle');
+  });
+});
+
+describe('sidebar lifecycle teardown', () => {
+  test('should dispose all active handles when api lifecycle onDispose fires', async () => {
+    const workspace = createDialogWorkspace('owflow-tui-sidebar-test-');
+    writeHookFile(workspace, 'tool-execute-before.sh');
+    const { api, slots, disposeCallbacks } = makeFakeApi(workspace.root);
+    const { runtime } = makeSolid();
+
+    spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(path.join(workspace.root, 'status.json'));
+    await registerActiveHooksSidebar(api, workspace.root, async () => runtime);
+
+    const rendered = renderSidebar({ slots, theme: THEME, sessionID: 's1' });
+    expect(collectText(rendered)).toContain('Idle');
+
+    for (const callback of disposeCallbacks) callback();
+
+    const rowNode = findClickableByContent(rendered, 'tool-execute-before');
+    expect(rowNode).toBeDefined();
+    expect(() => rowNode?.props.onMouseUp?.()).not.toThrow();
+    expect(() => rowNode?.props.onMouseOver?.()).not.toThrow();
+    expect(() => rowNode?.props.onMouseOut?.()).not.toThrow();
   });
 
-  describe('status polling and lifecycle', () => {
-    test('should update status from status file and clean up on dispose', async () => {
-      fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-      const statusFile = path.join(tmpDir, 'status.json');
-      const { api, slots, disposeCallbacks, getRenders } = makeFakeApi(tmpDir);
-      const { runtime } = makeSolid();
+  test('should ignore mouse interactions on directly disposed sidebar handle', () => {
+    const workspace = createDialogWorkspace('owflow-tui-sidebar-test-');
+    writeHookFile(workspace, 'tool-execute-before.sh');
+    const view = buildActiveHooksView(workspace.root);
+    const { runtime } = makeSolid();
+    let isClicked = false;
+    let isHovered = false;
 
-      const realSetInterval = globalThis.setInterval;
-      spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(statusFile);
-      spyOn(globalThis, 'setInterval').mockImplementation(((fn: TimerHandler) => realSetInterval(fn, 10)) as typeof setInterval);
-
-      await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
-
-      const rendered = slots[0].slots.sidebar_content({
-        theme: { current: THEME },
-      });
-      expect(collectText(rendered)).toContain('Idle');
-
-      // Update status file to pending
-      const now = Date.now();
-      fs.writeFileSync(
-        statusFile,
-        JSON.stringify({
-          version: 1,
-          pid: 1,
-          workspace: tmpDir,
-          updatedAt: now,
-          hooks: {
-            'tool.execute.before': { status: 'pending', startedAt: now },
-          },
-        }),
-      );
-      await wait(30);
-
-      expect(collectText(rendered)).toContain('In progress');
-      expect(getRenders()).toBeGreaterThan(0);
-
-      // Clean up on dispose stops polling
-      for (const cb of disposeCallbacks) cb();
-      const rendersBefore = getRenders();
-
-      fs.writeFileSync(
-        statusFile,
-        JSON.stringify({
-          version: 1,
-          pid: 1,
-          workspace: tmpDir,
-          updatedAt: Date.now(),
-          hooks: {
-            'tool.execute.before': {
-              status: 'success',
-              startedAt: now,
-              finishedAt: Date.now(),
-            },
-          },
-        }),
-      );
-      await wait(30);
-
-      expect(getRenders()).toBe(rendersBefore);
+    const handle = materializeSidebar({
+      view,
+      theme: THEME,
+      solid: runtime,
+      onRowClick: () => {
+        isClicked = true;
+      },
+      onRowHover: () => {
+        isHovered = true;
+      },
+      isInteractive: true,
+      notBefore: FIRST_RENDER_AT,
     });
 
-    test('should disable polling and interactions when OWFLOW_HOOKS_DISABLED=1', async () => {
-      const prev = process.env.OWFLOW_HOOKS_DISABLED;
-      process.env.OWFLOW_HOOKS_DISABLED = '1';
+    const rowNode = findClickableByContent(handle.root as FakeNode, 'tool-execute-before');
+    expect(rowNode).toBeDefined();
 
-      try {
-        fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-        const { api, slots } = makeFakeApi(tmpDir);
-        const { runtime } = makeSolid();
+    handle.dispose();
+    expect(handle.disposed()).toBe(true);
 
-        spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(path.join(tmpDir, 'status.json'));
+    rowNode?.props.onMouseUp?.();
+    expect(isClicked).toBe(false);
 
-        await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
+    rowNode?.props.onMouseOver?.();
+    expect(isHovered).toBe(false);
 
-        const rendered = slots[0].slots.sidebar_content({
-          theme: { current: THEME },
-        });
-        const hookRow = findClickableByContent(rendered, 'tool-execute-before');
-        expect(hookRow).toBeUndefined(); // Non-interactive
-      } finally {
-        if (prev === undefined) delete process.env.OWFLOW_HOOKS_DISABLED;
-        else process.env.OWFLOW_HOOKS_DISABLED = prev;
-      }
-    });
-
-    test('should explicitly dispose handle and clean up via solid onCleanup', () => {
-      fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-      const view = buildActiveHooksView(tmpDir);
-      const { runtime, triggerCleanup } = makeSolid();
-
-      const handle = materializeSidebar(
-        view,
-        THEME,
-        runtime,
-        () => {},
-        () => {},
-        true,
-        0,
-      );
-
-      expect(typeof (handle as any).dispose).toBe('function');
-      expect(handle.disposed()).toBe(false);
-
-      // Trigger Solid onCleanup
-      triggerCleanup();
-
-      expect(handle.disposed()).toBe(true);
-      expect(handle.applyStatuses(new Map([['tool.execute.before', { status: 'pending', startedAt: 100 }]]))).toBe(false);
-    });
-
-    test('should deregister disposed handles on slot unmount and prevent memory accumulation', async () => {
-      fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-      const statusFile = path.join(tmpDir, 'status.json');
-      const { api, slots } = makeFakeApi(tmpDir);
-      const { runtime, triggerCleanup } = makeSolid();
-
-      const realSetInterval = globalThis.setInterval;
-      spyOn(hookLogs, 'resolveHooksStatusFile').mockReturnValue(statusFile);
-      spyOn(globalThis, 'setInterval').mockImplementation(((fn: TimerHandler) => realSetInterval(fn, 10)) as typeof setInterval);
-
-      await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
-
-      // Render slot instance 1
-      const rendered1 = slots[0].slots.sidebar_content({ theme: { current: THEME } }, { session_id: 's1' });
-      expect(collectText(rendered1)).toContain('Idle');
-
-      // Unmount slot instance 1 via solid onCleanup
-      triggerCleanup();
-
-      // Render slot instance 2
-      const rendered2 = slots[0].slots.sidebar_content({ theme: { current: THEME } }, { session_id: 's2' });
-      expect(collectText(rendered2)).toContain('Idle');
-
-      // Update status file
-      const now = Date.now();
-      fs.writeFileSync(
-        statusFile,
-        JSON.stringify({
-          version: 1,
-          pid: 1,
-          workspace: tmpDir,
-          updatedAt: now,
-          hooks: {
-            'tool.execute.before': { status: 'pending', startedAt: now, sessionID: 's1' },
-          },
-        }),
-      );
-      await wait(30);
-
-      // The unmounted instance (s1) should NOT have been updated because it was disposed
-      expect(collectText(rendered1)).toContain('Idle');
-    });
-
-    test('should dispose all active handles when api lifecycle onDispose fires', async () => {
-      fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-      const { api, slots, disposeCallbacks } = makeFakeApi(tmpDir);
-      const { runtime } = makeSolid();
-
-      await registerActiveHooksSidebar(api, tmpDir, async () => runtime);
-
-      const rendered = slots[0].slots.sidebar_content({ theme: { current: THEME } }, { session_id: 's1' });
-      expect(collectText(rendered)).toContain('Idle');
-
-      // Trigger lifecycle dispose
-      for (const cb of disposeCallbacks) cb();
-
-      // Mouse events or status updates after lifecycle dispose should be no-ops
-      const rowNode = findClickableByContent(rendered, 'tool-execute-before');
-      expect(rowNode).toBeDefined();
-      expect(() => rowNode?.props.onMouseUp?.()).not.toThrow();
-      expect(() => rowNode?.props.onMouseOver?.()).not.toThrow();
-      expect(() => rowNode?.props.onMouseOut?.()).not.toThrow();
-    });
-
-    test('should ignore mouse interactions on directly disposed sidebar handle', () => {
-      fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-      const view = buildActiveHooksView(tmpDir);
-      const { runtime } = makeSolid();
-      let clicked = false;
-      let hovered = false;
-
-      const handle = materializeSidebar(
-        view,
-        THEME,
-        runtime,
-        () => {
-          clicked = true;
-        },
-        () => {
-          hovered = true;
-        },
-        true,
-        0,
-      );
-
-      const rowNode = findClickableByContent(handle.root as any, 'tool-execute-before');
-      expect(rowNode).toBeDefined();
-
-      handle.dispose();
-      expect(handle.disposed()).toBe(true);
-
-      rowNode?.props.onMouseUp?.();
-      expect(clicked).toBe(false);
-
-      rowNode?.props.onMouseOver?.();
-      expect(hovered).toBe(false);
-
-      rowNode?.props.onMouseOut?.();
-      expect(hovered).toBe(false);
-    });
+    rowNode?.props.onMouseOut?.();
+    expect(isHovered).toBe(false);
   });
 });

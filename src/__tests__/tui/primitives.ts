@@ -1,10 +1,48 @@
+import type { TuiPluginApi } from '@opencode-ai/plugin/tui';
 import { HookRunState, type HookRunLogRecord } from '../../hooks/hooks-persistence.js';
-import type { SidebarTheme } from '../../tui/primitives.js';
+import type { SidebarTheme, SolidRuntime } from '../../tui/primitives.js';
+
+export interface FakeProperties {
+  readonly content?: string;
+  readonly onMouseUp?: () => void;
+  readonly onMouseOver?: () => void;
+  readonly onMouseOut?: () => void;
+  readonly [propertyName: string]: unknown;
+}
 
 export interface FakeNode {
   tag: string;
-  props: Record<string, any>;
+  props: FakeProperties;
   children: (FakeNode | string)[];
+}
+
+export interface FakeSlotRegistration {
+  order?: number;
+  slots: {
+    sidebar_content: (context: { readonly theme: { readonly current: SidebarTheme } }, properties?: { readonly session_id?: string }) => FakeNode;
+  };
+}
+
+export interface FakeDialogCall {
+  render: () => FakeNode;
+  onClose?: () => void;
+}
+
+export interface FakeApi {
+  slots: { register: (registration: FakeSlotRegistration) => string };
+  theme: { current: SidebarTheme };
+  state: { path: { directory: string } };
+  renderer: { width: number; height: number; requestRender: () => void };
+  lifecycle: { onDispose: (callback: () => void) => () => void };
+  ui: {
+    Dialog: (properties: unknown) => unknown;
+    dialog: {
+      replace: (render: () => FakeNode, onClose?: () => void) => void;
+      setSize: () => void;
+      clear: () => void;
+    };
+    toast: (input: unknown) => void;
+  };
 }
 
 export const THEME: SidebarTheme = {
@@ -21,41 +59,58 @@ export const THEME: SidebarTheme = {
 export const makeSolid = () => {
   const roots: FakeNode[] = [];
   const cleanups: (() => void)[] = [];
-  const runtime = {
+  const runtime: SolidRuntime = {
     createElement: (tag: string): FakeNode => {
       const node: FakeNode = { tag, props: {}, children: [] };
       if (tag === 'box') roots.push(node);
       return node;
     },
-    insert: (parent: any, child: any) => {
-      parent.children.push(child);
+    insert: (parent: unknown, child: unknown) => {
+      (parent as FakeNode).children.push(child as FakeNode);
     },
-    setProp: (node: any, name: string, value: any) => {
-      node.props[name] = value;
+    setProp: (node: unknown, ...nameAndValue: [string, unknown]) => {
+      const [propertyName, propertyValue] = nameAndValue;
+      (node as FakeNode).props[propertyName] = propertyValue;
     },
-    onCleanup: (fn: () => void) => {
-      cleanups.push(fn);
+    onCleanup: (cleanupFunction: () => void) => {
+      cleanups.push(cleanupFunction);
     },
   };
-  const triggerCleanup = () => {
+  const triggerCleanup = (): void => {
     while (cleanups.length > 0) {
-      const fn = cleanups.shift();
-      fn?.();
+      const cleanupFunction = cleanups.shift();
+      cleanupFunction?.();
     }
   };
   return { runtime, roots, cleanups, triggerCleanup };
 };
 
-export const makeFakeApi = (directory: string) => {
-  const slots: any[] = [];
-  const dialogCalls: Array<{ render: () => any; onClose?: () => void }> = [];
-  const toasts: any[] = [];
-  const disposeCallbacks: (() => void)[] = [];
-  let renders = 0;
+const noop = (): void => {};
 
-  const api: any = {
+const createFakeUi = (dialogCalls: FakeDialogCall[], toasts: unknown[]): FakeApi['ui'] => ({
+  Dialog: (properties: unknown) => properties,
+  dialog: {
+    replace: (render: () => FakeNode, onClose?: () => void) => {
+      dialogCalls.push({ render, onClose });
+    },
+    setSize: noop,
+    clear: noop,
+  },
+  toast: (input: unknown) => {
+    toasts.push(input);
+  },
+});
+
+export const makeFakeApi = (directory: string) => {
+  const slots: FakeSlotRegistration[] = [];
+  const dialogCalls: FakeDialogCall[] = [];
+  const toasts: unknown[] = [];
+  const disposeCallbacks: (() => void)[] = [];
+  let renderCount = 0;
+
+  const api: FakeApi = {
     slots: {
-      register: (registration: any) => {
+      register: (registration: FakeSlotRegistration) => {
         slots.push(registration);
         return 'owflow:0';
       },
@@ -66,44 +121,37 @@ export const makeFakeApi = (directory: string) => {
       width: 120,
       height: 40,
       requestRender: () => {
-        renders += 1;
+        renderCount += 1;
       },
     },
     lifecycle: {
       onDispose: (callback: () => void) => {
         disposeCallbacks.push(callback);
-        return () => {};
+        return noop;
       },
     },
-    ui: {
-      Dialog: (props: any) => props,
-      dialog: {
-        replace: (render: () => any, onClose?: () => void) => {
-          dialogCalls.push({ render, onClose });
-        },
-        setSize: () => {},
-        clear: () => {},
-      },
-      toast: (input: any) => {
-        toasts.push(input);
-      },
-    },
+    ui: createFakeUi(dialogCalls, toasts),
   };
 
+  function getRenders(): number {
+    return renderCount;
+  }
+
   return {
-    api,
+    api: api as unknown as TuiPluginApi,
+    fakeApi: api,
     slots,
     dialogCalls,
     toasts,
     disposeCallbacks,
-    getRenders: () => renders,
+    getRenders,
   };
 };
 
 export const collectText = (node: FakeNode | string): string => {
   if (typeof node === 'string') return node;
   const content = typeof node.props.content === 'string' ? node.props.content : '';
-  return [content, ...node.children.map(collectText)].filter(Boolean).join('\n');
+  return [content, ...node.children.map((child) => collectText(child))].filter(Boolean).join('\n');
 };
 
 export const findClickableByContent = (node: FakeNode, text: string): FakeNode | undefined => {
@@ -111,10 +159,11 @@ export const findClickableByContent = (node: FakeNode, text: string): FakeNode |
     return node;
   }
   for (const child of node.children) {
-    if (typeof child === 'object') {
-      const found = findClickableByContent(child, text);
-      if (found) return found;
+    if (typeof child !== 'object') {
+      continue;
     }
+    const found = findClickableByContent(child, text);
+    if (found) return found;
   }
   return undefined;
 };
@@ -127,11 +176,11 @@ export const makeLogRecord = (overrides: Partial<HookRunLogRecord> = {}): HookRu
   event: 'tool.execute.before',
   hook: '/project/.owflow/hooks/tool-execute-before.sh',
   name: 'tool-execute-before',
-  startedAt: 1_000,
-  finishedAt: 1_123,
+  startedAt: 12_345,
+  finishedAt: 12_468,
   durationMs: 123,
   status: HookRunState.SUCCESS,
   ...overrides,
 });
 
-export const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+export const wait = (milliseconds: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, milliseconds));
