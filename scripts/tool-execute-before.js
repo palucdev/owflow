@@ -11,11 +11,11 @@
  * Contract:
  * - Reads tool invocation payload as JSON from process.argv[2] or stdin.
  * - If the tool call targets `eslint.config.mjs` for modification:
- *     Outputs JSON: { "decision": "block", "reason": "..." }
- *     Exits with status code 1.
+ *     Attempts 1 & 2: Outputs JSON block decision with attempt count and hint, exits 1.
+ *     Attempt >= 3:   Outputs JSON block decision with CRITICAL halting message and hint, exits 1.
  * - Otherwise:
  *     Outputs JSON: { "decision": "approve" }
- *     Exits with status code 0.
+ *     Clears any previous attempt count and exits 0.
  */
 
 import path from 'node:path';
@@ -24,11 +24,8 @@ import fs from 'node:fs';
 /** The configuration filename that must not be altered by agent tools */
 const FORBIDDEN_FILE_NAME = 'eslint.config.mjs';
 
-/** The blocking reason returned to the agent when modification is attempted */
-const FORBIDDEN_REASON =
-  'Modifying eslint.config.mjs is forbidden.\n\n' +
-  'If you believe a rule makes your task impossible,\n' +
-  'report this to the user and explain why.';
+/** Maximum number of failed guard attempts permitted before critical escalation */
+const MAX_ATTEMPTS = 3;
 
 /**
  * Regex matching destructive bash commands or output redirections targeting eslint.config.mjs.
@@ -41,19 +38,92 @@ const BASH_MODIFYING_PATTERN =
   /(?:rm|mv|cp|truncate|sed\s+-i|>\s*|>>\s*|tee\s+).*eslint\.config\.mjs|eslint\.config\.mjs.*(?:>|>>|\|)/i;
 
 /**
- * Approves tool execution and terminates process cleanly.
+ * Extracts and sanitizes the session ID to create an isolated state file path.
+ * @param {object} data
+ * @returns {string} Absolute path to session state file in /tmp
  */
-function approve() {
+function resolveStatePath(data) {
+  const sessionID =
+    data?.session?.sessionID ||
+    data?.context?.sessionID ||
+    data?.sessionID ||
+    process.env.OPENCODE_SESSION_ID ||
+    'default';
+
+  const cleanSessionID = String(sessionID).replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `/tmp/owflow-guard-state-${cleanSessionID}.json`;
+}
+
+/**
+ * Safely loads the persistent guard attempt state for this session.
+ * @param {string} statePath
+ * @returns {Record<string, number>}
+ */
+function loadState(statePath) {
+  if (fs.existsSync(statePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+/**
+ * Safely persists the updated retry state for this session.
+ * @param {string} statePath
+ * @param {Record<string, number>} state
+ */
+function saveState(statePath, state) {
+  try {
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+  } catch {
+    // Non-fatal
+  }
+}
+
+/**
+ * Approves tool execution, clears recorded attempts, and terminates process cleanly.
+ * @param {string} [statePath]
+ */
+function approve(statePath) {
+  if (statePath) {
+    const state = loadState(statePath);
+    if (state.forbidden_file_attempts) {
+      delete state.forbidden_file_attempts;
+      saveState(statePath, state);
+    }
+  }
   console.log(JSON.stringify({ decision: 'approve' }));
   process.exit(0);
 }
 
 /**
- * Blocks tool execution with a descriptive reason and terminates with exit code 1.
- * @param {string} reason
+ * Blocks tool execution with escalation attempts and terminates with exit code 1.
+ * @param {string} statePath
  */
-function block(reason) {
-  console.log(JSON.stringify({ decision: 'block', reason }));
+function block(statePath) {
+  const state = loadState(statePath);
+  const attempt = (state.forbidden_file_attempts || 0) + 1;
+  state.forbidden_file_attempts = attempt;
+  saveState(statePath, state);
+
+  let reason;
+  if (attempt < MAX_ATTEMPTS) {
+    reason = `Modifying eslint.config.mjs is forbidden (attempt ${attempt}/${MAX_ATTEMPTS}). Hint: If you believe a rule makes your task impossible, report this to the user and explain why.`;
+  } else {
+    reason = `CRITICAL: Attempted to modify eslint.config.mjs 3 times. Stopping conversation. Hint: Editing eslint.config.mjs is strictly prohibited. Ask the user for manual intervention.`;
+  }
+
+  console.log(
+    JSON.stringify({
+      decision: 'block',
+      attempt,
+      maxAttempts: MAX_ATTEMPTS,
+      reason,
+    }),
+  );
   process.exit(1);
 }
 
@@ -119,11 +189,12 @@ function main() {
     approve();
   }
 
+  const statePath = resolveStatePath(data);
   const tool = data.tool || data.context?.tool;
 
   // Read-only tools are always permitted (e.g. inspecting eslint.config.mjs)
   if (tool === 'read') {
-    approve();
+    approve(statePath);
   }
 
   const args = data.args || data.context?.args || data.tool_input || data.context?.tool_input || data;
@@ -132,7 +203,7 @@ function main() {
   // Check 1: Detect shell commands attempting to delete or overwrite eslint.config.mjs
   if (tool === 'bash' || command) {
     if (BASH_MODIFYING_PATTERN.test(command)) {
-      block(FORBIDDEN_REASON);
+      block(statePath);
     }
   }
 
@@ -141,12 +212,12 @@ function main() {
   if (targetFile) {
     const baseName = path.basename(targetFile);
     if (baseName === FORBIDDEN_FILE_NAME) {
-      block(FORBIDDEN_REASON);
+      block(statePath);
     }
   }
 
   // All safety checks passed; approve tool execution
-  approve();
+  approve(statePath);
 }
 
 main();

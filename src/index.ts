@@ -90,9 +90,6 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
 
     [HookEvent.ExperimentalSessionCompacting]: async (input, output) => {
       await rereadOrchestratorState(directory, output);
-      if (wrapper !== undefined) {
-        await wrapper.dispatch(HookEvent.ExperimentalSessionCompacting, input, output);
-      }
     },
 
     [HookEvent.ChatMessage]: async (input, output) => {
@@ -117,7 +114,7 @@ const OwflowPlugin: Plugin = async ({ $, client, directory }) => {
 
     [HookEvent.ToolExecuteBefore]: async (input, output) => {
       try {
-        await guardAgainstDestructiveActions(input, output, agentBySession);
+        await guardAgainstDestructiveActions(input, output, agentBySession, endSession);
         if (wrapper !== undefined) {
           await wrapper.dispatch(HookEvent.ToolExecuteBefore, input, output);
         }

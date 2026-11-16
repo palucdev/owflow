@@ -107,8 +107,8 @@ export const scanHooks = (hooksDir: string, options: { mode?: HookDigestMode; wh
     }
   }
 
-  entries.sort((a, b) => (a.event < b.event ? -1 : a.event > b.event ? 1 : 0));
-  failures.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  entries.sort((left, right) => left.event.localeCompare(right.event) || left.path.localeCompare(right.path));
+  failures.sort((left, right) => left.path.localeCompare(right.path));
   if (mode === HookDigestMode.FailFast && failures.length > 0) {
     throw new Error(formatFatal(failures));
   }

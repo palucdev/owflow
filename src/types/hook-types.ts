@@ -59,9 +59,28 @@ export const HOST_EVENT_NAMES = [
 export type HostEventName = (typeof HOST_EVENT_NAMES)[number];
 export type HookEventName = DispatchableEvent | HostEventName;
 
-export const HOOK_EVENT_NAMES: readonly HookEventName[] = [...DISPATCHABLE_EVENTS, ...HOST_EVENT_NAMES];
+export const EXPERIMENTAL_EVENT_NAMES = [
+  HookEvent.ExperimentalChatMessagesTransform,
+  HookEvent.ExperimentalChatSystemTransform,
+  HookEvent.ExperimentalSessionCompacting,
+  HookEvent.ExperimentalCompactionAutocontinue,
+  HookEvent.ExperimentalTextComplete,
+] as const;
 
-export const EXCLUDED_EVENT_NAMES = ['permission.ask', 'tool', 'auth', 'provider', 'experimental.provider.small_model'] as const;
+const STABLE_LIFECYCLE_EVENT_NAMES: readonly DispatchableEvent[] = DISPATCHABLE_EVENTS.filter(
+  (event) => !(EXPERIMENTAL_EVENT_NAMES as readonly string[]).includes(event),
+);
+
+export const HOOK_EVENT_NAMES: readonly HookEventName[] = [...STABLE_LIFECYCLE_EVENT_NAMES, ...HOST_EVENT_NAMES];
+
+export const EXCLUDED_EVENT_NAMES = [
+  'permission.ask',
+  'tool',
+  'auth',
+  'provider',
+  'experimental.provider.small_model',
+  ...EXPERIMENTAL_EVENT_NAMES,
+] as const;
 
 export const isHostEventName = (value: string): value is HostEventName => (HOST_EVENT_NAMES as readonly string[]).includes(value);
 

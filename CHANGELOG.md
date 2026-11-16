@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-14
+
+### Added
+
+- **3-attempt escalation loop for tool lifecycle hooks** — Failures from user hook scripts and the built-in destructive-command guard no longer abort the session immediately. Attempts 1 and 2 deliver actionable feedback while keeping the conversation alive: `tool.execute.before` failures block the tool call with a `Blocked: <reason> (attempt N/3). Hint: ...` error the agent can act on, and `tool.execute.after` failures append `[Post-Tool Check Failed (attempt N/3)]` plus the hook output to the tool result. Attempt 3 aborts the active session (`client.session.abort`) and fails loudly. Clean runs reset the per-check counter.
+- **`CRITICAL:` hard-stop signal** — Hook scripts and the failure formatter recognize `CRITICAL:` in `stdout`, `stderr`, or the JSON `reason` field. A critical failure bypasses the retry grace period and aborts the session on the first failure.
+- **Post-tool hint bridge (`tool.execute.after` stdout)** — Non-empty stdout from a successful post-tool hook is appended to `output.output` as `[Post-Tool Hint]: ...`, injecting advisory warnings and fix guidance directly into agent context without interrupting the turn.
+- **`HookFailureTracker`** (`src/hooks/runtime/failure-policy.ts`) — Session-scoped failure counter keyed by `(event, check, sessionID)` with `recordFailure`/`recordSuccess`/`getCount`/`clear`, bounded by the exported `MAX_HOOK_FAILURES` constant (3).
+- **Structured failure formatting** — `buildProcessFailureError` now parses JSON hook output (`reason` field), preserves custom `Hint:` text, normalizes duplicate `Blocked:` prefixes and stale attempt suffixes, and reports attempt progress (`attempt N/3`) until the critical halt threshold.
+
+### Changed
+
+- **Destructive-command guard escalation (`guardAgainstDestructiveActions`)** — The built-in guard accepts an `endSession` callback and a failure tracker: attempts 1–2 block the command with an actionable hint, attempt 3 aborts the session. The agent whitelist is unchanged, and a permitted command resets the guard's counter.
+- **Repo hook scripts** — `scripts/tool-execute-before.js` tracks per-session `eslint.config.mjs` tampering attempts in `/tmp/owflow-guard-state-<session>.json`, clears the count on approve, and escalates to `CRITICAL:` on attempt 3; `scripts/tool-execute-after.js` emits `[ESLint Verification (Attempt N/3)]` hints on attempts 1–2 and a `CRITICAL:` halting error on attempt 3.
+- **Failure handling scope** — Only `tool.execute.before` and `tool.execute.after` use the escalation loop; other lifecycle gate hooks still fail closed immediately on the first failure, and reactive host events keep their non-aborting semantics.
+- **Docs** — README, AGENTS.md, `.owflow/docs/INDEX.md`, and `.owflow/docs/project/user-hooks.md` document the escalation contract, the `CRITICAL:` escape hatch, and the soft-vs-hard failure matrix.
+
 ## [0.7.1] - 2026-11-13
 
 ### Added
