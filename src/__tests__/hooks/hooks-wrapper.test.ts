@@ -1059,5 +1059,314 @@ describe('hooks-wrapper (execution & dispatch runtime)', () => {
         wrapper.dispose();
       });
     });
+
+    describe('mutation protocol integration', () => {
+      const mutationScript = (body: string, exitCode = 0): string =>
+        `#!/usr/bin/env bash\ncat <<'JSON'\n${body}\nJSON\nexit ${exitCode}\n`;
+
+      test('tool.execute.after success mutation applies output, appends the tag, and skips the post-tool hint', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-after.sh',
+          mutationScript('{"$owflow":1,"mutate":{"output":"patched tool result"},"hint":"Use the project lint config."}'),
+        );
+        const logFile = path.join(root, 'logs-mutation-success.jsonl');
+        const wrapper = new HooksWrapper(root, undefined, { logFile });
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-ok' }, output);
+
+        expect(output.output).toBe('patched tool result\n\n[tool-execute-after]: Hint: Use the project lint config.');
+        expect(output.output).not.toContain('[Post-Tool Hint]');
+
+        const record = readHookLogRecords(logFile);
+        expect(record.kind === 'ok' && record.records[0]!.reason).toBe('[tool-execute-after]: Hint: Use the project lint config.');
+        expect(record.kind === 'ok' && record.records[0]!.stdout).toContain('"$owflow":1');
+        wrapper.dispose();
+      });
+
+      test('tool.execute.after soft failures apply mutations on attempts 1 and 2 without aborting', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-after.sh',
+          mutationScript('{"$owflow":1,"mutate":{"output":"Lint found unused imports."},"hint":"Remove unused imports before re-running."}', 1),
+        );
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        for (const attempt of [1, 2]) {
+          const output: Record<string, unknown> = { output: 'Tool executed' };
+          await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-soft' }, output);
+          expect(output.output).toContain('Lint found unused imports.');
+          expect(output.output).toContain(`[Post-Tool Check Failed (attempt ${attempt}/3)]:`);
+          expect(output.output).toContain('Hint: Remove unused imports before re-running.');
+          expect(output.output).toContain('[tool-execute-after]: Hint: Remove unused imports before re-running.');
+          expect(ended).toEqual([]);
+        }
+        wrapper.dispose();
+      });
+
+      test('tool.execute.after attempt 3 ignores the mutation and aborts', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-after.sh',
+          mutationScript('{"$owflow":1,"mutate":{"output":"should not apply"},"hint":"ignored hint"}', 1),
+        );
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-hard' }, { output: 'one' });
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-hard' }, { output: 'two' });
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-hard' }, output)).rejects.toThrow(
+          /CRITICAL: .*failed 3 times.*Halting conversation/,
+        );
+        expect(output.output).toBe('Original tool output');
+        expect(ended).toEqual(['ses-mut-hard']);
+        wrapper.dispose();
+      });
+
+      test('tool.execute.after CRITICAL ignores the mutation and aborts immediately', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-after.sh',
+          mutationScript(
+            '{"$owflow":1,"mutate":{"output":"should not apply"},"hint":"ignored hint","reason":"CRITICAL: stop now"}',
+            1,
+          ),
+        );
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-critical' }, output)).rejects.toThrow(/CRITICAL: stop now/);
+        expect(output.output).toBe('Original tool output');
+        expect(ended).toEqual(['ses-mut-critical']);
+        wrapper.dispose();
+      });
+
+      test('CRITICAL text inside the hint is treated as ordinary text', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-after.sh',
+          mutationScript('{"$owflow":1,"mutate":{"output":"mutated"},"hint":"CRITICAL: this is only a hint"}', 1),
+        );
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-hint-critical' }, output);
+        expect(output.output).toContain('CRITICAL: this is only a hint');
+        expect(output.output).toContain('[tool-execute-after]: Hint: CRITICAL: this is only a hint');
+        expect(ended).toEqual([]);
+        wrapper.dispose();
+      });
+
+      test('tool.execute.before soft failures merge args and include the tag in the Blocked error', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-before.sh',
+          mutationScript('{"$owflow":1,"mutate":{"args":{"timeout":5}},"hint":"Use the repository package manager."}', 1),
+        );
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        for (const attempt of [1, 2]) {
+          const output: Record<string, unknown> = { args: { command: 'ls' } };
+          await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-mut-before-soft' }, output)).rejects.toThrow(
+            new RegExp(`\\(attempt ${attempt}/3\\).*\\[tool-execute-before\\]: Hint: Use the repository package manager\\.`),
+          );
+          expect(output.args).toEqual({ command: 'ls', timeout: 5 });
+          expect(ended).toEqual([]);
+        }
+        wrapper.dispose();
+      });
+
+      test('tool.execute.before attempt 3 ignores the mutation and aborts', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-execute-before.sh',
+          mutationScript('{"$owflow":1,"mutate":{"args":{"timeout":5}},"hint":"ignored hint"}', 1),
+        );
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-mut-before-hard' }, { args: {} })).rejects.toThrow(
+          /attempt 1\/3/,
+        );
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-mut-before-hard' }, { args: {} })).rejects.toThrow(
+          /attempt 2\/3/,
+        );
+        const output: Record<string, unknown> = { args: { command: 'ls' } };
+        await expect(wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-mut-before-hard' }, output)).rejects.toThrow(
+          /CRITICAL: .*failed 3 times.*Halting conversation/,
+        );
+        expect(output.args).toEqual({ command: 'ls' });
+        expect(ended).toEqual(['ses-mut-before-hard']);
+        wrapper.dispose();
+      });
+
+      test('tool.execute.before success mutation merges args and records the tag', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'tool-execute-before.sh', mutationScript('{"$owflow":1,"mutate":{"args":{"timeout":5}},"hint":"Scoped."}'));
+        const logFile = path.join(root, 'logs-before-success.jsonl');
+        const wrapper = new HooksWrapper(root, undefined, { logFile });
+
+        const output: Record<string, unknown> = { args: { command: 'ls' } };
+        await wrapper.dispatch(HookEvent.ToolExecuteBefore, { sessionID: 'ses-mut-before-ok' }, output);
+
+        expect(output.args).toEqual({ command: 'ls', timeout: 5 });
+        const record = readHookLogRecords(logFile);
+        expect(record.kind === 'ok' && record.records[0]!.reason).toBe('[tool-execute-before]: Hint: Scoped.');
+        wrapper.dispose();
+      });
+
+      test('chat.message mutation merges the message, replaces parts, and appends the tag part', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'chat-message.sh',
+          mutationScript('{"$owflow":1,"mutate":{"message":{"agent":"build"},"parts":[{"type":"text","text":"rewritten"}]},"hint":"Keep it scoped."}'),
+        );
+        const wrapper = new HooksWrapper(root);
+
+        const output: Record<string, unknown> = { message: { id: 'msg-1', agent: 'main' }, parts: [{ type: 'text', text: 'original' }] };
+        await wrapper.dispatch(HookEvent.ChatMessage, { sessionID: 'ses-mut-chat' }, output);
+
+        expect(output.message).toEqual({ id: 'msg-1', agent: 'build' });
+        expect(output.parts).toEqual([
+          { type: 'text', text: 'rewritten' },
+          { type: 'text', text: '[chat-message]: Hint: Keep it scoped.' },
+        ]);
+        wrapper.dispose();
+      });
+
+      test('chat.params mutation assigns fields and merges options', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'chat-params.sh',
+          mutationScript('{"$owflow":1,"mutate":{"temperature":0.2,"topP":null,"options":{"reasoning":"high"}},"hint":"Tuned."}'),
+        );
+        const wrapper = new HooksWrapper(root);
+
+        const output: Record<string, unknown> = { temperature: 1, topP: 1, options: { existing: true } };
+        await wrapper.dispatch(HookEvent.ChatParams, { sessionID: 'ses-mut-params' }, output);
+
+        expect(output.temperature).toBe(0.2);
+        expect('topP' in output).toBe(false);
+        expect(output.options).toEqual({ existing: true, reasoning: 'high' });
+        wrapper.dispose();
+      });
+
+      test('chat.headers mutation merges headers', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'chat-headers.sh', mutationScript('{"$owflow":1,"mutate":{"headers":{"x-owflow":"1"}},"hint":"Header added."}'));
+        const wrapper = new HooksWrapper(root);
+
+        const output: Record<string, unknown> = { headers: { existing: 'yes' } };
+        await wrapper.dispatch(HookEvent.ChatHeaders, { sessionID: 'ses-mut-headers' }, output);
+        expect(output.headers).toEqual({ existing: 'yes', 'x-owflow': '1' });
+        wrapper.dispose();
+      });
+
+      test('command.execute.before mutation replaces parts and appends the tag part', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'command-execute-before.sh',
+          mutationScript('{"$owflow":1,"mutate":{"parts":[{"type":"text","text":"injected"}]},"hint":"Command scoped."}'),
+        );
+        const wrapper = new HooksWrapper(root);
+
+        const output: Record<string, unknown> = { parts: [{ type: 'text', text: 'original' }] };
+        await wrapper.dispatch(HookEvent.CommandExecuteBefore, { sessionID: 'ses-mut-command' }, output);
+        expect(output.parts).toEqual([
+          { type: 'text', text: 'injected' },
+          { type: 'text', text: '[command-execute-before]: Hint: Command scoped.' },
+        ]);
+        wrapper.dispose();
+      });
+
+      test('tool.definition mutation assigns description and replaces parameters', async () => {
+        const root = makeTempDir();
+        writeHook(
+          root,
+          'tool-definition.sh',
+          mutationScript('{"$owflow":1,"mutate":{"description":"new description","parameters":{"type":"object"}},"hint":"Schema updated."}'),
+        );
+        const wrapper = new HooksWrapper(root);
+
+        const output: Record<string, unknown> = { description: 'old', parameters: { type: 'string' } };
+        await wrapper.dispatch(HookEvent.ToolDefinition, { sessionID: 'ses-mut-definition' }, output);
+        expect(output.description).toBe('new description');
+        expect(output.parameters).toEqual({ type: 'object' });
+        wrapper.dispose();
+      });
+
+      test('shell.env mutation merges environment variables', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'shell-env.sh', mutationScript('{"$owflow":1,"mutate":{"env":{"CI":"1"}},"hint":"CI mode."}'));
+        const wrapper = new HooksWrapper(root);
+
+        const output: Record<string, unknown> = { env: { PATH: '/bin' } };
+        await wrapper.dispatch(HookEvent.ShellEnv, { sessionID: 'ses-mut-env' }, output);
+        expect(output.env).toEqual({ PATH: '/bin', CI: '1' });
+        wrapper.dispose();
+      });
+
+      test('invalid protocol on success follows the tool failure policy without mutating', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'tool-execute-after.sh', mutationScript('{"$owflow":1,"mutate":[],"hint":"x"}'));
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-invalid-ok' }, output);
+        expect(output.output).toContain('[Post-Tool Check Failed (attempt 1/3)]:');
+        expect(output.output).toContain('invalid mutation payload');
+        expect(ended).toEqual([]);
+        wrapper.dispose();
+      });
+
+      test('invalid protocol on a soft failure stays soft and reports the protocol error', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'tool-execute-after.sh', mutationScript('{"$owflow":1,"mutate":[],"hint":"x"}', 1));
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-invalid-soft' }, output);
+        expect(output.output).toContain('[Post-Tool Check Failed (attempt 1/3)]:');
+        expect(output.output).toContain('invalid mutation payload');
+        expect(output.output).not.toContain('[tool-execute-after]: Hint:');
+        expect(ended).toEqual([]);
+        wrapper.dispose();
+      });
+
+      test('invalid per-event patch on success is treated as a protocol failure without mutating', async () => {
+        const root = makeTempDir();
+        writeHook(root, 'tool-execute-after.sh', mutationScript('{"$owflow":1,"mutate":{"stdout":"nope"},"hint":"bad patch"}'));
+        const ended: string[] = [];
+        const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+
+        const output: Record<string, unknown> = { output: 'Original tool output' };
+        await wrapper.dispatch(HookEvent.ToolExecuteAfter, { sessionID: 'ses-mut-bad-patch' }, output);
+        expect(output.output).toContain('[Post-Tool Check Failed (attempt 1/3)]:');
+        expect(output.output).toContain('invalid mutation payload');
+        expect(output.output).toContain('unsupported field "stdout"');
+        expect(output.output).toContain('Original tool output');
+        expect(ended).toEqual([]);
+        wrapper.dispose();
+      });
+    });
   });
 });

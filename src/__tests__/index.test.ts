@@ -77,8 +77,9 @@ describe('OwflowPlugin', () => {
   });
 
   describe('experimental.session.compacting hook', () => {
-    test('should delegate to rereadOrchestratorState', async () => {
+    test('should delegate to rereadOrchestratorState without dispatching to user hooks', async () => {
       const rereadSpy = spyOn(sessionCompaction, 'rereadOrchestratorState').mockImplementation(async () => {});
+      const dispatchSpy = spyOn(hooksWrapperModule.default.prototype, 'dispatch').mockImplementation(async () => {});
 
       try {
         const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
@@ -86,8 +87,10 @@ describe('OwflowPlugin', () => {
         await plugin['experimental.session.compacting']!({ sessionID: 'sess-1' }, output);
 
         expect(rereadSpy).toHaveBeenCalledWith(tmpDir, output);
+        expect(dispatchSpy).not.toHaveBeenCalled();
       } finally {
         rereadSpy.mockRestore();
+        dispatchSpy.mockRestore();
       }
     });
   });

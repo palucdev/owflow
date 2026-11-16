@@ -16,10 +16,11 @@ owflow exposes OpenCode's lifecycle events to the host project as git-style scri
 
 ## Hooks Contract
 
-All 16 lifecycle events and 32 host events are fail-closed hooks:
+All 11 lifecycle events and 32 host events are fail-closed hooks:
 
 - **Input (`stdin`)**: JSON object `{ event, session?: { sessionID }, context }`. Host class instances inside `context` are stripped to identity keys (`id`, `sessionID`, `messageID`, `partID`, `callID`, `providerID`, `type`, `name`, `tool`).
 - **Success (`exit 0`)**: Operation continues; `stdout` and `stderr` are captured into a per-hook workspace JSONL runtime log (`owflow-hook-logs-<workspace-hash>-<hook-name>.jsonl`, 4 MB rotation). For `tool.execute.after`, non-empty `stdout` is bridged into the conversation by appending `\n\n[Post-Tool Hint]:\n<stdout>` to `output.output`, injecting hints/warnings directly into agent context without interrupting the turn. Session hook logs are captured in full without truncation and lazy-loaded by scrolling in the TUI logs popup (non-session runs remain capped at 16 KB per stream). Silent successful runs of the catch-all `event` hook are treated as no-ops so hot bus events do not flood logs or TUI status. Clean execution resets failure attempt counters for that check.
+- **Mutation protocol (`$owflow: 1`)**: The eight stable mutable hooks (`chat.message`, `chat.params`, `chat.headers`, `command.execute.before`, `tool.definition`, `tool.execute.before`, `tool.execute.after`, `shell.env`) may print a JSON envelope `{ "$owflow": 1, "mutate": {...}, "hint": "..." }` on `stdout` to patch their output in place. `hint` is required. Every applied mutation is tagged `[<hook-name>]: Hint: <text>` in the run log and, where a conversation surface exists, in the agent-visible output. Success and soft failures (attempts 1 and 2 without `CRITICAL:`) accept mutations; hard failures do not. Protocol errors count as hook failures under the same attempt policy. Experimental hooks are not user-hookable.
 - **Failure (`exit != 0`, signal, timeout, or missing interpreter)**:
   - **Tool Execution Hooks with 3-Attempt Escalation**:
     - **`tool.execute.after`**: Post-tool checks (e.g. ESLint). On attempts 1 and 2, mutates `output.output` in-place with `[Post-Tool Check Failed (attempt N/3)]:\n<details>\nHint: ...` without aborting the session, keeping the conversation alive so the agent can inspect and fix errors. On attempt 3 (or upon explicit `CRITICAL:` signal), halts the conversation (`client.session.abort`) and throws a critical halting error.

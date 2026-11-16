@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import { PLUGIN_VERSION, readPluginVersion } from '../../utils/plugin-info.js';
 
+const brokenProbe: any = 'trigger-after-hook-3';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, '../../..');
 

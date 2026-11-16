@@ -260,9 +260,9 @@ Hook logs popup is scrollable and displays stderr and stdout logs in a separate 
 | `.sh` | subprocess via `bash` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
 | `.ps1` | subprocess via `pwsh`/`powershell.exe` | JSON payload on stdin; exit 0 = ok, non-zero exit = block |
 
-**All hooks are gate hooks** governed by fail-closed semantics (16 lifecycle events and 32 host events) using the standard **git-hooks contract**:
+**All hooks are gate hooks** governed by fail-closed semantics (11 lifecycle events and 32 host events; 43 user-hook names) using the standard **git-hooks contract**:
 - **Input (`stdin`)**: JSON `{ event, session?: { sessionID }, context }`.
-- **Success (`exit 0`)**: Operation proceeds. For `tool.execute.after`, any non-empty `stdout` is bridged directly into agent context as `[Post-Tool Hint]:\n<stdout>`, providing an advisory warning without interrupting the turn.
+- **Success (`exit 0`)**: Operation proceeds. For `tool.execute.after`, any non-empty plain-text `stdout` is bridged directly into agent context as `[Post-Tool Hint]:\n<stdout>`, providing an advisory warning without interrupting the turn. A valid mutation envelope applies its patch instead (see [Mutation Protocol](#mutation-protocol)).
 - **Tool Lifecycle Hooks & 3-Attempt Escalation (`tool.execute.before`, `tool.execute.after`)**:
   - **Warning with Hint (Attempts 1 & 2)**: Non-zero exit codes provide actionable feedback while **keeping the conversation alive** so the agent can self-correct:
     - `tool.execute.before`: Blocks the tool call with `Blocked: <reason> (attempt N/3). Hint: <hint>` returned to the agent as the tool result, without aborting the session.
@@ -273,9 +273,80 @@ Hook logs popup is scrollable and displays stderr and stdout logs in a separate 
     echo "CRITICAL: Unauthorized modification detected. Halting conversation." >&2
     exit 1
     ```
+- **Protocol Mutations**: A hook may emit a JSON mutation envelope on `stdout` to patch its output in place. Every applied mutation is tagged `[<hook-name>]: Hint: <text>`; the tag is always logged and is injected into the conversation where the hook has an agent-visible surface. Mutations are accepted on success and on soft failures (attempts 1 and 2 without `CRITICAL:`), but never on hard failures. Protocol errors count as hook failures under the same 3-attempt/`CRITICAL:` policy.
 - **Other Gate Hooks**: Lifecycle hooks like `command.execute.before` fail closed immediately on non-zero exit and abort the active session. Missing interpreters fail closed at fire time.
 
-### Available Lifecycle Hooks (16)
+### Mutation Protocol
+
+Stable mutable hooks can rewrite their own OpenCode v1 output by printing a single JSON object on `stdout`:
+
+```json
+{
+  "$owflow": 1,
+  "mutate": { "output": "patched tool result" },
+  "hint": "Use the project lint config before editing."
+}
+```
+
+Rules:
+
+- `$owflow` must be exactly `1`; `mutate` must be a plain object.
+- `hint` is **required** for every mutation and must be a non-empty string after trimming.
+- `reason` is optional and is used as the failure summary when `stderr` is empty.
+- Every applied mutation is tagged exactly `[<hook-name>]: Hint: <text>` using the script stem (for example `[tool-execute-after]: Hint: ...`).
+- The tag is always recorded in the hook run reason/JSONL log. It is also injected into the conversation for `tool.execute.after` (appended to `output.output`), soft-failing `tool.execute.before` (appended to the thrown `Blocked:` error), `chat.message`, and `command.execute.before` (appended as a synthetic text part).
+- **Soft errors** (attempts 1 and 2 without `CRITICAL:`) accept mutations and keep the conversation alive. The mutation is applied before the existing failure text is appended or thrown.
+- **Hard errors** (attempt 3, `CRITICAL:`, non-tool gate failures, spawn/interpreter/circuit-breaker failures) do not apply mutations.
+- Plain-text `stdout` behavior is unchanged; ordinary JSON without `$owflow` is treated as ordinary `stdout`.
+- Protocol errors fail closed under the existing attempt policy. On a soft failure they do not mutate, and the original failure stays soft with the protocol error included in the reason/log.
+- Use `stderr` for human-readable logs when emitting a protocol envelope; protocol `stdout` is never rendered as a post-tool hint.
+- Scripts are trusted host code; the protocol does not expand the trust boundary.
+
+#### Supported mutable hooks
+
+| Hook | Mutable fields | Apply behavior |
+|---|---|---|
+| `chat.message` | `message.agent`, `message.model`, `message.system`, `message.tools`, `parts` | Merge message fields; replace parts contents; append tag part |
+| `chat.params` | `temperature`, `topP`, `topK`, `maxOutputTokens`, `options` | Assign fields; `null` unsets; merge options |
+| `chat.headers` | `headers` | Merge headers |
+| `command.execute.before` | `parts` | Replace parts contents; append tag part |
+| `tool.definition` | `description`, `parameters` | Assign description; replace parameters |
+| `tool.execute.before` | `args` | Shallow-merge args |
+| `tool.execute.after` | `title`, `output`, `metadata` | Assign title/output; merge metadata |
+| `shell.env` | `env` | Merge environment variables |
+
+Experimental OpenCode hooks are not mutable through this protocol. `config` and `event` are input-only, and `dispose` has no arguments.
+
+#### Mutation examples
+
+Bash success mutation for `tool.execute.after`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cat <<'JSON'
+{"$owflow":1,"mutate":{"output":"ESLint completed with warnings."},"hint":"Fix the reported warnings before committing."}
+JSON
+```
+
+Bash soft-error mutation:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cat <<'JSON'
+{"$owflow":1,"mutate":{"output":"Lint found unused imports."},"hint":"Remove unused imports before re-running."}
+JSON
+exit 1
+```
+
+PowerShell example:
+
+```powershell
+[Console]::Out.Write('{"$owflow":1,"mutate":{"env":{"CI":"1"}},"hint":"Run in CI mode."}')
+```
+
+### Available Lifecycle Hooks (11)
 
 Lifecycle hooks attach directly to OpenCode's plugin hook points:
 
@@ -290,13 +361,10 @@ Lifecycle hooks attach directly to OpenCode's plugin hook points:
 | `tool.execute.before` | `tool-execute-before.<ext>` | Fires immediately before a tool call executes, right after owflow's built-in destructive-command guard passes. |
 | `tool.execute.after` | `tool-execute-after.<ext>` | Fires immediately after a tool call finishes executing and produces its result. |
 | `shell.env` | `shell-env.<ext>` | Fires when environment variables are being constructed for a shell execution context. |
-| `experimental.chat.messages.transform` | `experimental-chat-messages-transform.<ext>` | Fires before the conversation message history is sent to the model for a turn. |
-| `experimental.chat.system.transform` | `experimental-chat-system-transform.<ext>` | Fires when the system prompt is being assembled before a model request. |
-| `experimental.session.compacting` | `experimental-session-compacting.<ext>` | Fires when a session's context window is being compacted, right after owflow injects its orchestrator-state reminder. |
-| `experimental.compaction.autocontinue` | `experimental-compaction-autocontinue.<ext>` | Fires during context compaction when determining whether the session should automatically continue its turn. |
-| `experimental.text.complete` | `experimental-text-complete.<ext>` | Fires when the model finishes generating a text response segment. |
 | `event` | `event.<ext>` | Catch-all hook that fires on every event emitted on the OpenCode event bus, after any matching host-event hook runs. |
 | `dispose` | `dispose.<ext>` | Fires when the plugin instance is being shut down and disposed. |
+
+Experimental OpenCode hooks are not exposed as user hooks. `experimental.session.compacting` remains an internal built-in used for the post-compaction reminder.
 
 ### Available Host Events (32)
 
@@ -337,7 +405,7 @@ Host events are emitted on OpenCode's event bus and routed through the `event` h
 | `tui.toast.show` | `tui-toast-show.<ext>` | Fires when a toast notification is displayed in the OpenCode TUI. |
 | `vcs.branch.updated` | `vcs-branch-updated.<ext>` | Fires when the active version-control (Git) branch changes in the workspace. |
 
-**Excluded names**: `permission.ask`, `tool`, `auth`, `provider`, and `experimental.provider.small_model` are reserved OpenCode plugin surfaces and cannot be hooked via `.owflow/hooks/` (naming a script after them fails startup validation).
+**Excluded names**: `permission.ask`, `tool`, `auth`, `provider`, and `experimental.provider.small_model` are reserved OpenCode plugin surfaces and cannot be hooked via `.owflow/hooks/`. The experimental hooks `experimental.chat.messages.transform`, `experimental.chat.system.transform`, `experimental.session.compacting`, `experimental.compaction.autocontinue`, and `experimental.text.complete` are intentionally unsupported as user hooks. Naming a script after any of these names fails startup validation with a precise excluded-event error.
 
 ### Example hook in both formats
 

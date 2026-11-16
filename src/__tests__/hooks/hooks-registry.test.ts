@@ -20,11 +20,23 @@ describe('hooks-registry (scanHooks and validation)', () => {
     }
   });
 
-  test('event tables pin 16 lifecycle events, 32 host events, and 5 excluded names', () => {
+  test('event tables pin 16 internal lifecycle events, 43 user-hook names, and 10 excluded names', () => {
     expect(DISPATCHABLE_EVENTS).toHaveLength(16);
     expect(HOST_EVENT_NAMES).toHaveLength(32);
-    expect(HOOK_EVENT_NAMES).toHaveLength(48);
-    expect(EXCLUDED_EVENT_NAMES).toEqual(['permission.ask', 'tool', 'auth', 'provider', 'experimental.provider.small_model']);
+    expect(HOOK_EVENT_NAMES).toHaveLength(43);
+    expect(EXCLUDED_EVENT_NAMES).toHaveLength(10);
+    expect(EXCLUDED_EVENT_NAMES).toEqual([
+      'permission.ask',
+      'tool',
+      'auth',
+      'provider',
+      'experimental.provider.small_model',
+      'experimental.chat.messages.transform',
+      'experimental.chat.system.transform',
+      'experimental.session.compacting',
+      'experimental.compaction.autocontinue',
+      'experimental.text.complete',
+    ]);
   });
 
   test('scanHooks validates directory existence and directory type', () => {
@@ -127,5 +139,33 @@ describe('hooks-registry (scanHooks and validation)', () => {
     expect(scan.failures).toEqual([]);
     expect(scan.entries).toHaveLength(1);
     expect(scan.entries[0]!.event).toBe('tool.execute.before');
+  });
+
+  test('scanHooks rejects experimental hook stems with a precise excluded-event error', () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'experimental-session-compacting.sh'), '');
+    fs.writeFileSync(path.join(hooksDir, 'experimental-chat-messages-transform.sh'), '');
+
+    const report = scanHooks(hooksDir, { mode: HookDigestMode.Report });
+    expect(report.entries).toEqual([]);
+    expect(report.failures).toHaveLength(2);
+    expect(report.failures[0]!.error).toContain('an excluded event that cannot be hooked');
+    expect(report.failures[1]!.error).toContain('an excluded event that cannot be hooked');
+  });
+
+  test('scanHooks orders entries deterministically by event and then path', () => {
+    const root = makeTempDir();
+    const hooksDir = path.join(root, '.owflow', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
+    fs.writeFileSync(path.join(hooksDir, 'chat-message.sh'), '');
+    fs.writeFileSync(path.join(hooksDir, 'tool-execute-after.sh'), '');
+
+    const scan = scanHooks(hooksDir, {
+      which: (cmd) => (cmd === 'bash' ? '/bin/bash' : null),
+    });
+    expect(scan.entries.map((entry) => entry.event)).toEqual(['chat.message', 'tool.execute.after', 'tool.execute.before']);
   });
 });

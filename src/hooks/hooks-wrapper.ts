@@ -6,9 +6,11 @@ import {
   isHostEventName,
   type DispatchableEvent,
   type HookEventName,
+  type HookRegistryEntry,
   type HookScan,
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
+import type { OwflowMutationEnvelope } from '../types/hook-mutation-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
 import { scanHooks } from './hooks-registry.js';
 import { CircuitBreakerTracker } from './runtime/circuit-breaker.js';
@@ -21,6 +23,12 @@ import {
   buildProcessFailureError,
   buildSpawnError,
 } from './runtime/failure-policy.js';
+import {
+  applyHookMutation,
+  buildMutationNotice,
+  isMutableHookEvent,
+  parseMutationEnvelope,
+} from './runtime/mutation-protocol.js';
 import { HookSpawnError, executeHookProcess } from './runtime/process-executor.js';
 import { NON_SESSION_STREAM_CAP_BYTES, StatusRecorder } from './runtime/status-recorder.js';
 import { writeHookCrashLog } from './hooks-persistence.js';
@@ -49,10 +57,6 @@ class HooksWrapper {
     HookEvent.ChatHeaders,
     HookEvent.CommandExecuteBefore,
     HookEvent.ShellEnv,
-    HookEvent.ExperimentalChatMessagesTransform,
-    HookEvent.ExperimentalChatSystemTransform,
-    HookEvent.ExperimentalCompactionAutocontinue,
-    HookEvent.ExperimentalTextComplete,
     HookEvent.Dispose,
   ] as const satisfies readonly DispatchableEvent[];
 
@@ -274,20 +278,85 @@ class HooksWrapper {
 
       const { ok, exitCode, signal, reason, durationMs, finishedAt, rawStdout, rawStderr } = execResult;
 
-      if (ok) {
-        this.circuitBreaker.recordSuccess(event, entry.path, sessionID);
-        this.failureTracker.recordSuccess(event, entry.path, sessionID);
-        if (event === HookEvent.ToolExecuteAfter && rawStdout.trim() && output && typeof output === 'object') {
-          const trimmed = rawStdout.trim();
-          const existing = typeof (output as any).output === 'string' ? (output as any).output : '';
-          (output as any).output = existing ? `${existing}\n\n[Post-Tool Hint]:\n${trimmed}` : trimmed;
+      const mutable = isMutableHookEvent(event);
+      let isOk = ok;
+      let effectiveReason = reason;
+      let envelope: OwflowMutationEnvelope | undefined;
+      let protocolError: string | undefined;
+      let notice: string | undefined;
+
+      if (mutable) {
+        try {
+          const parsed = parseMutationEnvelope(rawStdout);
+          if (parsed.kind === 'mutation') envelope = parsed.envelope;
+        } catch (error) {
+          protocolError = error instanceof Error ? error.message : String(error);
+          if (isOk) {
+            isOk = false;
+            effectiveReason = `invalid mutation payload: ${protocolError}`;
+          } else {
+            effectiveReason = `${effectiveReason ?? 'hook failed'}; invalid mutation payload: ${protocolError}`;
+          }
         }
-      } else {
-        this.circuitBreaker.recordFailure(event, entry.path, sessionID, startedAt, finishedAt);
       }
 
+      if (!isOk && envelope) {
+        effectiveReason = rawStderr.trim() || envelope.reason?.trim() || envelope.hint.trim() || 'hook failed';
+      }
+
+      const criticalSource = envelope
+        ? `${rawStderr}\n${envelope.reason ?? ''}`
+        : protocolError
+          ? rawStderr
+          : `${rawStderr}\n${rawStdout}`;
+      let isCritical = !isOk && criticalSource.includes('CRITICAL:');
+
+      const attemptPeek =
+        !isOk && (event === HookEvent.ToolExecuteAfter || event === HookEvent.ToolExecuteBefore)
+          ? this.failureTracker.getCount(event, entry.path, sessionID) + 1
+          : undefined;
+      const canApplyMutation =
+        envelope !== undefined && (isOk || (!isCritical && attemptPeek !== undefined && attemptPeek < MAX_HOOK_FAILURES));
+
+      if (canApplyMutation && envelope !== undefined) {
+        try {
+          notice = buildMutationNotice(name, envelope.hint);
+          applyHookMutation(event, output, envelope.mutate, notice);
+        } catch (error) {
+          protocolError = error instanceof Error ? error.message : String(error);
+          notice = undefined;
+          if (isOk) {
+            isOk = false;
+            isCritical = false;
+            effectiveReason = `invalid mutation payload: ${protocolError}`;
+          } else {
+            effectiveReason = `${effectiveReason ?? 'hook failed'}; invalid mutation payload: ${protocolError}`;
+          }
+        }
+      }
+
+      let attempt: number | undefined;
+      if (isOk) {
+        this.circuitBreaker.recordSuccess(event, entry.path, sessionID);
+        this.failureTracker.recordSuccess(event, entry.path, sessionID);
+      } else {
+        this.circuitBreaker.recordFailure(event, entry.path, sessionID, startedAt, finishedAt);
+        if (event === HookEvent.ToolExecuteAfter || event === HookEvent.ToolExecuteBefore) {
+          attempt = this.failureTracker.recordFailure(event, entry.path, sessionID);
+        }
+      }
+
+      if (isOk && notice !== undefined) {
+        effectiveReason = notice;
+        if (event === HookEvent.ToolExecuteAfter && output) this.appendOutputNotice(output, notice);
+      } else if (isOk && event === HookEvent.ToolExecuteAfter && rawStdout.trim() && output) {
+        this.appendPostToolHint(output, rawStdout.trim());
+      }
+
+      const runReason = notice && !isOk ? `${effectiveReason}\n\n${notice}` : effectiveReason;
+
       // Silent successful catch-all `event` runs leave no status/log trace so hot bus events don't flood.
-      if (ok && event === HookEvent.Event && !rawStdout.trim() && !rawStderr.trim()) {
+      if (isOk && event === HookEvent.Event && !rawStdout.trim() && !rawStderr.trim()) {
         if (previousStatus) this.statusRecorder.setStatus(event, previousStatus);
         else this.statusRecorder.deleteStatus(event);
         this.statusRecorder.flushStatus();
@@ -295,11 +364,11 @@ class HooksWrapper {
       }
 
       this.statusRecorder.setStatus(event, {
-        status: ok ? HookRunState.SUCCESS : HookRunState.FAILURE,
+        status: isOk ? HookRunState.SUCCESS : HookRunState.FAILURE,
         startedAt,
         finishedAt,
         durationMs,
-        ...(reason ? { reason } : {}),
+        ...(runReason ? { reason: runReason } : {}),
         ...(sessionID ? { sessionID } : {}),
       });
       this.statusRecorder.flushStatus();
@@ -321,44 +390,79 @@ class HooksWrapper {
         startedAt,
         finishedAt,
         durationMs,
-        status: ok ? HookRunState.SUCCESS : HookRunState.FAILURE,
+        status: isOk ? HookRunState.SUCCESS : HookRunState.FAILURE,
         exitCode,
         ...(signal ? { signal } : {}),
-        ...(reason ? { reason } : {}),
+        ...(runReason ? { reason: runReason } : {}),
         ...(loggedStdout ? { stdout: loggedStdout } : {}),
         ...(loggedStderr ? { stderr: loggedStderr } : {}),
       });
 
-      if (!ok) {
-        const isCritical = Boolean(reason?.includes('CRITICAL:'));
-        if (event === HookEvent.ToolExecuteAfter) {
-          const attempt = this.failureTracker.recordFailure(event, entry.path, sessionID);
-          if (attempt < MAX_HOOK_FAILURES && !isCritical) {
-            if (output && typeof output === 'object') {
-              const hintBody = rawStderr.trim() || rawStdout.trim() || reason || 'Check failed';
-              const hintMessage = `[Post-Tool Check Failed (attempt ${attempt}/${MAX_HOOK_FAILURES})]:\n${hintBody}\nHint: Fix the reported issues to keep code quality standards.`;
-              const existing = typeof (output as any).output === 'string' ? (output as any).output : '';
-              (output as any).output = existing ? `${existing}\n\n${hintMessage}` : hintMessage;
-            }
-            continue;
-          }
-          await this.abortController.abortSession(event, sessionID, entry.path);
-          throw buildProcessFailureError(entry.path, reason, event, isCritical ? MAX_HOOK_FAILURES : attempt, MAX_HOOK_FAILURES);
-        }
-
-        if (event === HookEvent.ToolExecuteBefore) {
-          const attempt = this.failureTracker.recordFailure(event, entry.path, sessionID);
-          if (attempt < MAX_HOOK_FAILURES && !isCritical) {
-            throw buildProcessFailureError(entry.path, reason, event, attempt, MAX_HOOK_FAILURES);
-          }
-          await this.abortController.abortSession(event, sessionID, entry.path);
-          throw buildProcessFailureError(entry.path, reason, event, isCritical ? MAX_HOOK_FAILURES : attempt, MAX_HOOK_FAILURES);
-        }
-
-        await this.abortController.abortSession(event, sessionID, entry.path);
-        throw buildProcessFailureError(entry.path, reason, event);
+      if (!isOk) {
+        const shouldContinue = await this.handleFailure({
+          event,
+          entry,
+          sessionID,
+          output,
+          baseReason: effectiveReason,
+          notice,
+          attempt,
+          isCritical,
+        });
+        if (shouldContinue) continue;
       }
     }
+  };
+
+  private appendOutputNotice = (output: Record<string, unknown>, notice: string): void => {
+    const existing = typeof output.output === 'string' ? output.output : '';
+    output.output = existing ? `${existing}\n\n${notice}` : notice;
+  };
+
+  private appendPostToolHint = (output: Record<string, unknown>, stdout: string): void => {
+    const existing = typeof output.output === 'string' ? output.output : '';
+    output.output = existing ? `${existing}\n\n[Post-Tool Hint]:\n${stdout}` : stdout;
+  };
+
+  private handleFailure = async (context: {
+    event: HookEventName;
+    entry: HookRegistryEntry;
+    sessionID?: string;
+    output?: Record<string, unknown>;
+    baseReason?: string;
+    notice?: string;
+    attempt?: number;
+    isCritical: boolean;
+  }): Promise<boolean> => {
+    const { event, entry, sessionID, output, baseReason, notice, isCritical } = context;
+
+    if (event === HookEvent.ToolExecuteAfter) {
+      const attempt = context.attempt ?? MAX_HOOK_FAILURES;
+      if (attempt < MAX_HOOK_FAILURES && !isCritical) {
+        if (output && typeof output === 'object') {
+          const hintBody = baseReason || 'Check failed';
+          const failureBlock = `[Post-Tool Check Failed (attempt ${attempt}/${MAX_HOOK_FAILURES})]:\n${hintBody}\nHint: Fix the reported issues to keep code quality standards.`;
+          this.appendOutputNotice(output, notice ? `${failureBlock}\n\n${notice}` : failureBlock);
+        }
+        return true;
+      }
+      await this.abortController.abortSession(event, sessionID, entry.path);
+      throw buildProcessFailureError(entry.path, baseReason, event, isCritical ? MAX_HOOK_FAILURES : attempt, MAX_HOOK_FAILURES);
+    }
+
+    if (event === HookEvent.ToolExecuteBefore) {
+      const attempt = context.attempt ?? MAX_HOOK_FAILURES;
+      if (attempt < MAX_HOOK_FAILURES && !isCritical) {
+        const error = buildProcessFailureError(entry.path, baseReason, event, attempt, MAX_HOOK_FAILURES);
+        if (notice) error.message = `${error.message} ${notice}`;
+        throw error;
+      }
+      await this.abortController.abortSession(event, sessionID, entry.path);
+      throw buildProcessFailureError(entry.path, baseReason, event, isCritical ? MAX_HOOK_FAILURES : attempt, MAX_HOOK_FAILURES);
+    }
+
+    await this.abortController.abortSession(event, sessionID, entry.path);
+    throw buildProcessFailureError(entry.path, baseReason, event);
   };
 
   public createDispatchHandlers = (): Hooks => {
