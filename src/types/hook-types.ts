@@ -166,7 +166,7 @@ export interface HookReportInput {
 }
 
 export interface HooksWrapper {
-  readonly runHooks: HookRunCallback;
+  readonly runHook: HookRunCallback;
   readonly snapshot: HookReportInput;
   dispose(): void;
 }

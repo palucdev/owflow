@@ -99,9 +99,9 @@ class HooksWrapper {
     workspace: this.directory,
   });
 
-  private runHooksReactive = async (options: ReactiveRunOptions): Promise<void> => {
+  private runHookReactive = async (options: ReactiveRunOptions): Promise<void> => {
     try {
-      await this.runHooks(options.event, options.input);
+      await this.runHook(options.event, options.input);
     } catch (error) {
       writeHookCrashLog(this.directory, options.crashSource, error);
     }
@@ -119,7 +119,7 @@ class HooksWrapper {
     this.activeProcesses.clear();
   };
 
-  public runHooks = async (
+  public runHook = async (
     invocationOrEvent: HookInvocation | HookEventName,
     ...rest: readonly unknown[]
   ): Promise<void> => {
@@ -160,7 +160,7 @@ class HooksWrapper {
     const handlers = Object.fromEntries(
       PASSTHROUGH_EVENTS.map((event) => [
         event,
-        (input?: unknown, output?: Record<string, unknown>) => this.runHooks(event, input, output),
+        (input?: unknown, output?: Record<string, unknown>) => this.runHook(event, input, output),
       ]),
     ) as Hooks;
     const eventSerializer = createEventRunSerializer();
@@ -171,7 +171,7 @@ class HooksWrapper {
         const eventType = readHostEventType(input);
         if (eventType && isHostEventName(eventType) && !eventSerializer.has(eventType)) {
           await eventSerializer.run(eventType, async () => {
-            await this.runHooksReactive({
+            await this.runHookReactive({
               event: eventType,
               input,
               crashSource: `reactive_host_event_${eventType}`,
@@ -179,7 +179,7 @@ class HooksWrapper {
           });
         }
         await eventSerializer.run(HookEvent.Event, async () => {
-          await this.runHooksReactive({ event: HookEvent.Event, input, crashSource: 'catch_all_event_hook' });
+          await this.runHookReactive({ event: HookEvent.Event, input, crashSource: 'catch_all_event_hook' });
         });
       },
     };
