@@ -1,6 +1,6 @@
 import type { HookEventName } from '../../types/hook-types.js';
 
-export interface DispatchInvocation {
+export interface HookInvocation {
   readonly event: HookEventName;
   readonly input?: unknown;
   readonly output?: Record<string, unknown>;
@@ -10,10 +10,10 @@ export interface DispatchInvocation {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
-export const resolveDispatchInvocation = (
-  invocationOrEvent: DispatchInvocation | HookEventName,
+export const resolveHookInvocation = (
+  invocationOrEvent: HookInvocation | HookEventName,
   rest: readonly unknown[],
-): DispatchInvocation => {
+): HookInvocation => {
   if (typeof invocationOrEvent === 'object') return invocationOrEvent;
   return {
     event: invocationOrEvent,

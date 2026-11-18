@@ -1,33 +1,33 @@
-export interface SerializedTaskQueue {
+export interface EventRunSerializer {
   has(key: string): boolean;
   run(key: string, task: () => Promise<void>): Promise<void>;
 }
 
-interface SerializedTask {
+interface QueuedEventRun {
   readonly key: string;
   readonly version: number;
   readonly previous?: Promise<void>;
   readonly task: () => Promise<void>;
 }
 
-export const createSerializedTaskQueue = (): SerializedTaskQueue => {
+export const createEventRunSerializer = (): EventRunSerializer => {
   const tails = new Map<string, Promise<void>>();
   const versions = new Map<string, number>();
 
-  const executeTask = async (serializedTask: SerializedTask): Promise<void> => {
-    if (serializedTask.previous) {
+  const executeTask = async (queuedRun: QueuedEventRun): Promise<void> => {
+    if (queuedRun.previous) {
       try {
-        await serializedTask.previous;
+        await queuedRun.previous;
       } catch {
         // Prior task failures are reported to their own callers.
       }
     }
     try {
-      await serializedTask.task();
+      await queuedRun.task();
     } finally {
-      if (versions.get(serializedTask.key) === serializedTask.version) {
-        tails.delete(serializedTask.key);
-        versions.delete(serializedTask.key);
+      if (versions.get(queuedRun.key) === queuedRun.version) {
+        tails.delete(queuedRun.key);
+        versions.delete(queuedRun.key);
       }
     }
   };

@@ -14,9 +14,9 @@ import { CircuitBreakerTracker } from './runtime/circuit-breaker.js';
 import { SessionAbortController } from './runtime/failure-policy.js';
 import { StatusRecorder } from './runtime/status-recorder.js';
 import { writeHookCrashLog } from './hooks-persistence.js';
-import { executeHookRun, type HookRunDependencies } from './wrapper/dispatch-coordinator.js';
-import { resolveDispatchInvocation, type DispatchInvocation } from './wrapper/dispatch-invocation.js';
-import { createSerializedTaskQueue } from './wrapper/serialized-task-queue.js';
+import { executeHookRun, type HookRunDependencies } from './wrapper/hook-run-executor.js';
+import { resolveHookInvocation, type HookInvocation } from './wrapper/invocation-resolver.js';
+import { createEventRunSerializer } from './wrapper/event-run-serializer.js';
 import {
   buildStdinPayload as composeStdinPayload,
   readProperty,
@@ -74,7 +74,7 @@ const readHostEventType = (input: unknown): string | undefined => {
   return typeof type === 'string' ? type : undefined;
 };
 
-interface ReactiveDispatchOptions {
+interface ReactiveRunOptions {
   readonly event: HookEventName;
   readonly input: unknown;
   readonly crashSource: string;
@@ -99,9 +99,9 @@ class HooksWrapper {
     workspace: this.directory,
   });
 
-  private dispatchReactive = async (options: ReactiveDispatchOptions): Promise<void> => {
+  private runHooksReactive = async (options: ReactiveRunOptions): Promise<void> => {
     try {
-      await this.dispatch(options.event, options.input);
+      await this.runHooks(options.event, options.input);
     } catch (error) {
       writeHookCrashLog(this.directory, options.crashSource, error);
     }
@@ -119,11 +119,11 @@ class HooksWrapper {
     this.activeProcesses.clear();
   };
 
-  public dispatch = async (
-    invocationOrEvent: DispatchInvocation | HookEventName,
+  public runHooks = async (
+    invocationOrEvent: HookInvocation | HookEventName,
     ...rest: readonly unknown[]
   ): Promise<void> => {
-    const invocation = resolveDispatchInvocation(invocationOrEvent, rest);
+    const invocation = resolveHookInvocation(invocationOrEvent, rest);
     const resolvedSessionID = invocation.sessionID ?? sessionIDFrom(invocation.input);
 
     if (resolvedSessionID && invocation.event === HookEvent.ChatMessage) {
@@ -156,30 +156,30 @@ class HooksWrapper {
     }
   };
 
-  public createDispatchHandlers = (): Hooks => {
+  public createHostEventHandlers = (): Hooks => {
     const handlers = Object.fromEntries(
       PASSTHROUGH_EVENTS.map((event) => [
         event,
-        (input?: unknown, output?: Record<string, unknown>) => this.dispatch(event, input, output),
+        (input?: unknown, output?: Record<string, unknown>) => this.runHooks(event, input, output),
       ]),
     ) as Hooks;
-    const taskQueue = createSerializedTaskQueue();
+    const eventSerializer = createEventRunSerializer();
 
     return {
       ...handlers,
       [HookEvent.Event]: async (input: unknown) => {
         const eventType = readHostEventType(input);
-        if (eventType && isHostEventName(eventType) && !taskQueue.has(eventType)) {
-          await taskQueue.run(eventType, async () => {
-            await this.dispatchReactive({
+        if (eventType && isHostEventName(eventType) && !eventSerializer.has(eventType)) {
+          await eventSerializer.run(eventType, async () => {
+            await this.runHooksReactive({
               event: eventType,
               input,
               crashSource: `reactive_host_event_${eventType}`,
             });
           });
         }
-        await taskQueue.run(HookEvent.Event, async () => {
-          await this.dispatchReactive({ event: HookEvent.Event, input, crashSource: 'catch_all_event_hook' });
+        await eventSerializer.run(HookEvent.Event, async () => {
+          await this.runHooksReactive({ event: HookEvent.Event, input, crashSource: 'catch_all_event_hook' });
         });
       },
     };

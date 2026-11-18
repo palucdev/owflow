@@ -169,13 +169,13 @@ describe('OwflowPlugin', () => {
       const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(
         (_dir: any, endSession: any) =>
           ({
-            dispatch: async (_event: any, input: any) => {
+            runHooks: async (_event: any, input: any) => {
               if (endSession && input?.sessionID) await endSession(input.sessionID);
               throw new Error('Blocked: gate check failed');
             },
             snapshot: { entries: [] },
             dispose: () => {},
-            createDispatchHandlers: () => ({
+            createHostEventHandlers: () => ({
               'tool.execute.before': async (input: any) => {
                 if (endSession && input?.sessionID) await endSession(input.sessionID);
                 throw new Error('Blocked: gate check failed');
@@ -210,12 +210,12 @@ describe('OwflowPlugin', () => {
       const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(
         () =>
           ({
-            dispatch: async () => {},
+            runHooks: async () => {},
             snapshot: { entries: [] },
             dispose: () => {
               wrapperDisposed = true;
             },
-            createDispatchHandlers: () => ({}),
+            createHostEventHandlers: () => ({}),
           }) as any,
       );
 
