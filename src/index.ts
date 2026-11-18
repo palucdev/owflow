@@ -53,7 +53,7 @@ const createHooksWrapper = (options: WrapperCreationOptions): HooksWrapper | und
   }
 
   try {
-    return new HooksWrapper(options.directory, createEndSession(options.client));
+    return new HooksWrapper(options.directory, { endSession: createEndSession(options.client) });
   } catch (error) {
     writeHookCrashLog(options.directory, 'startup_digest_failed', error);
     console.error(`[owflow] ERROR: user hooks failed to load (${formatErrorMessage(error)}).`);

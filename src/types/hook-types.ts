@@ -174,4 +174,5 @@ export interface HooksWrapper {
 export interface HooksWrapperOptions {
   readonly statusFile?: string;
   readonly logFile?: string;
+  readonly endSession?: (sessionID: string) => Promise<void> | void;
 }

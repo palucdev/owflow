@@ -112,7 +112,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const danglingLog = path.join(root, 'dangling-log.jsonl');
     fs.symlinkSync(targetLog, danglingLog);
 
-    const wrapper = new HooksWrapper(root, undefined, {
+    const wrapper = new HooksWrapper(root, {
       statusFile: danglingStatus,
       logFile: danglingLog,
     });
@@ -135,7 +135,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     writeHook(root, 'chat-message.sh', `#!/usr/bin/env bash\necho "policy violation" >&2\nexit 2\n`);
 
     const ended: string[] = [];
-    const wrapper = new HooksWrapper(root, (id) => ended.push(id), { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, { endSession: (id) => ended.push(id), statusFile, logFile });
 
     // Session hook run writes stdout and stderr directly to JSONL records
     await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_ok' }, output: {} });
@@ -170,7 +170,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const logFile = path.join(root, 'logs-dedup.jsonl');
     writeHook(root, 'tool-execute-before.sh');
 
-    const wrapper = new HooksWrapper(root, undefined, { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, { statusFile, logFile });
     const sessionID = 'ses_multi_run';
 
     for (let i = 0; i < 5; i++) {
@@ -196,7 +196,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     writeHook(root, 'chat-message.sh', '#!/usr/bin/env bash\necho "chat out"\nexit 0\n');
 
     const statusFile = path.join(root, 'status-isolated.json');
-    const wrapper = new HooksWrapper(root, undefined, { statusFile });
+    const wrapper = new HooksWrapper(root, { statusFile });
     const sessionID = 'ses_per_hook';
     const latestSymlink = resolveHooksLatestSymlink(root);
 
@@ -238,8 +238,10 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const whichSpy = spyOn(Bun, 'which').mockReturnValue(null);
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const wrapper = new HooksWrapper(root, () => {
-        throw new Error('abort failed');
+      const wrapper = new HooksWrapper(root, {
+        endSession: () => {
+          throw new Error('abort failed');
+        },
       });
       await expect(wrapper.runHook({ event: HookEvent.Config, input: { sessionID: 'ses_no_interp' } })).rejects.toThrow(/bash interpreter is not available/);
       expect(warnSpy).toHaveBeenCalled();
@@ -255,7 +257,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     writeHook(root, 'event.sh');
     const logFile = path.join(root, 'logs.jsonl');
 
-    const wrapper = new HooksWrapper(root, undefined, { logFile });
+    const wrapper = new HooksWrapper(root, { logFile });
     await wrapper.runHook({ event: HookEvent.Event, input: {} });
 
     expect(readHookLogRecords(logFile)).toEqual({ kind: 'missing' });
@@ -356,7 +358,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const logFile = path.join(root, 'logs.jsonl');
     const ended: string[] = [];
 
-    const wrapper = new HooksWrapper(root, (id) => ended.push(id), { statusFile, logFile });
+    const wrapper = new HooksWrapper(root, { endSession: (id) => ended.push(id), statusFile, logFile });
 
     await expect(
       wrapper.runHook({ event: 'session.idle', input: { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_1' } } } }),
@@ -375,7 +377,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     // Missing interpreter on session.idle does not call endSession, while chat.message does
     const whichSpy = spyOn(Bun, 'which').mockReturnValue(null);
     try {
-      const noInterpWrapper = new HooksWrapper(root, (id) => ended.push(id));
+      const noInterpWrapper = new HooksWrapper(root, { endSession: (id) => ended.push(id) });
       await expect(
         noInterpWrapper.runHook({ event: 'session.idle', input: { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_no_bash' } } } }),
       ).rejects.toThrow(/bash interpreter is not available/);
@@ -397,7 +399,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     writeHook(root, 'command-execute-before.sh', '#!/usr/bin/env bash\necho "cmd gate failed" >&2\nexit 1\n');
 
     const ended: string[] = [];
-    const wrapper = new HooksWrapper(root, (id) => ended.push(id));
+    const wrapper = new HooksWrapper(root, { endSession: (id) => ended.push(id) });
 
     await expect(wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_dedup' }, output: {} })).rejects.toThrow(/tool gate failed/);
     await expect(wrapper.runHook({ event: HookEvent.CommandExecuteBefore, input: { sessionID: 'ses_dedup' }, output: {} })).rejects.toThrow(/cmd gate failed/);
@@ -420,7 +422,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
-      const wrapper = new HooksWrapper(root, undefined, { statusFile });
+      const wrapper = new HooksWrapper(root, { statusFile });
       const payload = { event: { type: 'session.idle', properties: { sessionID: 'ses_cb' } } };
 
       for (let i = 0; i < 4; i += 1) {
@@ -481,7 +483,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     writeHook(root, 'tool-execute-before.sh', "#!/usr/bin/env bash\nhead -c 32768 < /dev/zero | tr '\\0' 'A'\nexit 0\n");
     const logFile = path.join(root, 'logs.jsonl');
 
-    const wrapper = new HooksWrapper(root, undefined, { logFile });
+    const wrapper = new HooksWrapper(root, { logFile });
     await wrapper.runHook({
       event: HookEvent.ToolExecuteBefore,
       input: {
@@ -616,7 +618,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const logFile = path.join(root, 'logs.jsonl');
 
     try {
-      const wrapper = new HooksWrapper(root, undefined, { logFile });
+      const wrapper = new HooksWrapper(root, { logFile });
       await expect(wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} })).rejects.toThrow(/Blocked: failed to spawn hook.*EACCES: permission denied/);
 
       const logs = readHookLogRecords(logFile);
@@ -695,7 +697,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     });
 
     try {
-      const wrapper = new HooksWrapper(root, undefined, { statusFile });
+      const wrapper = new HooksWrapper(root, { statusFile });
       expect(renameCount).toBe(1);
 
       await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
@@ -718,7 +720,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     writeHook(root, 'tool-execute-before.sh', '#!/usr/bin/env bash\nsleep 0.12\nexit 0\n');
     const statusFile = path.join(root, 'status-slow.json');
 
-    const wrapper = new HooksWrapper(root, undefined, { statusFile });
+    const wrapper = new HooksWrapper(root, { statusFile });
     const runPromise = wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
 
     await new Promise((r) => setTimeout(r, 15));

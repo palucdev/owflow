@@ -53,22 +53,6 @@ const PASSTHROUGH_EVENTS = [
   HookEvent.Dispose,
 ] as const satisfies readonly DispatchableEvent[];
 
-interface WrapperConstructorOptions extends HooksWrapperOptions {
-  readonly endSession?: (sessionID: string) => Promise<void> | void;
-}
-
-const isEndSessionCallback = (value: unknown): value is (sessionID: string) => Promise<void> | void => typeof value === 'function';
-
-const asWrapperOptions = (value: unknown): WrapperConstructorOptions =>
-  typeof value === 'object' && value !== null ? (value as WrapperConstructorOptions) : {};
-
-const resolveWrapperOptions = (rest: readonly unknown[]): WrapperConstructorOptions => {
-  const firstArgument = rest[0];
-  const endSession = isEndSessionCallback(firstArgument) ? firstArgument : undefined;
-  const options = asWrapperOptions(typeof firstArgument === 'object' && firstArgument !== null ? firstArgument : rest[1]);
-  return { ...options, ...(endSession && { endSession }) };
-};
-
 interface ReactiveRunOptions {
   readonly event: HookEventName;
   readonly input: unknown;
@@ -179,8 +163,7 @@ class HooksWrapper {
 
   public snapshot: HookScan;
 
-  constructor(directory: string, ...rest: readonly unknown[]) {
-    const options = resolveWrapperOptions(rest);
+  constructor(directory: string, options: HooksWrapperOptions = {}) {
     this.snapshot = scanHooks(hooksDirectory(directory));
     this.directory = directory;
     this.statusRecorder = new StatusRecorder({
