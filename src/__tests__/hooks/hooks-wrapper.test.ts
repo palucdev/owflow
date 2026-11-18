@@ -116,7 +116,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
       statusFile: danglingStatus,
       logFile: danglingLog,
     });
-    await wrapper.runHook(HookEvent.ToolExecuteBefore, { sessionID: 'ses_sym' }, {});
+    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_sym' }, output: {} });
     wrapper.dispose();
 
     // Neither target file should have been created or written to
@@ -138,7 +138,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const wrapper = new HooksWrapper(root, (id) => ended.push(id), { statusFile, logFile });
 
     // Session hook run writes stdout and stderr directly to JSONL records
-    await wrapper.runHook(HookEvent.ToolExecuteBefore, { sessionID: 'ses_ok' }, {});
+    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_ok' }, output: {} });
     const latestOk = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, Number.NEGATIVE_INFINITY, 'ses_ok').at(-1);
     expect(latestOk?.status).toBe(HookRunState.SUCCESS);
     expect(latestOk?.stdout).toBe('out line\n');
@@ -146,19 +146,19 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, Date.now() + 10_000)).toEqual([]);
 
     // Non-session hook run writes to JSONL
-    await wrapper.runHook(HookEvent.ToolExecuteBefore, {}, {});
+    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
     const nonSession = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore).at(-1);
     expect(nonSession?.status).toBe(HookRunState.SUCCESS);
     expect(nonSession?.stdout).toBe('out line\n');
     expect(nonSession?.stderr).toBe('warn line\n');
 
     // Consecutive runs are each recorded with distinct runId in JSONL
-    await wrapper.runHook(HookEvent.ToolExecuteBefore, {}, {});
+    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
     const logsAfterRepeat = readHookLogRecords(logFile);
     expect(logsAfterRepeat.kind === 'ok' && logsAfterRepeat.records.length).toBe(3);
 
     // Non-zero exit fails closed and ends session
-    await expect(wrapper.runHook(HookEvent.ChatMessage, { sessionID: 'ses_fail' }, {})).rejects.toThrow(/Blocked: policy violation\./);
+    await expect(wrapper.runHook({ event: HookEvent.ChatMessage, input: { sessionID: 'ses_fail' }, output: {} })).rejects.toThrow(/Blocked: policy violation\./);
     expect(ended).toEqual(['ses_fail']);
 
     wrapper.dispose();
@@ -174,7 +174,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const sessionID = 'ses_multi_run';
 
     for (let i = 0; i < 5; i++) {
-      await wrapper.runHook(HookEvent.ToolExecuteBefore, { sessionID }, {});
+      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID }, output: {} });
     }
 
     const logs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, sessionID);
@@ -201,7 +201,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const latestSymlink = resolveHooksLatestSymlink(root);
 
     // Run tool.execute.before
-    await wrapper.runHook(HookEvent.ToolExecuteBefore, { sessionID }, {});
+    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID }, output: {} });
 
     const logFileTool = resolveHooksLogFile(root, 'tool-execute-before');
     const logFileChat = resolveHooksLogFile(root, 'chat-message');
@@ -215,7 +215,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     expect(toolLogs.kind === 'ok' && toolLogs.records[0]!.name).toBe('tool-execute-before');
 
     // Run chat.message
-    await wrapper.runHook(HookEvent.ChatMessage, { sessionID }, {});
+    await wrapper.runHook({ event: HookEvent.ChatMessage, input: { sessionID }, output: {} });
 
     expect(fs.existsSync(logFileChat)).toBe(true);
     expect(fs.readlinkSync(latestSymlink)).toBe(logFileChat);
@@ -241,7 +241,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
       const wrapper = new HooksWrapper(root, () => {
         throw new Error('abort failed');
       });
-      await expect(wrapper.runHook(HookEvent.Config, { sessionID: 'ses_no_interp' })).rejects.toThrow(/bash interpreter is not available/);
+      await expect(wrapper.runHook({ event: HookEvent.Config, input: { sessionID: 'ses_no_interp' } })).rejects.toThrow(/bash interpreter is not available/);
       expect(warnSpy).toHaveBeenCalled();
       wrapper.dispose();
     } finally {
@@ -256,7 +256,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const logFile = path.join(root, 'logs.jsonl');
 
     const wrapper = new HooksWrapper(root, undefined, { logFile });
-    await wrapper.runHook(HookEvent.Event, {});
+    await wrapper.runHook({ event: HookEvent.Event, input: {} });
 
     expect(readHookLogRecords(logFile)).toEqual({ kind: 'missing' });
     wrapper.dispose();
@@ -286,7 +286,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as any);
     try {
       const wrapper = new HooksWrapper(root);
-      const runPromise = wrapper.runHook(HookEvent.Config, {});
+      const runPromise = wrapper.runHook({ event: HookEvent.Config, input: {} });
       expect(mockProc.kill).not.toHaveBeenCalled();
 
       wrapper.dispose();
@@ -311,9 +311,9 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
       releaseIdle = resolve;
     });
 
-    spyOn(wrapper, 'runHook').mockImplementation(async (event) => {
-      events.push(event);
-      if (event === 'session.idle') {
+    spyOn(wrapper, 'runHook').mockImplementation(async (options) => {
+      events.push(options.event);
+      if (options.event === 'session.idle') {
         await idleBarrier;
       }
     });
@@ -358,9 +358,9 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
 
     const wrapper = new HooksWrapper(root, (id) => ended.push(id), { statusFile, logFile });
 
-    await expect(wrapper.runHook('session.idle', { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_1' } } })).rejects.toThrow(
-      /Blocked: test failed\. Hint: fix the failing script .* \(failure recorded; fail closed\)/,
-    );
+    await expect(
+      wrapper.runHook({ event: 'session.idle', input: { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_1' } } } }),
+    ).rejects.toThrow(/Blocked: test failed\. Hint: fix the failing script .* \(failure recorded; fail closed\)/);
 
     expect(ended).toEqual([]);
     const snapshot = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
@@ -377,11 +377,11 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     try {
       const noInterpWrapper = new HooksWrapper(root, (id) => ended.push(id));
       await expect(
-        noInterpWrapper.runHook('session.idle', { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_no_bash' } } }),
+        noInterpWrapper.runHook({ event: 'session.idle', input: { event: { type: 'session.idle', properties: { sessionID: 'ses_idle_no_bash' } } } }),
       ).rejects.toThrow(/bash interpreter is not available/);
       expect(ended).toEqual([]);
 
-      await expect(noInterpWrapper.runHook(HookEvent.ChatMessage, { sessionID: 'ses_chat_no_bash' })).rejects.toThrow(
+      await expect(noInterpWrapper.runHook({ event: HookEvent.ChatMessage, input: { sessionID: 'ses_chat_no_bash' } })).rejects.toThrow(
         /bash interpreter is not available/,
       );
       expect(ended).toEqual(['ses_chat_no_bash']);
@@ -399,13 +399,13 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const ended: string[] = [];
     const wrapper = new HooksWrapper(root, (id) => ended.push(id));
 
-    await expect(wrapper.runHook(HookEvent.ToolExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/tool gate failed/);
-    await expect(wrapper.runHook(HookEvent.CommandExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/cmd gate failed/);
+    await expect(wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_dedup' }, output: {} })).rejects.toThrow(/tool gate failed/);
+    await expect(wrapper.runHook({ event: HookEvent.CommandExecuteBefore, input: { sessionID: 'ses_dedup' }, output: {} })).rejects.toThrow(/cmd gate failed/);
     expect(ended).toEqual(['ses_dedup']);
 
     // A new chat.message turn clears the session abort cooldown even when no chat-message hook exists
-    await wrapper.runHook(HookEvent.ChatMessage, { sessionID: 'ses_dedup' }, {});
-    await expect(wrapper.runHook(HookEvent.ToolExecuteBefore, { sessionID: 'ses_dedup' }, {})).rejects.toThrow(/tool gate failed/);
+    await wrapper.runHook({ event: HookEvent.ChatMessage, input: { sessionID: 'ses_dedup' }, output: {} });
+    await expect(wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_dedup' }, output: {} })).rejects.toThrow(/tool gate failed/);
     expect(ended).toEqual(['ses_dedup', 'ses_dedup']);
 
     wrapper.dispose();
@@ -424,14 +424,14 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
       const payload = { event: { type: 'session.idle', properties: { sessionID: 'ses_cb' } } };
 
       for (let i = 0; i < 4; i += 1) {
-        await expect(wrapper.runHook('session.idle', payload)).rejects.toThrow(/Blocked: check failed\./);
+        await expect(wrapper.runHook({ event: 'session.idle', input: payload })).rejects.toThrow(/Blocked: check failed\./);
       }
 
       expect(spawnSpy).toHaveBeenCalledTimes(4);
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('circuit breaker tripped'));
 
       // 5th rapid attempt is blocked before spawning a subprocess
-      await expect(wrapper.runHook('session.idle', payload)).rejects.toThrow(/Blocked: Circuit breaker active for .*session-idle\.sh/);
+      await expect(wrapper.runHook({ event: 'session.idle', input: payload })).rejects.toThrow(/Blocked: Circuit breaker active for .*session-idle\.sh/);
       expect(spawnSpy).toHaveBeenCalledTimes(4);
 
       const snapshot = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
@@ -482,9 +482,12 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const logFile = path.join(root, 'logs.jsonl');
 
     const wrapper = new HooksWrapper(root, undefined, { logFile });
-    await wrapper.runHook(HookEvent.ToolExecuteBefore, {
-      tool: 'bash',
-      args: { command: 'test' },
+    await wrapper.runHook({
+      event: HookEvent.ToolExecuteBefore,
+      input: {
+        tool: 'bash',
+        args: { command: 'test' },
+      },
     });
 
     const logResult = readHookLogRecords(logFile);
@@ -537,7 +540,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
       }) as typeof setTimeout);
 
       const wrapper = new HooksWrapper(root);
-      await expect(wrapper.runHook(HookEvent.Config, {})).rejects.toThrow(/timed out after 120000ms/);
+      await expect(wrapper.runHook({ event: HookEvent.Config, input: {} })).rejects.toThrow(/timed out after 120000ms/);
       expect(recordedDelay).toBe(120_000);
       expect(killed).toBe(true);
       wrapper.dispose();
@@ -565,7 +568,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
       );
 
       const wrapper2 = new HooksWrapper(root);
-      await wrapper2.runHook(HookEvent.Config, {});
+      await wrapper2.runHook({ event: HookEvent.Config, input: {} });
       expect(timeoutScheduled).toBe(false);
       wrapper2.dispose();
     } finally {
@@ -590,7 +593,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
 
     try {
       const wrapper = new HooksWrapper(root);
-      await wrapper.runHook(HookEvent.ToolExecuteBefore, {}, {});
+      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
 
       expect(errLines.some((l) => l.includes('[owflow:debug] [tool.execute.before] Spawning'))).toBe(true);
       expect(errLines.some((l) => l.includes('[owflow:debug] [tool.execute.before] Finished') && l.includes('exitCode: 0'))).toBe(true);
@@ -614,7 +617,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
 
     try {
       const wrapper = new HooksWrapper(root, undefined, { logFile });
-      await expect(wrapper.runHook(HookEvent.ToolExecuteBefore, {}, {})).rejects.toThrow(/Blocked: failed to spawn hook.*EACCES: permission denied/);
+      await expect(wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} })).rejects.toThrow(/Blocked: failed to spawn hook.*EACCES: permission denied/);
 
       const logs = readHookLogRecords(logFile);
       expect(logs.kind).toBe('ok');
@@ -639,9 +642,9 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
-      spyOn(wrapper, 'runHook').mockImplementation(async (ev: string) => {
-        if (ev === 'session.idle') throw new Error('Blocked: idle check failed');
-        if (ev === HookEvent.Event) throw new Error('Blocked: catch-all event failed');
+      spyOn(wrapper, 'runHook').mockImplementation(async (options) => {
+        if (options.event === 'session.idle') throw new Error('Blocked: idle check failed');
+        if (options.event === HookEvent.Event) throw new Error('Blocked: catch-all event failed');
       });
 
       const handlers = wrapper.createHostEventHandlers();
@@ -665,8 +668,8 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const root = makeTempDir();
     const wrapper = new HooksWrapper(root);
     const routedEvents: string[] = [];
-    spyOn(wrapper, 'runHook').mockImplementation(async (ev: string) => {
-      routedEvents.push(ev);
+    spyOn(wrapper, 'runHook').mockImplementation(async (options) => {
+      routedEvents.push(options.event);
     });
 
     const handlers = wrapper.createHostEventHandlers();
@@ -695,7 +698,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
       const wrapper = new HooksWrapper(root, undefined, { statusFile });
       expect(renameCount).toBe(1);
 
-      await wrapper.runHook(HookEvent.ToolExecuteBefore, {}, {});
+      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
       expect(renameCount).toBe(2);
 
       const status = readHookStatusSnapshot(statusFile);
@@ -716,7 +719,7 @@ describe('hooks-wrapper (execution & hook-run runtime)', () => {
     const statusFile = path.join(root, 'status-slow.json');
 
     const wrapper = new HooksWrapper(root, undefined, { statusFile });
-    const runPromise = wrapper.runHook(HookEvent.ToolExecuteBefore, {}, {});
+    const runPromise = wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
 
     await new Promise((r) => setTimeout(r, 15));
     let status = readHookStatusSnapshot(statusFile);

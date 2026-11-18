@@ -149,13 +149,13 @@ export interface HookRunLogRecord {
 export type HookLogReadResult =
   { readonly kind: 'missing' | 'invalid' } | { readonly kind: 'ok'; readonly records: readonly HookRunLogRecord[]; readonly truncated: boolean };
 
-export interface HookRunContext {
+export interface HookRunOptions {
   readonly event: HookEventName;
-  readonly sessionID?: string;
-  readonly context?: Record<string, unknown>;
+  readonly input?: unknown;
+  readonly output?: unknown;
 }
 
-export type HookRunCallback = (runContext: HookRunContext) => Promise<void>;
+export type HookRunCallback = (options: HookRunOptions) => Promise<void>;
 
 export type HookReportRow = Readonly<Record<'path' | 'event' | 'interpreter' | 'status', string>>;
 

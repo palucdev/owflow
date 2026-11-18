@@ -90,7 +90,7 @@ const createConfigHook = (options: ConfigHookOptions): ConfigHook => {
 
     const typedConfig = config as OpenCodeConfig;
     applyPluginConfig(typedConfig);
-    if (options.wrapper !== undefined) await options.wrapper.runHook(HookEvent.Config, typedConfig);
+    if (options.wrapper !== undefined) await options.wrapper.runHook({ event: HookEvent.Config, input: typedConfig });
 
     if (isConfigLoaded) return;
     console.log(`[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`);
@@ -107,7 +107,7 @@ const createSessionCompactionHook = (options: SessionCompactionOptions): Session
   async (input, output) => {
     await rereadOrchestratorState(options.directory, output);
     if (options.wrapper !== undefined) {
-      await options.wrapper.runHook(HookEvent.ExperimentalSessionCompacting, input, output);
+      await options.wrapper.runHook({ event: HookEvent.ExperimentalSessionCompacting, input, output });
     }
   };
 
@@ -136,7 +136,7 @@ const createChatMessageHook = (options: AgentTrackingOptions): ChatMessageHook =
   async (input, output) => {
     trackAgentSession(options.agentBySession, input);
     if (options.wrapper !== undefined) {
-      await options.wrapper.runHook(HookEvent.ChatMessage, input, output);
+      await options.wrapper.runHook({ event: HookEvent.ChatMessage, input, output });
     }
   };
 
@@ -147,7 +147,7 @@ const createToolExecuteBeforeHook = (options: AgentTrackingOptions): ToolExecute
     try {
       await guardAgainstDestructiveActions(input, output, options.agentBySession);
       if (options.wrapper !== undefined) {
-        await options.wrapper.runHook(HookEvent.ToolExecuteBefore, input, output);
+        await options.wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input, output });
       }
     } catch (error) {
       if (isBlockedError(error)) throw error;

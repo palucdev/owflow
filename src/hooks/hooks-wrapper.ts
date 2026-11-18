@@ -5,6 +5,7 @@ import {
   isHostEventName,
   type DispatchableEvent,
   type HookEventName,
+  type HookRunOptions,
   type HookScan,
   type HooksWrapperOptions,
 } from '../types/hook-types.js';
@@ -15,7 +16,6 @@ import { SessionAbortController } from './runtime/failure-policy.js';
 import { StatusRecorder } from './runtime/status-recorder.js';
 import { writeHookCrashLog } from './hooks-persistence.js';
 import { executeHookRun, type HookRunDependencies } from './wrapper/hook-run-executor.js';
-import { resolveHookInvocation, type HookInvocation } from './wrapper/invocation-resolver.js';
 import { createEventRunSerializer } from './wrapper/event-run-serializer.js';
 import {
   buildStdinPayload as composeStdinPayload,
@@ -101,7 +101,7 @@ class HooksWrapper {
 
   private runHookReactive = async (options: ReactiveRunOptions): Promise<void> => {
     try {
-      await this.runHook(options.event, options.input);
+      await this.runHook({ event: options.event, input: options.input });
     } catch (error) {
       writeHookCrashLog(this.directory, options.crashSource, error);
     }
@@ -119,24 +119,21 @@ class HooksWrapper {
     this.activeProcesses.clear();
   };
 
-  public runHook = async (
-    invocationOrEvent: HookInvocation | HookEventName,
-    ...rest: readonly unknown[]
-  ): Promise<void> => {
-    const invocation = resolveHookInvocation(invocationOrEvent, rest);
-    const resolvedSessionID = invocation.sessionID ?? sessionIDFrom(invocation.input);
+  public runHook = async (options: HookRunOptions): Promise<void> => {
+    const { event, input, output } = options;
+    const resolvedSessionID = sessionIDFrom(input);
 
-    if (resolvedSessionID && invocation.event === HookEvent.ChatMessage) {
+    if (resolvedSessionID && event === HookEvent.ChatMessage) {
       this.abortController.clearSession(resolvedSessionID);
     }
 
-    const hooks = Map.groupBy(this.snapshot.entries, (entry) => entry.event).get(invocation.event);
+    const hooks = Map.groupBy(this.snapshot.entries, (entry) => entry.event).get(event);
     if (!hooks || hooks.length === 0) return;
 
     const stdinText = this.buildStdinPayload({
-      event: invocation.event,
-      input: invocation.input,
-      output: invocation.output,
+      event,
+      input,
+      output,
       ...(resolvedSessionID && { sessionID: resolvedSessionID }),
     });
     const dependencies = this.createRunDependencies();
@@ -146,10 +143,10 @@ class HooksWrapper {
       await executeHookRun({
         dependencies,
         entry,
-        event: invocation.event,
+        event,
         ...(resolvedSessionID && { sessionID: resolvedSessionID }),
         stdinText,
-        runId: `${invocation.event}#${this.runCounter}`,
+        runId: `${event}#${this.runCounter}`,
         startedAt: Date.now(),
         hookName: path.basename(entry.path, path.extname(entry.path)),
       });
@@ -160,7 +157,7 @@ class HooksWrapper {
     const handlers = Object.fromEntries(
       PASSTHROUGH_EVENTS.map((event) => [
         event,
-        (input?: unknown, output?: Record<string, unknown>) => this.runHook(event, input, output),
+        (input?: unknown, output?: Record<string, unknown>) => this.runHook({ event, input, output }),
       ]),
     ) as Hooks;
     const eventSerializer = createEventRunSerializer();
