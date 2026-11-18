@@ -19,7 +19,7 @@ import { executeHookRun, type HookRunDependencies } from './wrapper/hook-run-exe
 import { createEventRunSerializer } from './wrapper/event-run-serializer.js';
 import {
   buildStdinPayload as composeStdinPayload,
-  readProperty,
+  eventTypeFrom,
   resolveStdinPayloadOptions,
   sessionIDFrom,
   type StdinPayloadOptions,
@@ -67,11 +67,6 @@ const resolveWrapperOptions = (rest: readonly unknown[]): WrapperConstructorOpti
   const endSession = isEndSessionCallback(firstArgument) ? firstArgument : undefined;
   const options = asWrapperOptions(typeof firstArgument === 'object' && firstArgument !== null ? firstArgument : rest[1]);
   return { ...options, ...(endSession && { endSession }) };
-};
-
-const readHostEventType = (input: unknown): string | undefined => {
-  const type = readProperty(readProperty(input, 'event'), 'type');
-  return typeof type === 'string' ? type : undefined;
 };
 
 interface ReactiveRunOptions {
@@ -165,7 +160,7 @@ class HooksWrapper {
     return {
       ...handlers,
       [HookEvent.Event]: async (input: unknown) => {
-        const eventType = readHostEventType(input);
+        const eventType = eventTypeFrom(input);
         if (eventType && isHostEventName(eventType) && !eventSerializer.has(eventType)) {
           await eventSerializer.run(eventType, async () => {
             await this.runHookReactive({
