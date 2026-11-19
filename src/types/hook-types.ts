@@ -21,49 +21,52 @@ export type DispatchableEvent = `${HookEvent}`;
 
 export const DISPATCHABLE_EVENTS: readonly DispatchableEvent[] = Object.values(HookEvent);
 
-export const HOST_EVENT_NAMES = [
-  'command.executed',
-  'file.edited',
-  'file.watcher.updated',
-  'installation.update-available',
-  'installation.updated',
-  'lsp.client.diagnostics',
-  'lsp.updated',
-  'message.part.removed',
-  'message.part.updated',
-  'message.removed',
-  'message.updated',
-  'permission.replied',
-  'permission.updated',
-  'pty.created',
-  'pty.deleted',
-  'pty.exited',
-  'pty.updated',
-  'server.connected',
-  'server.instance.disposed',
-  'session.compacted',
-  'session.created',
-  'session.deleted',
-  'session.diff',
-  'session.error',
-  'session.idle',
-  'session.status',
-  'session.updated',
-  'todo.updated',
-  'tui.command.execute',
-  'tui.prompt.append',
-  'tui.toast.show',
-  'vcs.branch.updated',
-] as const;
+export enum HostEventName {
+  CommandExecuted = 'command.executed',
+  FileEdited = 'file.edited',
+  FileWatcherUpdated = 'file.watcher.updated',
+  InstallationUpdateAvailable = 'installation.update-available',
+  InstallationUpdated = 'installation.updated',
+  LSPClientDiagnostics = 'lsp.client.diagnostics',
+  LSPUpdated = 'lsp.updated',
+  MessagePartRemoved = 'message.part.removed',
+  MessagePartUpdated = 'message.part.updated',
+  MessageRemoved = 'message.removed',
+  MessageUpdated = 'message.updated',
+  PermissonReplied = 'permission.replied',
+  PermissionUpdated = 'permission.updated',
+  VirtualTerminalCreated = 'pty.created',
+  VirtualTerminalDeleted = 'pty.deleted',
+  VirtualTerminalExited = 'pty.exited',
+  VirtualTerminalUpdated = 'pty.updated',
+  ServerConnected = 'server.connected',
+  ServerInstanceDisposed = 'server.instance.disposed',
+  SessionCompated = 'session.compacted',
+  SessionCreated = 'session.created',
+  SessionDeleted = 'session.deleted',
+  SessionDiff = 'session.diff',
+  SessionError = 'session.error',
+  SessionIdle = 'session.idle',
+  SessionStatus = 'session.status',
+  SessionUpdated = 'session.updated',
+  ToDoUpdated = 'todo.updated',
+  TUICommandExecute = 'tui.command.execute',
+  TUIPromptAppend = 'tui.prompt.append',
+  TUIToastShow = 'tui.toast.show',
+  VSCBranchUpdated = 'vcs.branch.updated',
+}
 
-export type HostEventName = (typeof HOST_EVENT_NAMES)[number];
+export const HOST_EVENT_NAMES = Object.values(HostEventName);
+
 export type HookEventName = DispatchableEvent | HostEventName;
 
 export const HOOK_EVENT_NAMES: readonly HookEventName[] = [...DISPATCHABLE_EVENTS, ...HOST_EVENT_NAMES];
 
 export const EXCLUDED_EVENT_NAMES = ['permission.ask', 'tool', 'auth', 'provider', 'experimental.provider.small_model'] as const;
 
-export const isHostEventName = (value: string): value is HostEventName => (HOST_EVENT_NAMES as readonly string[]).includes(value);
+export const isHostEventName = (value: string): boolean => {
+  return HOST_EVENT_NAMES.includes(value as HostEventName);
+};
 
 /**
 Validation digest mode for `scanHooks`.

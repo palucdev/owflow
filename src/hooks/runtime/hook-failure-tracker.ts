@@ -9,10 +9,7 @@ const formatTrackerKey = (components: FailureTrackerEntry): string => {
   return `${components.event}::${components.checkKey}::${sessionID}`;
 };
 
-const resolveTrackerKey = (
-  eventOrEntry: FailureTrackerEntry | string,
-  rest: readonly (string | undefined)[],
-): string => {
+const resolveTrackerKey = (eventOrEntry: FailureTrackerEntry | string, rest: readonly (string | undefined)[]): string => {
   if (typeof eventOrEntry === 'object') {
     return formatTrackerKey(eventOrEntry);
   }
@@ -24,28 +21,19 @@ const resolveTrackerKey = (
 export class HookFailureTracker {
   private readonly failures = new Map<string, number>();
 
-  recordFailure(
-    eventOrEntry: FailureTrackerEntry | string,
-    ...rest: readonly (string | undefined)[]
-  ): number {
+  recordFailure(eventOrEntry: FailureTrackerEntry | string, ...rest: readonly (string | undefined)[]): number {
     const sessionKey = resolveTrackerKey(eventOrEntry, rest);
     const nextCount = (this.failures.get(sessionKey) ?? 0) + 1;
     this.failures.set(sessionKey, nextCount);
     return nextCount;
   }
 
-  recordSuccess(
-    eventOrEntry: FailureTrackerEntry | string,
-    ...rest: readonly (string | undefined)[]
-  ): void {
+  recordSuccess(eventOrEntry: FailureTrackerEntry | string, ...rest: readonly (string | undefined)[]): void {
     const sessionKey = resolveTrackerKey(eventOrEntry, rest);
     this.failures.delete(sessionKey);
   }
 
-  getCount(
-    eventOrEntry: FailureTrackerEntry | string,
-    ...rest: readonly (string | undefined)[]
-  ): number {
+  getCount(eventOrEntry: FailureTrackerEntry | string, ...rest: readonly (string | undefined)[]): number {
     const sessionKey = resolveTrackerKey(eventOrEntry, rest);
     return this.failures.get(sessionKey) ?? 0;
   }

@@ -22,17 +22,12 @@ const isIgnoredFile = (name: string): boolean => {
   return IGNORED_FILENAMES.has(lowerName) || lowerName.endsWith('.md') || name.endsWith('~') || name.endsWith('.swp');
 };
 
-const isLowercaseAsciiOrDigit = (character: string): boolean =>
-  (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9');
+const isLowercaseAsciiOrDigit = (character: string): boolean => (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9');
 
 const isValidHookStem = (stem: string): boolean =>
-  stem
-    .split('-')
-    .every((segment) => segment.length > 0 && [...segment].every((character) => isLowercaseAsciiOrDigit(character)));
+  stem.split('-').every((segment) => segment.length > 0 && [...segment].every((character) => isLowercaseAsciiOrDigit(character)));
 
-type HookNameValidation =
-  | { readonly isValid: true; readonly event: HookEventName }
-  | { readonly isValid: false; readonly error: string };
+type HookNameValidation = { readonly isValid: true; readonly event: HookEventName } | { readonly isValid: false; readonly error: string };
 
 const validateHookEvent = (stem: string): HookNameValidation => {
   if (!isValidHookStem(stem)) {
@@ -143,10 +138,7 @@ const resolveInterpreters = (which: (command: string) => string | null): Record<
 const RECOVERY_HINT =
   'Hint: fix or remove the invalid file(s) and restart OpenCode. User hooks are bypassed until the hooks directory validates; the built-in destructive-command guard remains active. To start without user hooks, set OWFLOW_HOOKS_DISABLED=1.';
 
-export const scanHooks = (
-  hooksDirectory: string,
-  options: { mode?: HookDigestMode; which?: (command: string) => string | null } = {},
-): HookScan => {
+export const scanHooks = (hooksDirectory: string, options: { mode?: HookDigestMode; which?: (command: string) => string | null } = {}): HookScan => {
   if (!fs.existsSync(hooksDirectory)) return { entries: [], failures: [] };
 
   if (!fs.statSync(hooksDirectory).isDirectory()) {

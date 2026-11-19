@@ -1,9 +1,4 @@
-import {
-  HookRunState,
-  type HookEventName,
-  type HookRegistryEntry,
-  type HookRuntimeEntry,
-} from '../../types/hook-types.js';
+import { HookRunState, type HookEventName, type HookRegistryEntry, type HookRuntimeEntry } from '../../types/hook-types.js';
 import type { CircuitBreakerCheckResult, CircuitBreakerTracker } from '../runtime/circuit-breaker.js';
 import type { SessionAbortController } from '../runtime/failure-policy.js';
 import { executeHookProcess, type HookProcessResult } from '../runtime/process-executor.js';

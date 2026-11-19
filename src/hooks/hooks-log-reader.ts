@@ -24,9 +24,7 @@ const logRecordsCache = new Map<string, FileCacheEntry<HookLogReadResult>>();
 const parseSnapshotData = (rawText: string): HookStatusSnapshot | undefined => {
   try {
     const parsed = JSON.parse(rawText);
-    return parsed?.version === 1 && typeof parsed.hooks === 'object' && parsed.hooks !== null
-      ? (parsed as HookStatusSnapshot)
-      : undefined;
+    return parsed?.version === 1 && typeof parsed.hooks === 'object' && parsed.hooks !== null ? (parsed as HookStatusSnapshot) : undefined;
   } catch {
     return undefined;
   }
@@ -51,16 +49,11 @@ export const readHookStatusSnapshot = (file: string): HookStatusReadResult => {
     return result;
   } catch (error) {
     statusFileCache.delete(file);
-    return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
-      ? { kind: 'missing' }
-      : { kind: 'invalid' };
+    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? { kind: 'missing' } : { kind: 'invalid' };
   }
 };
 
-const readTailString = (
-  file: string,
-  fileSize: number,
-): { rawText: string; isTruncated: boolean } => {
+const readTailString = (file: string, fileSize: number): { rawText: string; isTruncated: boolean } => {
   const startOffset = Math.max(0, fileSize - MAX_LOG_TAIL_READ_BYTES);
   const readLength = fileSize - startOffset;
 
@@ -91,11 +84,7 @@ const parseLogLineRecords = (rawText: string): HookRunLogRecord[] => {
     }
     try {
       const parsedRecord = JSON.parse(line);
-      if (
-        parsedRecord?.version === 1 &&
-        typeof parsedRecord.event === 'string' &&
-        typeof parsedRecord.name === 'string'
-      ) {
+      if (parsedRecord?.version === 1 && typeof parsedRecord.event === 'string' && typeof parsedRecord.name === 'string') {
         records.push(parsedRecord as HookRunLogRecord);
       }
     } catch {
@@ -105,10 +94,7 @@ const parseLogLineRecords = (rawText: string): HookRunLogRecord[] => {
   return records;
 };
 
-export const readHookLogRecords = (
-  file: string,
-  maxRecords = DEFAULT_MAX_LOG_RECORDS,
-): HookLogReadResult => {
+export const readHookLogRecords = (file: string, maxRecords = DEFAULT_MAX_LOG_RECORDS): HookLogReadResult => {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isFile()) {
@@ -128,16 +114,11 @@ export const readHookLogRecords = (
     return result;
   } catch (error) {
     logRecordsCache.delete(file);
-    return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
-      ? { kind: 'missing' }
-      : { kind: 'invalid' };
+    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? { kind: 'missing' } : { kind: 'invalid' };
   }
 };
 
-export const readSessionLatestLogs = (
-  file: string,
-  sessionID: string,
-): Map<string, HookRunLogRecord> => {
+export const readSessionLatestLogs = (file: string, sessionID: string): Map<string, HookRunLogRecord> => {
   const map = new Map<string, HookRunLogRecord>();
   if (!sessionID) {
     return map;
@@ -178,10 +159,7 @@ export const readSessionHookLogs = (
   fileOrOptions: string | ReadSessionHookLogsOptions,
   ...rest: readonly [event?: HookEventName, since?: number, sessionID?: string] | []
 ): readonly HookRunLogRecord[] => {
-  const { file, event, since = -Infinity, sessionID } = resolveSessionHookLogArguments(
-    fileOrOptions,
-    rest,
-  );
+  const { file, event, since = -Infinity, sessionID } = resolveSessionHookLogArguments(fileOrOptions, rest);
   const result = readHookLogRecords(file);
   if (result.kind !== 'ok') {
     return [];
@@ -191,8 +169,7 @@ export const readSessionHookLogs = (
       return false;
     }
     const hasSessionId = sessionID !== undefined && sessionID.length > 0;
-    const isSessionMismatch =
-      hasSessionId && logRecord.sessionID !== sessionID && logRecord.sessionID !== undefined;
+    const isSessionMismatch = hasSessionId && logRecord.sessionID !== sessionID && logRecord.sessionID !== undefined;
     return !isSessionMismatch && logRecord.startedAt >= since;
   });
 };

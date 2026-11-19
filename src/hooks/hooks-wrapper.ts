@@ -134,10 +134,7 @@ class HooksWrapper {
 
   public createHostEventHandlers = (): Hooks => {
     const handlers = Object.fromEntries(
-      PASSTHROUGH_EVENTS.map((event) => [
-        event,
-        (input?: unknown, output?: Record<string, unknown>) => this.runHook({ event, input, output }),
-      ]),
+      PASSTHROUGH_EVENTS.map((event) => [event, (input?: unknown, output?: Record<string, unknown>) => this.runHook({ event, input, output })]),
     ) as Hooks;
     const eventSerializer = createEventRunSerializer();
 

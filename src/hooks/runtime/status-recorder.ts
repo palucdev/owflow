@@ -115,7 +115,7 @@ export class StatusRecorder {
       fs.unlinkSync(temporaryFile);
       // Best-effort status persistence never affects hook execution.
     }
-  };
+  }
 
   flushStatus(): void {
     if (this.statusTimer !== undefined) {

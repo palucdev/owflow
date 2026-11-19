@@ -42,9 +42,13 @@ describe('stream-reader (bounded subprocess output reading)', () => {
   test('readStream supports the options-object call form', async () => {
     const stream = new Response('options form').body;
     const chunks: string[] = [];
-    const result = await readStream({ stream: stream!, onChunk: (chunk) => {
-      chunks.push(chunk);
-    }, maxBytes: OPTIONS_MAX_BYTES });
+    const result = await readStream({
+      stream: stream!,
+      onChunk: (chunk) => {
+        chunks.push(chunk);
+      },
+      maxBytes: OPTIONS_MAX_BYTES,
+    });
     expect(result).toBe('options form');
     expect(chunks.join('')).toBe('options form');
   });

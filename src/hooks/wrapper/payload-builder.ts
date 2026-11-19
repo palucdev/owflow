@@ -77,16 +77,10 @@ const firstString = (candidates: readonly unknown[]): string | undefined =>
 export const sessionIDFrom = (input: unknown): string | undefined => {
   if (!isRecord(input)) return undefined;
   const properties = hostEventEnvelopeFrom(input.event)?.properties;
-  return firstString([
-    stringFrom(input.sessionID),
-    properties?.sessionID,
-    properties?.part?.sessionID,
-    properties?.info?.sessionID,
-  ]);
+  return firstString([stringFrom(input.sessionID), properties?.sessionID, properties?.part?.sessionID, properties?.info?.sessionID]);
 };
 
-export const eventTypeFrom = (input: unknown): string | undefined =>
-  isRecord(input) ? hostEventEnvelopeFrom(input.event)?.type : undefined;
+export const eventTypeFrom = (input: unknown): string | undefined => (isRecord(input) ? hostEventEnvelopeFrom(input.event)?.type : undefined);
 
 const mergeContext = (options: StdinPayloadOptions): Record<string, unknown> => {
   const context: Record<string, unknown> = {};
@@ -110,10 +104,7 @@ export const buildStdinPayload = (options: StdinPayloadOptions): string => {
   );
 };
 
-export const resolveStdinPayloadOptions = (
-  eventOrOptions: HookEventName | StdinPayloadOptions,
-  rest: readonly unknown[],
-): StdinPayloadOptions => {
+export const resolveStdinPayloadOptions = (eventOrOptions: HookEventName | StdinPayloadOptions, rest: readonly unknown[]): StdinPayloadOptions => {
   if (typeof eventOrOptions === 'object') return eventOrOptions;
   return {
     event: eventOrOptions,

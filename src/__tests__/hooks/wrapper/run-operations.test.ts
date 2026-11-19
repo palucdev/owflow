@@ -125,31 +125,35 @@ describe('run-operations (failure recording)', () => {
 });
 
 describe('run-operations (debounced pending status)', () => {
-  test('recordPending schedules a debounced PENDING status write', async () => {
-    const root = path.join(SCRATCH_ROOT, 'debounced-pending');
-    fs.mkdirSync(root, { recursive: true });
-    const statusFile = path.join(root, 'status.json');
-    const { request } = makeRequest(root);
-    const ops = new HookRunOperations(request);
+  test(
+    'recordPending schedules a debounced PENDING status write',
+    async () => {
+      const root = path.join(SCRATCH_ROOT, 'debounced-pending');
+      fs.mkdirSync(root, { recursive: true });
+      const statusFile = path.join(root, 'status.json');
+      const { request } = makeRequest(root);
+      const ops = new HookRunOperations(request);
 
-    ops.recordPending();
-    expect(ops.previousStatus()?.status).toBe(HookRunState.PENDING);
+      ops.recordPending();
+      expect(ops.previousStatus()?.status).toBe(HookRunState.PENDING);
 
-    // Not yet flushed before the debounce window elapses
-    expect(readHookStatusSnapshot(statusFile).kind).toBe('ok');
-    const immediate = readHookStatusSnapshot(statusFile);
-    if (immediate.kind === 'ok') {
-      expect(immediate.snapshot.hooks[HookEvent.ToolExecuteBefore]).toBeUndefined();
-    }
+      // Not yet flushed before the debounce window elapses
+      expect(readHookStatusSnapshot(statusFile).kind).toBe('ok');
+      const immediate = readHookStatusSnapshot(statusFile);
+      if (immediate.kind === 'ok') {
+        expect(immediate.snapshot.hooks[HookEvent.ToolExecuteBefore]).toBeUndefined();
+      }
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, STATUS_FLUSH_WAIT_MS);
-    });
-    const flushed = readHookStatusSnapshot(statusFile);
-    if (flushed.kind === 'ok') {
-      expect(flushed.snapshot.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.PENDING);
-    }
-  }, STATUS_FLUSH_TEST_TIMEOUT_MS);
+      await new Promise((resolve) => {
+        setTimeout(resolve, STATUS_FLUSH_WAIT_MS);
+      });
+      const flushed = readHookStatusSnapshot(statusFile);
+      if (flushed.kind === 'ok') {
+        expect(flushed.snapshot.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.PENDING);
+      }
+    },
+    STATUS_FLUSH_TEST_TIMEOUT_MS,
+  );
 });
 
 describe('run-operations (terminal status and log)', () => {

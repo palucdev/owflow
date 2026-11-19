@@ -17,10 +17,7 @@ export class HookSpawnError extends Error {
 export const buildExecutionArguments = (entry: HookRegistryEntry): string[] => {
   const resolvedLower = (entry.interpreter.resolved ?? '').toLowerCase();
   const isPowerShell =
-    entry.path.endsWith('.ps1') ||
-    entry.interpreter.expected === 'pwsh' ||
-    resolvedLower.includes('powershell') ||
-    resolvedLower.includes('pwsh');
+    entry.path.endsWith('.ps1') || entry.interpreter.expected === 'pwsh' || resolvedLower.includes('powershell') || resolvedLower.includes('pwsh');
 
   return isPowerShell
     ? [entry.interpreter.resolved!, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', entry.path]
@@ -29,9 +26,7 @@ export const buildExecutionArguments = (entry: HookRegistryEntry): string[] => {
 
 export { buildExecutionArguments as buildExecutionArgs };
 
-export const resolveHookTimeoutMs = (
-  config: EnvironmentConfig = createDefaultEnvironmentConfig(),
-): number =>
+export const resolveHookTimeoutMs = (config: EnvironmentConfig = createDefaultEnvironmentConfig()): number =>
   config.hookTimeoutMs === undefined ? DEFAULT_HOOK_TIMEOUT_MS : Math.max(0, config.hookTimeoutMs);
 
 export interface ExecuteHookProcessOptions {
@@ -93,10 +88,7 @@ const createTimeoutPromise = (
   return { timeoutPromise, timer };
 };
 
-const waitForProcess = async (
-  proc: ReturnType<typeof Bun.spawn>,
-  timeoutMs: number,
-): Promise<ProcessRunResult> => {
+const waitForProcess = async (proc: ReturnType<typeof Bun.spawn>, timeoutMs: number): Promise<ProcessRunResult> => {
   const ioPromise = createProcessIoPromise(proc);
   if (timeoutMs <= 0) {
     const [rawStdout, rawStderr, code] = await ioPromise;
@@ -154,9 +146,7 @@ interface SpawnOptions {
   readonly stdinText: string;
 }
 
-const spawnHookProcess = (
-  options: SpawnOptions,
-): ReturnType<typeof Bun.spawn> => {
+const spawnHookProcess = (options: SpawnOptions): ReturnType<typeof Bun.spawn> => {
   try {
     return Bun.spawn(buildExecutionArguments(options.entry), {
       cwd: options.directory,
@@ -205,19 +195,9 @@ const formatProcessResult = (options: FormatResultOptions): HookProcessResult =>
   };
 };
 
-export const executeHookProcess = async (
-  options: ExecuteHookProcessOptions,
-): Promise<HookProcessResult> => {
+export const executeHookProcess = async (options: ExecuteHookProcessOptions): Promise<HookProcessResult> => {
   const config = options.config ?? createDefaultEnvironmentConfig();
-  const {
-    entry,
-    directory,
-    stdinText,
-    event,
-    startedAt = Date.now(),
-    timeoutMs = resolveHookTimeoutMs(config),
-    activeProcs,
-  } = options;
+  const { entry, directory, stdinText, event, startedAt = Date.now(), timeoutMs = resolveHookTimeoutMs(config), activeProcs } = options;
 
   if (config.isDebugEnabled) {
     console.error(`[owflow:debug] [${event}] Spawning ${entry.path} (stdin: ${stdinText.length} bytes)`);
@@ -237,9 +217,7 @@ export const executeHookProcess = async (
   const result = formatProcessResult({ startedAt, runResult, signal, timeoutMs });
 
   if (config.isDebugEnabled) {
-    console.error(
-      `[owflow:debug] [${event}] Finished ${entry.path} in ${result.durationMs}ms (exitCode: ${runResult.exitCode}, ok: ${result.isOk})`,
-    );
+    console.error(`[owflow:debug] [${event}] Finished ${entry.path} in ${result.durationMs}ms (exitCode: ${runResult.exitCode}, ok: ${result.isOk})`);
   }
 
   return result;

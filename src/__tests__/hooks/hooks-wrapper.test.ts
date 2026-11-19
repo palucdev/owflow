@@ -2,12 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import HooksWrapper from '../../hooks/hooks-wrapper.js';
-import {
-  readHookLogRecords,
-  readSessionHookLogs,
-  resolveHooksLatestSymlink,
-  resolveHooksLogFile,
-} from '../../hooks/hooks-persistence.js';
+import { readHookLogRecords, readSessionHookLogs, resolveHooksLatestSymlink, resolveHooksLogFile } from '../../hooks/hooks-persistence.js';
 import { HookEvent, HookRunState, type HookRunLogRecord } from '../../types/hook-types.js';
 import { DEFAULT_HOOK_CONTENT, EXECUTABLE_MODE } from '../fixtures/hooks/hooks-wrapper-fixtures.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
@@ -56,30 +51,33 @@ describe('hooks-wrapper (initialization and persistence safety)', () => {
     wrapper.dispose();
   });
 
-  test.skipIf(!isSymlinkCreationSupported)('runtime status and log persistence safely ignore dangling symlinks and clean up symlink rotation targets', async () => {
-    const root = path.join(SCRATCH_ROOT, 'dangling-symlinks');
-    fs.mkdirSync(path.join(root, '.owflow', 'hooks'), { recursive: true });
-    fs.writeFileSync(path.join(root, '.owflow', 'hooks', 'tool-execute-before.sh'), DEFAULT_HOOK_CONTENT, { mode: EXECUTABLE_MODE });
+  test.skipIf(!isSymlinkCreationSupported)(
+    'runtime status and log persistence safely ignore dangling symlinks and clean up symlink rotation targets',
+    async () => {
+      const root = path.join(SCRATCH_ROOT, 'dangling-symlinks');
+      fs.mkdirSync(path.join(root, '.owflow', 'hooks'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.owflow', 'hooks', 'tool-execute-before.sh'), DEFAULT_HOOK_CONTENT, { mode: EXECUTABLE_MODE });
 
-    const targetFile = path.join(root, 'target-status.txt');
-    const danglingStatus = path.join(root, 'dangling-status.json');
-    fs.symlinkSync(targetFile, danglingStatus);
+      const targetFile = path.join(root, 'target-status.txt');
+      const danglingStatus = path.join(root, 'dangling-status.json');
+      fs.symlinkSync(targetFile, danglingStatus);
 
-    const targetLog = path.join(root, 'target-log.txt');
-    const danglingLog = path.join(root, 'dangling-log.jsonl');
-    fs.symlinkSync(targetLog, danglingLog);
+      const targetLog = path.join(root, 'target-log.txt');
+      const danglingLog = path.join(root, 'dangling-log.jsonl');
+      fs.symlinkSync(targetLog, danglingLog);
 
-    const wrapper = new HooksWrapper(root, {
-      statusFile: danglingStatus,
-      logFile: danglingLog,
-    });
-    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_sym' }, output: {} });
-    wrapper.dispose();
+      const wrapper = new HooksWrapper(root, {
+        statusFile: danglingStatus,
+        logFile: danglingLog,
+      });
+      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_sym' }, output: {} });
+      wrapper.dispose();
 
-    // Neither target file should have been created or written to
-    expect(fs.existsSync(targetFile)).toBe(false);
-    expect(fs.existsSync(targetLog)).toBe(false);
-  });
+      // Neither target file should have been created or written to
+      expect(fs.existsSync(targetFile)).toBe(false);
+      expect(fs.existsSync(targetLog)).toBe(false);
+    },
+  );
 });
 
 describe('hooks-wrapper (git-hooks execution)', () => {
@@ -134,7 +132,12 @@ describe('hooks-wrapper (git-hooks execution)', () => {
     fs.writeFileSync(path.join(root, '.owflow', 'hooks', 'chat-message.sh'), POLICY_VIOLATION_HOOK, { mode: EXECUTABLE_MODE });
 
     const ended: string[] = [];
-    const wrapper = new HooksWrapper(root, { endSession: (sessionID) => { ended.push(sessionID); }, logFile });
+    const wrapper = new HooksWrapper(root, {
+      endSession: (sessionID) => {
+        ended.push(sessionID);
+      },
+      logFile,
+    });
 
     await expect(wrapper.runHook({ event: HookEvent.ChatMessage, input: { sessionID: 'ses_fail' }, output: {} })).rejects.toThrow(
       /Blocked: policy violation\./,

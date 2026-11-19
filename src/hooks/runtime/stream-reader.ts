@@ -46,10 +46,7 @@ export const readStream = async (
   streamOrOptions: ReadableStream<Uint8Array> | ReadStreamOptions | null | undefined,
   ...rest: readonly unknown[]
 ): Promise<string> => {
-  const { stream, onChunk, maxBytes = MAX_STREAM_BUFFER_BYTES } = resolveReadStreamOptions(
-    streamOrOptions,
-    rest,
-  );
+  const { stream, onChunk, maxBytes = MAX_STREAM_BUFFER_BYTES } = resolveReadStreamOptions(streamOrOptions, rest);
   if (!stream) {
     return '';
   }

@@ -41,21 +41,15 @@ export const workspaceKey = (workspace: string): string => {
     .slice(0, WORKSPACE_KEY_LENGTH);
 };
 
-export const getUserTemporaryDirectory = (
-  config: EnvironmentConfig = createDefaultEnvironmentConfig(),
-): string => {
+export const getUserTemporaryDirectory = (config: EnvironmentConfig = createDefaultEnvironmentConfig()): string => {
   const uid = typeof process.getuid === 'function' ? String(process.getuid()) : config.username;
   return path.join(os.tmpdir(), `opencode-${uid}`);
 };
 
 export { getUserTemporaryDirectory as getUserTmpDir };
 
-export const resolveHooksStatusFile = (
-  workspace: string,
-  config: EnvironmentConfig = createDefaultEnvironmentConfig(),
-): string =>
-  config.statusFilePath ??
-  path.join(getUserTemporaryDirectory(config), `owflow-hooks-${workspaceKey(workspace)}.json`);
+export const resolveHooksStatusFile = (workspace: string, config: EnvironmentConfig = createDefaultEnvironmentConfig()): string =>
+  config.statusFilePath ?? path.join(getUserTemporaryDirectory(config), `owflow-hooks-${workspaceKey(workspace)}.json`);
 
 const trimHyphens = (text: string): string => {
   let start = 0;
@@ -81,10 +75,7 @@ export const resolveHooksLogFile = (workspace: string, hookName?: string): strin
   const config = createDefaultEnvironmentConfig();
   return (
     config.logFilePath ??
-    path.join(
-      getUserTemporaryDirectory(config),
-      `owflow-hook-logs-${workspaceKey(workspace)}${sanitizeHookStem(hookName)}.jsonl`,
-    )
+    path.join(getUserTemporaryDirectory(config), `owflow-hook-logs-${workspaceKey(workspace)}${sanitizeHookStem(hookName)}.jsonl`)
   );
 };
 
@@ -138,10 +129,7 @@ export interface AppendLogOptions {
   readonly maxBytes?: number;
 }
 
-const resolveAppendArguments = (
-  pathOrOptions: string | AppendLogOptions,
-  rest: readonly (string | number | undefined)[],
-): AppendLogOptions => {
+const resolveAppendArguments = (pathOrOptions: string | AppendLogOptions, rest: readonly (string | number | undefined)[]): AppendLogOptions => {
   if (typeof pathOrOptions === 'object') {
     return pathOrOptions;
   }
@@ -150,14 +138,8 @@ const resolveAppendArguments = (
   return { filePath: pathOrOptions, line, maxBytes };
 };
 
-export const appendWithRotation = (
-  pathOrOptions: string | AppendLogOptions,
-  ...rest: readonly (string | number | undefined)[]
-): void => {
-  const { filePath, line, maxBytes = DEFAULT_LOG_ROTATION_BYTES } = resolveAppendArguments(
-    pathOrOptions,
-    rest,
-  );
+export const appendWithRotation = (pathOrOptions: string | AppendLogOptions, ...rest: readonly (string | number | undefined)[]): void => {
+  const { filePath, line, maxBytes = DEFAULT_LOG_ROTATION_BYTES } = resolveAppendArguments(pathOrOptions, rest);
   if (!line) {
     return;
   }
@@ -175,11 +157,7 @@ export const appendWithRotation = (
     }
 
     const content = line.endsWith('\n') ? line : `${line}\n`;
-    const flags =
-      fs.constants.O_WRONLY |
-      fs.constants.O_CREAT |
-      fs.constants.O_APPEND |
-      (fs.constants.O_NOFOLLOW ?? 0);
+    const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND | (fs.constants.O_NOFOLLOW ?? 0);
     const fileDescriptor = fs.openSync(filePath, flags, LOG_FILE_PERMISSIONS);
     try {
       fs.writeFileSync(fileDescriptor, content, 'utf8');
@@ -209,10 +187,7 @@ const resolveCrashLogOptions = (
   return { workspace: optionsOrWorkspace, source, error };
 };
 
-export const writeHookCrashLog = (
-  optionsOrWorkspace: string | CrashLogOptions,
-  ...rest: readonly [source?: string, error?: unknown] | []
-): void => {
+export const writeHookCrashLog = (optionsOrWorkspace: string | CrashLogOptions, ...rest: readonly [source?: string, error?: unknown] | []): void => {
   const { workspace, source, error } = resolveCrashLogOptions(optionsOrWorkspace, rest);
   try {
     const crashFile = path.join(getUserTemporaryDirectory(), 'owflow-hooks-crash.log');
