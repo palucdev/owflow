@@ -16,42 +16,91 @@ const OFFSETS = {
   ninety: 90,
 } as const;
 
+const recordThreeConsecutiveFailures = (
+  tracker: CircuitBreakerTracker,
+  now: number,
+): {
+  trippedUntil: number;
+  rapidFailures: number;
+} => {
+  tracker.recordFailure({
+    event: HookEvent.ToolExecuteBefore,
+    scriptPath: '/test/hook.sh',
+    sessionID: 'ses_1',
+    startedAt: now + OFFSETS.twenty,
+    finishedAt: now + OFFSETS.thirty,
+  });
+
+  tracker.recordFailure({
+    event: HookEvent.ToolExecuteBefore,
+    scriptPath: '/test/hook.sh',
+    sessionID: 'ses_1',
+    startedAt: now + OFFSETS.forty,
+    finishedAt: now + OFFSETS.fifty,
+  });
+
+  return tracker.recordFailure({
+    event: HookEvent.ToolExecuteBefore,
+    scriptPath: '/test/hook.sh',
+    sessionID: 'ses_1',
+    startedAt: now + OFFSETS.sixty,
+    finishedAt: now + OFFSETS.seventy,
+  });
+};
+
 describe('circuit-breaker (rapid failure tripping and cooldown)', () => {
   test('CircuitBreakerTracker tracks, trips, resets on success, and clears', () => {
     const tracker = new CircuitBreakerTracker();
-    expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+    expect(tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/test/hook.sh', sessionID: 'ses_1' })).toEqual({ tripped: false });
 
     const now = Date.now();
-    tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now, now + OFFSETS.ten);
-    expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+    tracker.recordFailure({
+      event: HookEvent.ToolExecuteBefore,
+      scriptPath: '/test/hook.sh',
+      sessionID: 'ses_1',
+      startedAt: now,
+      finishedAt: now + OFFSETS.ten,
+    });
+    expect(tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/test/hook.sh', sessionID: 'ses_1' })).toEqual({ tripped: false });
 
-    tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + OFFSETS.twenty, now + OFFSETS.thirty);
-    tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + OFFSETS.forty, now + OFFSETS.fifty);
-    const result = tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + OFFSETS.sixty, now + OFFSETS.seventy);
+    const result = recordThreeConsecutiveFailures(tracker, now);
+
     expect(result.rapidFailures).toBe(EXPECTED_BREAKER_THRESHOLD);
     expect(result.trippedUntil).toBeGreaterThan(0);
 
-    const checkTripped = tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1');
+    const checkTripped = tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/test/hook.sh', sessionID: 'ses_1' });
     expect(checkTripped.tripped).toBe(true);
     expect(checkTripped.reason).toContain('Circuit breaker active for /test/hook.sh');
 
-    tracker.recordSuccess(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1');
-    expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+    tracker.recordSuccess({ event: HookEvent.ToolExecuteBefore, scriptPath: '/test/hook.sh', sessionID: 'ses_1' });
+    expect(tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/test/hook.sh', sessionID: 'ses_1' })).toEqual({ tripped: false });
 
-    tracker.recordFailure(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1', now + OFFSETS.eighty, now + OFFSETS.ninety);
+    tracker.recordFailure({
+      event: HookEvent.ToolExecuteBefore,
+      scriptPath: '/test/hook.sh',
+      sessionID: 'ses_1',
+      startedAt: now + OFFSETS.eighty,
+      finishedAt: now + OFFSETS.ninety,
+    });
     tracker.clear();
-    expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
+    expect(tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/test/hook.sh', sessionID: 'ses_1' })).toEqual({ tripped: false });
   });
 
   test('keys are isolated per event, script, and session', () => {
     const tracker = new CircuitBreakerTracker();
     const now = Date.now();
     for (let index = 0; index < EXPECTED_BREAKER_THRESHOLD; index += 1) {
-      tracker.recordFailure(HookEvent.ToolExecuteBefore, '/a.sh', 'ses_1', now + index * OFFSETS.ten, now + index * OFFSETS.ten + OFFSETS.five);
+      tracker.recordFailure({
+        event: HookEvent.ToolExecuteBefore,
+        scriptPath: '/a.sh',
+        sessionID: 'ses_1',
+        startedAt: now + index * OFFSETS.ten,
+        finishedAt: now + index * OFFSETS.ten + OFFSETS.five,
+      });
     }
-    expect(tracker.check(HookEvent.ToolExecuteBefore, '/a.sh', 'ses_1').tripped).toBe(true);
-    expect(tracker.check(HookEvent.ToolExecuteBefore, '/a.sh', 'ses_2').tripped).toBe(false);
-    expect(tracker.check(HookEvent.ChatMessage, '/a.sh', 'ses_1').tripped).toBe(false);
-    expect(tracker.check(HookEvent.ToolExecuteBefore, '/b.sh', 'ses_1').tripped).toBe(false);
+    expect(tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/a.sh', sessionID: 'ses_1' }).tripped).toBe(true);
+    expect(tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/a.sh', sessionID: 'ses_2' }).tripped).toBe(false);
+    expect(tracker.check({ event: HookEvent.ChatMessage, scriptPath: '/a.sh', sessionID: 'ses_1' }).tripped).toBe(false);
+    expect(tracker.check({ event: HookEvent.ToolExecuteBefore, scriptPath: '/b.sh', sessionID: 'ses_1' }).tripped).toBe(false);
   });
 });
