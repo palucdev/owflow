@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as hookLogs from '../../hooks/hooks-persistence.js';
+import { HookRunState } from '../../types/hook-types.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
 import { materializeSidebar } from '../../tui/hooks-sidebar.js';
 import { buildActiveHooksView } from '../../tui/hooks-presenter.js';
@@ -160,7 +161,7 @@ describe('TUI hooks-sidebar', () => {
       triggerCleanup();
 
       expect(handle.disposed()).toBe(true);
-      expect(handle.applyStatuses(new Map([['tool.execute.before', { status: 'pending', startedAt: 100 }]]))).toBe(false);
+      expect(handle.applyStatuses(new Map([['tool.execute.before', { status: HookRunState.PENDING, startedAt: 100 }]]))).toBe(false);
     });
 
     test('should deregister disposed handles on slot unmount and prevent memory accumulation', async () => {

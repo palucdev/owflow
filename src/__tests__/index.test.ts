@@ -167,7 +167,7 @@ describe('OwflowPlugin', () => {
       };
 
       const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(
-        (_dir: any, options: any) =>
+        ((_dir: any, options: any) =>
           ({
             runHook: async ({ input }: any) => {
               if (options?.endSession && input?.sessionID) await options.endSession(input.sessionID);
@@ -181,7 +181,7 @@ describe('OwflowPlugin', () => {
                 throw new Error('Blocked: gate check failed');
               },
             }),
-          }) as any,
+          }) as any) as never,
       );
       const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -208,7 +208,7 @@ describe('OwflowPlugin', () => {
     test('should call user dispose and cleanup on dispose', async () => {
       let wrapperDisposed = false;
       const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(
-        () =>
+        (() =>
           ({
             runHook: async () => {},
             snapshot: { entries: [] },
@@ -216,7 +216,7 @@ describe('OwflowPlugin', () => {
               wrapperDisposed = true;
             },
             createHostEventHandlers: () => ({}),
-          }) as any,
+          }) as any) as never,
       );
 
       try {
@@ -230,9 +230,9 @@ describe('OwflowPlugin', () => {
 
     test('should maintain built-in destructive action guard and write crash log when user hooks fail initialization', async () => {
       const crashSpy = spyOn(hooksPersistenceModule, 'writeHookCrashLog').mockImplementation(() => {});
-      const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation(() => {
+      const wrapperSpy = spyOn(hooksWrapperModule, 'default').mockImplementation((() => {
         throw new Error('SyntaxError in user hook script');
-      });
+      }) as never);
       const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
       try {

@@ -35,3 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # owflow generated files
 .owflow/tasks
+
+# hooks test scratch
+.test-scratch/
