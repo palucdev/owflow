@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  buildStdinPayload,
-  eventTypeFrom,
-  resolveStdinPayloadOptions,
-  sessionIDFrom,
-} from '../../../hooks/wrapper/payload-builder.js';
+import { buildStdinPayload, eventTypeFrom, resolveStdinPayloadOptions, sessionIDFrom } from '../../../hooks/wrapper/payload-builder.js';
 import { HookEvent } from '../../../types/hook-types.js';
 
 const NULL_VALUE: null = JSON.parse('null');
@@ -57,9 +52,7 @@ describe('payload-builder (stdin payload composition)', () => {
 
 describe('payload-builder (option and envelope resolution)', () => {
   test('resolveStdinPayloadOptions accepts both positional and options-object forms', () => {
-    expect(
-      resolveStdinPayloadOptions(HookEvent.ToolExecuteBefore, [{ tool: 'bash' }, { done: true }, 'ses_pos']),
-    ).toEqual({
+    expect(resolveStdinPayloadOptions(HookEvent.ToolExecuteBefore, [{ tool: 'bash' }, { done: true }, 'ses_pos'])).toEqual({
       event: HookEvent.ToolExecuteBefore,
       input: { tool: 'bash' },
       output: { done: true },

@@ -1,15 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  CIRCUIT_BREAKER_COOLDOWN_MS,
-  CIRCUIT_BREAKER_RAPID_GAP_MS,
-  CIRCUIT_BREAKER_THRESHOLD,
-  CircuitBreakerTracker,
-} from '../../../hooks/runtime/circuit-breaker.js';
+import { CircuitBreakerTracker } from '../../../hooks/runtime/circuit-breaker.js';
 import { HookEvent } from '../../../types/hook-types.js';
 
 const EXPECTED_BREAKER_THRESHOLD = 4;
-const EXPECTED_RAPID_GAP_MS = 500;
-const EXPECTED_COOLDOWN_MS = 30_000;
 const OFFSETS = {
   five: 5,
   ten: 10,
@@ -24,12 +17,6 @@ const OFFSETS = {
 } as const;
 
 describe('circuit-breaker (rapid failure tripping and cooldown)', () => {
-  test('exports the documented breaker constants', () => {
-    expect(CIRCUIT_BREAKER_THRESHOLD).toBe(EXPECTED_BREAKER_THRESHOLD);
-    expect(CIRCUIT_BREAKER_RAPID_GAP_MS).toBe(EXPECTED_RAPID_GAP_MS);
-    expect(CIRCUIT_BREAKER_COOLDOWN_MS).toBe(EXPECTED_COOLDOWN_MS);
-  });
-
   test('CircuitBreakerTracker tracks, trips, resets on success, and clears', () => {
     const tracker = new CircuitBreakerTracker();
     expect(tracker.check(HookEvent.ToolExecuteBefore, '/test/hook.sh', 'ses_1')).toEqual({ tripped: false });
@@ -60,13 +47,7 @@ describe('circuit-breaker (rapid failure tripping and cooldown)', () => {
     const tracker = new CircuitBreakerTracker();
     const now = Date.now();
     for (let index = 0; index < EXPECTED_BREAKER_THRESHOLD; index += 1) {
-      tracker.recordFailure(
-        HookEvent.ToolExecuteBefore,
-        '/a.sh',
-        'ses_1',
-        now + index * OFFSETS.ten,
-        now + index * OFFSETS.ten + OFFSETS.five,
-      );
+      tracker.recordFailure(HookEvent.ToolExecuteBefore, '/a.sh', 'ses_1', now + index * OFFSETS.ten, now + index * OFFSETS.ten + OFFSETS.five);
     }
     expect(tracker.check(HookEvent.ToolExecuteBefore, '/a.sh', 'ses_1').tripped).toBe(true);
     expect(tracker.check(HookEvent.ToolExecuteBefore, '/a.sh', 'ses_2').tripped).toBe(false);

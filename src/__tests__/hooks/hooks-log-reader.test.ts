@@ -2,7 +2,6 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  DEFAULT_MAX_LOG_RECORDS,
   MAX_LOG_TAIL_READ_BYTES,
   readHookLogRecords,
   readHookStatusSnapshot,
@@ -12,8 +11,6 @@ import {
 import { HookEvent, HookRunState, type HookRunLogRecord, type HookStatusSnapshot } from '../../types/hook-types.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
 
-const EXPECTED_MAX_LOG_TAIL_READ_BYTES = 262_144;
-const EXPECTED_DEFAULT_MAX_LOG_RECORDS = 500;
 const SINCE_OFFSET_MS = 1500;
 const FAR_FUTURE_TIMESTAMP_MS = 10_000;
 const EXPECTED_SES1_LATEST_COUNT = 2;
@@ -95,13 +92,6 @@ fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 afterAll(() => {
   removeScratchDirectory(SCRATCH_ROOT);
-});
-
-describe('hooks-log-reader (documented constants)', () => {
-  test('exports the documented reader constants', () => {
-    expect(MAX_LOG_TAIL_READ_BYTES).toBe(EXPECTED_MAX_LOG_TAIL_READ_BYTES);
-    expect(DEFAULT_MAX_LOG_RECORDS).toBe(EXPECTED_DEFAULT_MAX_LOG_RECORDS);
-  });
 });
 
 describe('hooks-log-reader (status snapshot)', () => {

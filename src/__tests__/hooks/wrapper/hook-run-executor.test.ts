@@ -58,7 +58,7 @@ afterAll(() => {
 });
 
 describe('hook-run-executor (successful runs)', () => {
-  test.skipIf(bashInterpreter === null)('successful run records SUCCESS status and leaves the circuit closed', async () => {
+  test('successful run records SUCCESS status and leaves the circuit closed', async () => {
     const root = path.join(SCRATCH_ROOT, 'success-run');
     const ended: string[] = [];
     const dependencies = makeDependencies(root, ended);
@@ -75,7 +75,7 @@ describe('hook-run-executor (successful runs)', () => {
     expect(ended).toEqual([]);
   });
 
-  test.skipIf(bashInterpreter === null)('silent successful event runs restore the previous status instead of recording SUCCESS', async () => {
+  test('silent successful event runs restore the previous status instead of recording SUCCESS', async () => {
     const root = path.join(SCRATCH_ROOT, 'silent-event');
     const ended: string[] = [];
     const dependencies = makeDependencies(root, ended);
@@ -85,9 +85,7 @@ describe('hook-run-executor (successful runs)', () => {
     fs.writeFileSync(scriptPath, '#!/usr/bin/env bash\nexit 0\n', { mode: EXECUTABLE_MODE });
     const entry = makeEntry(scriptPath);
 
-    await executeHookRun(
-      makeRequest({ dependencies, entry, overrides: { event: HookEvent.Event, sessionID: undefined, hookName: 'event' } }),
-    );
+    await executeHookRun(makeRequest({ dependencies, entry, overrides: { event: HookEvent.Event, sessionID: undefined, hookName: 'event' } }));
 
     expect(dependencies.statusRecorder.getStatus(HookEvent.Event)).toBeUndefined();
     expect(ended).toEqual([]);
@@ -95,7 +93,7 @@ describe('hook-run-executor (successful runs)', () => {
 });
 
 describe('hook-run-executor (failing lifecycle-gate runs)', () => {
-  test.skipIf(bashInterpreter === null)('failing lifecycle-gate run rejects with Blocked error, aborts the session, and records FAILURE', async () => {
+  test('failing lifecycle-gate run rejects with Blocked error, aborts the session, and records FAILURE', async () => {
     const root = path.join(SCRATCH_ROOT, 'failing-gate');
     const ended: string[] = [];
     const dependencies = makeDependencies(root, ended);

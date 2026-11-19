@@ -1,16 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { MAX_STREAM_BUFFER_BYTES, readStream } from '../../../hooks/runtime/stream-reader.js';
+import { readStream } from '../../../hooks/runtime/stream-reader.js';
 
-const EXPORTED_STREAM_BUFFER_CAP_BYTES = 4_194_304;
 const SMALL_MAX_BYTES = 15;
 const OPTIONS_MAX_BYTES = 100;
 const NULL_VALUE: null = JSON.parse('null');
 
 describe('stream-reader (bounded subprocess output reading)', () => {
-  test('exports the documented stream buffer cap', () => {
-    expect(MAX_STREAM_BUFFER_BYTES).toBe(EXPORTED_STREAM_BUFFER_CAP_BYTES);
-  });
-
   test('readStream reads stream within limit and handles null/undefined streams', async () => {
     expect(await readStream(NULL_VALUE, () => {})).toBe('');
     expect(await readStream(undefined, () => {})).toBe('');

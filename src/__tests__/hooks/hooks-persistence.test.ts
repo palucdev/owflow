@@ -11,7 +11,6 @@ import {
   writeHookCrashLog,
 } from '../../hooks/hooks-persistence.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
-import { isSymlinkCreationSupported } from '../fixtures/hooks/platform-support.js';
 
 const ROTATION_MAX_BYTES = 20;
 const LARGE_LOG_BYTES = 50;
@@ -97,7 +96,7 @@ test('appendWithRotation appends newlines, ignores empty lines, and rotates file
   expect(fs.readFileSync(logFile, 'utf8')).toBe('line after rotation\n');
 });
 
-test.skipIf(!isSymlinkCreationSupported)('appendWithRotation rejects dangling symlinks and replaces symlink rotation targets', () => {
+test('appendWithRotation rejects dangling symlinks and replaces symlink rotation targets', () => {
   const root = path.join(SCRATCH_ROOT, 'symlink-rotation');
   fs.mkdirSync(root, { recursive: true });
   const targetFile = path.join(root, 'target.txt');
@@ -136,7 +135,7 @@ test('writeHookCrashLog writes formatted crash entries to owflow-hooks-crash.log
   expect(updated).toContain('raw string failure');
 });
 
-test.skipIf(!isSymlinkCreationSupported)('resolveHooksLatestSymlink creates and resolves symlink pointing to active workspace log file', () => {
+test('resolveHooksLatestSymlink creates and resolves symlink pointing to active workspace log file', () => {
   const root = path.join(SCRATCH_ROOT, 'latest-symlink');
   const symlinkPath = resolveHooksLatestSymlink(root);
 
@@ -157,7 +156,7 @@ test.skipIf(!isSymlinkCreationSupported)('resolveHooksLatestSymlink creates and 
   expect(fs.readlinkSync(symlinkPath)).toBe(targetFile);
 });
 
-test.skipIf(!isSymlinkCreationSupported)('resolveHooksLatestSymlink maintains distinct symlinks across multiple workspaces without collision', () => {
+test('resolveHooksLatestSymlink maintains distinct symlinks across multiple workspaces without collision', () => {
   const root1 = path.join(SCRATCH_ROOT, 'multi-symlink-one');
   const root2 = path.join(SCRATCH_ROOT, 'multi-symlink-two');
   const symlink1 = resolveHooksLatestSymlink(root1);

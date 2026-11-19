@@ -246,7 +246,7 @@ describe('run-operations (session abort and spawning)', () => {
     expect(ended).toEqual(['ses_abort']);
   });
 
-  test.skipIf(bashInterpreter === null)('spawn delegates to executeHookProcess and registers the process in activeProcesses', async () => {
+  test('spawn delegates to executeHookProcess and registers the process in activeProcesses', async () => {
     const root = path.join(SCRATCH_ROOT, 'spawn-delegation');
     fs.mkdirSync(root, { recursive: true });
     const scriptPath = path.join(root, 'ok.sh');

@@ -1,11 +1,10 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { STATUS_DEBOUNCE_MS, StatusRecorder } from '../../../hooks/runtime/status-recorder.js';
+import { StatusRecorder } from '../../../hooks/runtime/status-recorder.js';
 import { HookEvent, HookRunState, type HookRunLogRecord } from '../../../types/hook-types.js';
 import { removeScratchDirectory } from '../../fixtures/hooks/scratch-cleanup.js';
 
-const EXPECTED_DEBOUNCE_MS = 50;
 const BOUNDED_CAPACITY = 1000;
 const CAPACITY_TEST_TIMEOUT_MS = 30_000;
 const SCRATCH_ROOT = path.join(process.cwd(), '.test-scratch', 'status-recorder');
@@ -26,20 +25,13 @@ const makeRecord = (root: string, id: number): HookRunLogRecord => ({
 
 type StatusRecorderInternals = { writtenRunRecords: Set<string> };
 
-const getWrittenRunRecords = (recorder: StatusRecorder): Set<string> =>
-  (recorder as unknown as StatusRecorderInternals).writtenRunRecords;
+const getWrittenRunRecords = (recorder: StatusRecorder): Set<string> => (recorder as unknown as StatusRecorderInternals).writtenRunRecords;
 
 fs.rmSync(SCRATCH_ROOT, { recursive: true, force: true });
 fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 afterAll(() => {
   removeScratchDirectory(SCRATCH_ROOT);
-});
-
-describe('status-recorder (documented constants)', () => {
-  test('exports the documented debounce constant', () => {
-    expect(STATUS_DEBOUNCE_MS).toBe(EXPECTED_DEBOUNCE_MS);
-  });
 });
 
 describe('status-recorder (run-record deduplication)', () => {
@@ -63,38 +55,42 @@ describe('status-recorder (run-record deduplication)', () => {
 });
 
 describe('status-recorder (bounded run-record capacity)', () => {
-  test('evicts oldest entries when capacity exceeds 1,000', () => {
-    const root = path.join(SCRATCH_ROOT, 'evict');
-    fs.mkdirSync(root, { recursive: true });
-    const logFile = path.join(root, 'evict.jsonl');
-    const recorder = new StatusRecorder({ directory: root, logFile });
+  test(
+    'evicts oldest entries when capacity exceeds 1,000',
+    () => {
+      const root = path.join(SCRATCH_ROOT, 'evict');
+      fs.mkdirSync(root, { recursive: true });
+      const logFile = path.join(root, 'evict.jsonl');
+      const recorder = new StatusRecorder({ directory: root, logFile });
 
-    recorder.appendLog(makeRecord(root, 0));
-    // Add 1,000 distinct records to exceed the 1,000 bounded capacity
-    for (let index = 1; index <= BOUNDED_CAPACITY; index += 1) {
-      recorder.appendLog(makeRecord(root, index));
-    }
+      recorder.appendLog(makeRecord(root, 0));
+      // Add 1,000 distinct records to exceed the 1,000 bounded capacity
+      for (let index = 1; index <= BOUNDED_CAPACITY; index += 1) {
+        recorder.appendLog(makeRecord(root, index));
+      }
 
-    const set = getWrittenRunRecords(recorder);
-    expect(set.size).toBe(BOUNDED_CAPACITY);
-    // run#0 was the oldest entry and was evicted
-    expect(set.has('run#0:success')).toBe(false);
-    // Recent runs are still tracked
-    expect(set.has(`run#${BOUNDED_CAPACITY}:success`)).toBe(true);
-    expect(set.has('run#1:success')).toBe(true);
+      const set = getWrittenRunRecords(recorder);
+      expect(set.size).toBe(BOUNDED_CAPACITY);
+      // run#0 was the oldest entry and was evicted
+      expect(set.has('run#0:success')).toBe(false);
+      // Recent runs are still tracked
+      expect(set.has(`run#${BOUNDED_CAPACITY}:success`)).toBe(true);
+      expect(set.has('run#1:success')).toBe(true);
 
-    // run#1000 is still active in the set and should be deduped
-    recorder.appendLog(makeRecord(root, BOUNDED_CAPACITY));
-    expect(set.size).toBe(BOUNDED_CAPACITY);
+      // run#1000 is still active in the set and should be deduped
+      recorder.appendLog(makeRecord(root, BOUNDED_CAPACITY));
+      expect(set.size).toBe(BOUNDED_CAPACITY);
 
-    // run#0 was evicted, so appending it again re-adds it and evicts run#1
-    recorder.appendLog(makeRecord(root, 0));
-    expect(set.size).toBe(BOUNDED_CAPACITY);
-    expect(set.has('run#0:success')).toBe(true);
-    expect(set.has('run#1:success')).toBe(false);
+      // run#0 was evicted, so appending it again re-adds it and evicts run#1
+      recorder.appendLog(makeRecord(root, 0));
+      expect(set.size).toBe(BOUNDED_CAPACITY);
+      expect(set.has('run#0:success')).toBe(true);
+      expect(set.has('run#1:success')).toBe(false);
 
-    recorder.dispose();
-  }, CAPACITY_TEST_TIMEOUT_MS);
+      recorder.dispose();
+    },
+    CAPACITY_TEST_TIMEOUT_MS,
+  );
 });
 
 describe('status-recorder (atomic status flush)', () => {

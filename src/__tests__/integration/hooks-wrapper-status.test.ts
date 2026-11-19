@@ -197,6 +197,7 @@ describe('hooks-wrapper (debug tracing)', () => {
 });
 
 describe('hooks-wrapper (status debounce)', () => {
+  // Flaky boi
   test('debounces transient PENDING status writes and atomically flushes terminal states', async () => {
     const root = path.join(SCRATCH_ROOT, 'debounce-flush');
     fs.mkdirSync(path.join(root, '.owflow', 'hooks'), { recursive: true });

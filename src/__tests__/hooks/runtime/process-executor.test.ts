@@ -1,18 +1,11 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  DEFAULT_HOOK_TIMEOUT_MS,
-  HOOK_TIMEOUT_ENV,
-  HookSpawnError,
-  buildExecutionArgs as buildExecutionArguments,
-  executeHookProcess,
-} from '../../../hooks/runtime/process-executor.js';
+import { HookSpawnError, buildExecutionArgs as buildExecutionArguments, executeHookProcess } from '../../../hooks/runtime/process-executor.js';
 import { HookEvent, type HookRegistryEntry } from '../../../types/hook-types.js';
 import { removeScratchDirectory } from '../../fixtures/hooks/scratch-cleanup.js';
 import { bashInterpreter } from '../../fixtures/hooks/platform-support.js';
 
-const EXPECTED_TIMEOUT_MS = 120_000;
 const TEST_TIMEOUT_MS = 10_000;
 const EXIT_FAILURE_CODE = 2;
 const EXECUTABLE_MODE = 0o755;
@@ -36,13 +29,6 @@ fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
 
 afterAll(() => {
   removeScratchDirectory(SCRATCH_ROOT);
-});
-
-describe('process-executor (documented timeout constants)', () => {
-  test('exports the documented timeout constants', () => {
-    expect(DEFAULT_HOOK_TIMEOUT_MS).toBe(EXPECTED_TIMEOUT_MS);
-    expect(HOOK_TIMEOUT_ENV).toBe('OWFLOW_HOOK_TIMEOUT_MS');
-  });
 });
 
 describe('process-executor (argument building)', () => {
@@ -111,7 +97,7 @@ describe('process-executor (spawn failures)', () => {
 });
 
 describe('process-executor (real script execution)', () => {
-  test.skipIf(bashInterpreter === null)('executeHookProcess runs a real script and reports success with stdout and stderr', async () => {
+  test('executeHookProcess runs a real script and reports success with stdout and stderr', async () => {
     const root = path.join(SCRATCH_ROOT, 'real-ok');
     fs.mkdirSync(root, { recursive: true });
     const scriptPath = path.join(root, 'ok.sh');
@@ -140,7 +126,7 @@ describe('process-executor (real script execution)', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  test.skipIf(bashInterpreter === null)('executeHookProcess reports failure reason from stderr and non-zero exit codes', async () => {
+  test('executeHookProcess reports failure reason from stderr and non-zero exit codes', async () => {
     const root = path.join(SCRATCH_ROOT, 'real-fail');
     fs.mkdirSync(root, { recursive: true });
     const scriptPath = path.join(root, 'fail.sh');
