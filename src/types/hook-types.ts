@@ -149,13 +149,13 @@ export interface HookRunLogRecord {
 export type HookLogReadResult =
   { readonly kind: 'missing' | 'invalid' } | { readonly kind: 'ok'; readonly records: readonly HookRunLogRecord[]; readonly truncated: boolean };
 
-export interface HookDispatchContext {
+export interface HookRunOptions {
   readonly event: HookEventName;
-  readonly sessionID?: string;
-  readonly context?: Record<string, unknown>;
+  readonly input?: unknown;
+  readonly output?: unknown;
 }
 
-export type HookDispatchCallback = (dispatchContext: HookDispatchContext) => Promise<void>;
+export type HookRunCallback = (options: HookRunOptions) => Promise<void>;
 
 export type HookReportRow = Readonly<Record<'path' | 'event' | 'interpreter' | 'status', string>>;
 
@@ -166,7 +166,7 @@ export interface HookReportInput {
 }
 
 export interface HooksWrapper {
-  readonly dispatch: HookDispatchCallback;
+  readonly runHook: HookRunCallback;
   readonly snapshot: HookReportInput;
   dispose(): void;
 }
@@ -174,4 +174,5 @@ export interface HooksWrapper {
 export interface HooksWrapperOptions {
   readonly statusFile?: string;
   readonly logFile?: string;
+  readonly endSession?: (sessionID: string) => Promise<void> | void;
 }

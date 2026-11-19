@@ -165,6 +165,15 @@ export const appendWithRotation = (
     fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: DIRECTORY_PERMISSIONS });
     rotateLogFileIfNecessary(filePath, maxBytes);
 
+    // O_NOFOLLOW is unavailable on Windows, so reject symlinked targets before the open.
+    try {
+      if (fs.lstatSync(filePath).isSymbolicLink()) {
+        return;
+      }
+    } catch {
+      // Fresh log path; the open below creates it.
+    }
+
     const content = line.endsWith('\n') ? line : `${line}\n`;
     const flags =
       fs.constants.O_WRONLY |
