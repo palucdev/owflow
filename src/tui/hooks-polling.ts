@@ -14,10 +14,7 @@ export interface StatusPollingOptions {
   readonly statusContainer: { current: Map<string, HookRuntimeEntry> };
 }
 
-export const checkStatusFile = (
-  statusFile: string,
-  lastMtime: number | undefined,
-): { statuses?: Map<string, HookRuntimeEntry>; mtime?: number } => {
+export const checkStatusFile = (statusFile: string, lastMtime: number | undefined): { statuses?: Map<string, HookRuntimeEntry>; mtime?: number } => {
   try {
     const stat = fs.statSync(statusFile);
     if (!stat.isFile()) {

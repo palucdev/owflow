@@ -7,7 +7,7 @@ import type { HookProcessResult } from '../../../hooks/runtime/process-executor.
 import { NON_SESSION_STREAM_CAP_BYTES, StatusRecorder } from '../../../hooks/runtime/status-recorder.js';
 import { HookRunOperations, type HookRunRequest } from '../../../hooks/wrapper/run-operations.js';
 import { readHookLogRecords, readHookStatusSnapshot } from '../../../hooks/hooks-log-reader.js';
-import { HookEvent, HookRunState, type HookRegistryEntry, type HookRunLogRecord } from '../../../types/hook-types.js';
+import { HookEventName, HookRunState, type HookRegistryEntry, type HookRunLogRecord } from '../../../types/hook-types.js';
 import { removeScratchDirectory } from '../../fixtures/hooks/scratch-cleanup.js';
 import { bashInterpreter } from '../../fixtures/hooks/platform-support.js';
 
@@ -23,7 +23,7 @@ const SCRATCH_ROOT = path.join(process.cwd(), '.test-scratch', 'run-operations')
 
 const makeEntry = (scriptPath: string): HookRegistryEntry => ({
   path: scriptPath,
-  event: HookEvent.ToolExecuteBefore,
+  event: HookEventName.ToolExecuteBefore,
   interpreter: { resolved: bashInterpreter ?? '/bin/bash', expected: 'bash', available: true },
   status: 'registered',
 });
@@ -111,7 +111,7 @@ describe('run-operations (failure recording)', () => {
     const status = readHookStatusSnapshot(path.join(root, 'status.json'));
     expect(status.kind).toBe('ok');
     if (status.kind !== 'ok') throw new Error('unreachable');
-    const entry = status.snapshot.hooks[HookEvent.ToolExecuteBefore];
+    const entry = status.snapshot.hooks[HookEventName.ToolExecuteBefore];
     expect(entry?.status).toBe(HookRunState.FAILURE);
     expect(entry?.reason).toBe('gate failed');
     expect(entry?.startedAt).toBe(STARTED_AT);
@@ -141,7 +141,7 @@ describe('run-operations (debounced pending status)', () => {
       expect(readHookStatusSnapshot(statusFile).kind).toBe('ok');
       const immediate = readHookStatusSnapshot(statusFile);
       if (immediate.kind === 'ok') {
-        expect(immediate.snapshot.hooks[HookEvent.ToolExecuteBefore]).toBeUndefined();
+        expect(immediate.snapshot.hooks[HookEventName.ToolExecuteBefore]).toBeUndefined();
       }
 
       await new Promise((resolve) => {
@@ -149,7 +149,7 @@ describe('run-operations (debounced pending status)', () => {
       });
       const flushed = readHookStatusSnapshot(statusFile);
       if (flushed.kind === 'ok') {
-        expect(flushed.snapshot.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.PENDING);
+        expect(flushed.snapshot.hooks[HookEventName.ToolExecuteBefore]?.status).toBe(HookRunState.PENDING);
       }
     },
     STATUS_FLUSH_TEST_TIMEOUT_MS,
@@ -170,7 +170,7 @@ describe('run-operations (terminal status and log)', () => {
 
     const flushed = readHookStatusSnapshot(path.join(root, 'status.json'));
     if (flushed.kind === 'ok') {
-      expect(flushed.snapshot.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
+      expect(flushed.snapshot.hooks[HookEventName.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
     }
 
     const record = lastLogRecord(logFile);

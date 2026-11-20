@@ -12,7 +12,7 @@ import { guardAgainstDestructiveActions } from './hooks/internal/before-tool.js'
 import { configureSkills } from './configuration/skills-config.js';
 import { configureCommands } from './configuration/commands-config.js';
 import { configureAgents } from './configuration/agents-config.js';
-import { HookEvent, type HookReportInput } from './types/hook-types.js';
+import { HookEventName, type HookReportInput } from './types/hook-types.js';
 import { renderSnapshot } from './hooks/hooks-diagnostics.js';
 import { writeHookCrashLog } from './hooks/hooks-persistence.js';
 import HooksWrapper from './hooks/hooks-wrapper.js';
@@ -30,7 +30,8 @@ type DisposeHook = NonNullable<Hooks['dispose']>;
 
 const formatErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-const createEndSession = (client: PluginInput['client']) =>
+const createEndSession =
+  (client: PluginInput['client']) =>
   async (sessionID: string): Promise<void> => {
     if (typeof client?.session?.abort !== 'function') return;
     try {
@@ -63,8 +64,7 @@ const createHooksWrapper = (options: WrapperCreationOptions): HooksWrapper | und
   }
 };
 
-const snapshotFromWrapper = (wrapper: HooksWrapper | undefined): HookReportInput =>
-  wrapper?.snapshot ?? { entries: [], bypassed: true };
+const snapshotFromWrapper = (wrapper: HooksWrapper | undefined): HookReportInput => wrapper?.snapshot ?? { entries: [], bypassed: true };
 
 const logInstallationStart = (snapshot: HookReportInput): void => {
   console.log(`[owflow] Starting plugin installation (v${PLUGIN_VERSION})...`);
@@ -90,7 +90,7 @@ const createConfigHook = (options: ConfigHookOptions): ConfigHook => {
 
     const typedConfig = config as OpenCodeConfig;
     applyPluginConfig(typedConfig);
-    if (options.wrapper !== undefined) await options.wrapper.runHook({ event: HookEvent.Config, input: typedConfig });
+    if (options.wrapper !== undefined) await options.wrapper.runHook({ event: HookEventName.Config, input: typedConfig });
 
     if (isConfigLoaded) return;
     console.log(`[owflow] Plugin installation completed successfully (v${PLUGIN_VERSION}).`);
@@ -103,11 +103,12 @@ interface SessionCompactionOptions {
   readonly wrapper: HooksWrapper | undefined;
 }
 
-const createSessionCompactionHook = (options: SessionCompactionOptions): SessionCompactionHook =>
+const createSessionCompactionHook =
+  (options: SessionCompactionOptions): SessionCompactionHook =>
   async (input, output) => {
     await rereadOrchestratorState(options.directory, output);
     if (options.wrapper !== undefined) {
-      await options.wrapper.runHook({ event: HookEvent.ExperimentalSessionCompacting, input, output });
+      await options.wrapper.runHook({ event: HookEventName.ExperimentalSessionCompacting, input, output });
     }
   };
 
@@ -116,10 +117,7 @@ interface AgentTrackingOptions {
   readonly agentBySession: Map<string, string>;
 }
 
-const trackAgentSession = (
-  agentBySession: Map<string, string>,
-  input: { readonly sessionID: string; readonly agent?: string },
-): void => {
+const trackAgentSession = (agentBySession: Map<string, string>, input: { readonly sessionID: string; readonly agent?: string }): void => {
   try {
     if (agentBySession.has(input.sessionID)) agentBySession.delete(input.sessionID);
     agentBySession.set(input.sessionID, input.agent ?? 'main');
@@ -132,22 +130,24 @@ const trackAgentSession = (
   }
 };
 
-const createChatMessageHook = (options: AgentTrackingOptions): ChatMessageHook =>
+const createChatMessageHook =
+  (options: AgentTrackingOptions): ChatMessageHook =>
   async (input, output) => {
     trackAgentSession(options.agentBySession, input);
     if (options.wrapper !== undefined) {
-      await options.wrapper.runHook({ event: HookEvent.ChatMessage, input, output });
+      await options.wrapper.runHook({ event: HookEventName.ChatMessage, input, output });
     }
   };
 
 const isBlockedError = (error: unknown): boolean => error instanceof Error && error.message.startsWith('Blocked:');
 
-const createToolExecuteBeforeHook = (options: AgentTrackingOptions): ToolExecuteBeforeHook =>
+const createToolExecuteBeforeHook =
+  (options: AgentTrackingOptions): ToolExecuteBeforeHook =>
   async (input, output) => {
     try {
       await guardAgainstDestructiveActions(input, output, options.agentBySession);
       if (options.wrapper !== undefined) {
-        await options.wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input, output });
+        await options.wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input, output });
       }
     } catch (error) {
       if (isBlockedError(error)) throw error;
@@ -161,7 +161,8 @@ interface DisposeHookOptions {
   readonly agentBySession: Map<string, string>;
 }
 
-const createDisposeHook = (options: DisposeHookOptions): DisposeHook =>
+const createDisposeHook =
+  (options: DisposeHookOptions): DisposeHook =>
   async () => {
     try {
       await options.userDispose?.();
@@ -183,10 +184,10 @@ const OwflowPlugin: Plugin = async ({ client, directory }) => {
       verify_template,
       fork_task,
     },
-    [HookEvent.Config]: createConfigHook({ wrapper, snapshot: snapshotFromWrapper(wrapper) }),
-    [HookEvent.ExperimentalSessionCompacting]: createSessionCompactionHook({ directory, wrapper }),
-    [HookEvent.ChatMessage]: createChatMessageHook({ wrapper, agentBySession }),
-    [HookEvent.ToolExecuteBefore]: createToolExecuteBeforeHook({ wrapper, agentBySession }),
+    [HookEventName.Config]: createConfigHook({ wrapper, snapshot: snapshotFromWrapper(wrapper) }),
+    [HookEventName.ExperimentalSessionCompacting]: createSessionCompactionHook({ directory, wrapper }),
+    [HookEventName.ChatMessage]: createChatMessageHook({ wrapper, agentBySession }),
+    [HookEventName.ToolExecuteBefore]: createToolExecuteBeforeHook({ wrapper, agentBySession }),
   };
 
   if (wrapper === undefined) return hooks;

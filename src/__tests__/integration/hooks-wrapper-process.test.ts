@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import HooksWrapper, { NON_SESSION_STREAM_CAP_BYTES } from '../../hooks/hooks-wrapper.js';
 import { readHookLogRecords } from '../../hooks/hooks-persistence.js';
-import { HookEvent, HookRunState } from '../../types/hook-types.js';
+import { HookEventName, HookRunState } from '../../types/hook-types.js';
 import { DEFAULT_HOOK_CONTENT, EXECUTABLE_MODE } from '../fixtures/hooks/hooks-wrapper-fixtures.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
 
@@ -49,7 +49,7 @@ describe('hooks-wrapper (interpreter failures and silent events)', () => {
           throw new Error('abort failed');
         },
       });
-      await expect(wrapper.runHook({ event: HookEvent.Config, input: { sessionID: 'ses_no_interp' } })).rejects.toThrow(
+      await expect(wrapper.runHook({ event: HookEventName.Config, input: { sessionID: 'ses_no_interp' } })).rejects.toThrow(
         /bash interpreter is not available/,
       );
       expect(warnSpy).toHaveBeenCalled();
@@ -67,7 +67,7 @@ describe('hooks-wrapper (interpreter failures and silent events)', () => {
     const logFile = path.join(root, 'logs.jsonl');
 
     const wrapper = new HooksWrapper(root, { logFile });
-    await wrapper.runHook({ event: HookEvent.Event, input: {} });
+    await wrapper.runHook({ event: HookEventName.Event, input: {} });
 
     expect(readHookLogRecords(logFile)).toEqual({ kind: 'missing' });
     wrapper.dispose();
@@ -85,7 +85,7 @@ describe('hooks-wrapper (process lifecycle)', () => {
     const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as unknown as ReturnType<typeof Bun.spawn>);
     try {
       const wrapper = new HooksWrapper(root);
-      const runPromise = wrapper.runHook({ event: HookEvent.Config, input: {} });
+      const runPromise = wrapper.runHook({ event: HookEventName.Config, input: {} });
       expect(mockProc.kill).not.toHaveBeenCalled();
 
       wrapper.dispose();
@@ -113,7 +113,7 @@ describe('hooks-wrapper (process lifecycle)', () => {
 
     try {
       const wrapper = new HooksWrapper(root, { logFile });
-      await expect(wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} })).rejects.toThrow(
+      await expect(wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: {}, output: {} })).rejects.toThrow(
         /Blocked: failed to spawn hook.*EACCES: permission denied/,
       );
 
@@ -143,7 +143,7 @@ describe('hooks-wrapper (stream capping)', () => {
 
     const wrapper = new HooksWrapper(root, { logFile });
     await wrapper.runHook({
-      event: HookEvent.ToolExecuteBefore,
+      event: HookEventName.ToolExecuteBefore,
       input: {
         tool: 'bash',
         args: { command: 'test' },

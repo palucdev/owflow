@@ -5,7 +5,7 @@ import HooksWrapper from '../../hooks/hooks-wrapper.js';
 import { DEFAULT_HOOK_TIMEOUT_MS } from '../../hooks/runtime/process-executor.js';
 import { STATUS_DEBOUNCE_MS } from '../../hooks/runtime/status-recorder.js';
 import { readHookStatusSnapshot } from '../../hooks/hooks-persistence.js';
-import { HookEvent, HookRunState } from '../../types/hook-types.js';
+import { HookEventName, HookRunState } from '../../types/hook-types.js';
 import { DEFAULT_HOOK_CONTENT, EXECUTABLE_MODE } from '../fixtures/hooks/hooks-wrapper-fixtures.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
 
@@ -82,8 +82,7 @@ const readHooksStatus = (file: string) => {
 
 const spyOnStatusRenames = (): { renameSpy: ReturnType<typeof spyOn>; count: () => number } => {
   const renameSpy = spyOn(fs, 'renameSync');
-  const count = () =>
-    renameSpy.mock.calls.filter(([, newPath]) => typeof newPath === 'string' && newPath.includes('status.json')).length;
+  const count = () => renameSpy.mock.calls.filter(([, newPath]) => typeof newPath === 'string' && newPath.includes('status.json')).length;
   return { renameSpy, count };
 };
 
@@ -117,7 +116,7 @@ describe('hooks-wrapper (hook timeout)', () => {
     const harness = createTimeoutHarness();
     try {
       const wrapper = new HooksWrapper(root);
-      await expect(wrapper.runHook({ event: HookEvent.Config, input: {} })).rejects.toThrow(/timed out after 120000ms/);
+      await expect(wrapper.runHook({ event: HookEventName.Config, input: {} })).rejects.toThrow(/timed out after 120000ms/);
       expect(harness.recordedDelay()).toBe(EXPECTED_DEFAULT_TIMEOUT_MS);
       expect(harness.wasKilled()).toBe(true);
       wrapper.dispose();
@@ -147,7 +146,7 @@ describe('hooks-wrapper (hook timeout)', () => {
     const spawnSpy = spyOn(Bun, 'spawn').mockImplementation(() => mockProc as unknown as ReturnType<typeof Bun.spawn>);
     try {
       const wrapper = new HooksWrapper(root);
-      await wrapper.runHook({ event: HookEvent.Config, input: {} });
+      await wrapper.runHook({ event: HookEventName.Config, input: {} });
       expect(isTimeoutScheduled).toBe(false);
       wrapper.dispose();
     } finally {
@@ -163,11 +162,9 @@ describe('hooks-wrapper (debug tracing)', () => {
   test('OWFLOW_DEBUG=1 logs real-time trace messages to console.error', async () => {
     const root = path.join(SCRATCH_ROOT, 'debug-trace');
     fs.mkdirSync(path.join(root, '.owflow', 'hooks'), { recursive: true });
-    fs.writeFileSync(
-      path.join(root, '.owflow', 'hooks', 'tool-execute-before.sh'),
-      '#!/usr/bin/env bash\necho "debug-ok"\nexit 0\n',
-      { mode: EXECUTABLE_MODE },
-    );
+    fs.writeFileSync(path.join(root, '.owflow', 'hooks', 'tool-execute-before.sh'), '#!/usr/bin/env bash\necho "debug-ok"\nexit 0\n', {
+      mode: EXECUTABLE_MODE,
+    });
 
     const errorLines: string[] = [];
     const errorSpy = spyOn(console, 'error').mockImplementation((message: string) => {
@@ -179,14 +176,10 @@ describe('hooks-wrapper (debug tracing)', () => {
 
     try {
       const wrapper = new HooksWrapper(root);
-      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
+      await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: {}, output: {} });
 
       expect(errorLines.some((line) => line.includes('[owflow:debug] [tool.execute.before] Spawning'))).toBe(true);
-      expect(
-        errorLines.some(
-          (line) => line.includes('[owflow:debug] [tool.execute.before] Finished') && line.includes('exitCode: 0'),
-        ),
-      ).toBe(true);
+      expect(errorLines.some((line) => line.includes('[owflow:debug] [tool.execute.before] Finished') && line.includes('exitCode: 0'))).toBe(true);
       wrapper.dispose();
     } finally {
       errorSpy.mockRestore();
@@ -209,9 +202,9 @@ describe('hooks-wrapper (status debounce)', () => {
       const wrapper = new HooksWrapper(root, { statusFile });
       expect(count()).toBe(1);
 
-      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
+      await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: {}, output: {} });
       expect(count()).toBe(EXPECTED_RENAME_COUNT_AFTER_RUN);
-      expect(readHooksStatus(statusFile).hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
+      expect(readHooksStatus(statusFile).hooks[HookEventName.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
 
       wrapper.dispose();
     } finally {
@@ -222,31 +215,29 @@ describe('hooks-wrapper (status debounce)', () => {
   test('flushes PENDING status after debounce delay for slow hooks and clears timer on dispose', async () => {
     const root = path.join(SCRATCH_ROOT, 'debounce-slow');
     fs.mkdirSync(path.join(root, '.owflow', 'hooks'), { recursive: true });
-    fs.writeFileSync(
-      path.join(root, '.owflow', 'hooks', 'tool-execute-before.sh'),
-      '#!/usr/bin/env bash\nsleep 0.12\nexit 0\n',
-      { mode: EXECUTABLE_MODE },
-    );
+    fs.writeFileSync(path.join(root, '.owflow', 'hooks', 'tool-execute-before.sh'), '#!/usr/bin/env bash\nsleep 0.12\nexit 0\n', {
+      mode: EXECUTABLE_MODE,
+    });
     const statusFile = path.join(root, 'status-slow.json');
 
     const wrapper = new HooksWrapper(root, { statusFile });
-    const runPromise = wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
+    const runPromise = wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: {}, output: {} });
 
     await new Promise((resolve) => {
       setTimeout(resolve, DEBOUNCE_EARLY_WAIT_MS);
     });
     let status = readHooksStatus(statusFile);
-    expect(status.hooks[HookEvent.ToolExecuteBefore]).toBeUndefined();
+    expect(status.hooks[HookEventName.ToolExecuteBefore]).toBeUndefined();
 
     await new Promise((resolve) => {
       setTimeout(resolve, DEBOUNCE_FLUSH_WAIT_MS);
     });
     status = readHooksStatus(statusFile);
-    expect(status.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.PENDING);
+    expect(status.hooks[HookEventName.ToolExecuteBefore]?.status).toBe(HookRunState.PENDING);
 
     await runPromise;
     status = readHooksStatus(statusFile);
-    expect(status.hooks[HookEvent.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
+    expect(status.hooks[HookEventName.ToolExecuteBefore]?.status).toBe(HookRunState.SUCCESS);
 
     wrapper.dispose();
   });

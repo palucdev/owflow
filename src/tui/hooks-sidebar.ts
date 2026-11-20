@@ -23,10 +23,7 @@ export interface SidebarMaterializeOptions {
   readonly initialStates?: ReadonlyMap<string, HookRunState>;
 }
 
-const resolveSidebarOptions = (
-  optionsOrView: SidebarMaterializeOptions | ActiveHooksView,
-  rest: readonly unknown[],
-): SidebarMaterializeOptions => {
+const resolveSidebarOptions = (optionsOrView: SidebarMaterializeOptions | ActiveHooksView, rest: readonly unknown[]): SidebarMaterializeOptions => {
   if ('view' in optionsOrView) {
     return optionsOrView;
   }
@@ -68,10 +65,7 @@ interface SessionMatchOptions {
   readonly notBefore: number;
 }
 
-const doesEntryBelongToSession = (
-  entry: HookRuntimeEntry,
-  options: SessionMatchOptions,
-): boolean => {
+const doesEntryBelongToSession = (entry: HookRuntimeEntry, options: SessionMatchOptions): boolean => {
   const { sessionID, notBefore } = options;
   return sessionID !== undefined && sessionID.length > 0
     ? entry.sessionID === sessionID || (entry.sessionID === undefined && entry.startedAt >= notBefore)
@@ -94,9 +88,8 @@ const hasAppliedStatusStylesToRows = (context: UpdateContext): boolean => {
   return hasChanged;
 };
 
-const createStatusUpdater = (
-  context: UpdateContext,
-): ((snapshotEntries: ReadonlyMap<string, HookRuntimeEntry>) => boolean) =>
+const createStatusUpdater =
+  (context: UpdateContext): ((snapshotEntries: ReadonlyMap<string, HookRuntimeEntry>) => boolean) =>
   (snapshotEntries) => {
     if (context.isDisposed()) {
       return false;
@@ -118,10 +111,7 @@ interface DisposalState {
   readonly dispose: () => void;
 }
 
-const setupDisposal = (
-  maps: readonly { clear: () => void }[],
-  solid: SolidRuntime,
-): DisposalState => {
+const setupDisposal = (maps: readonly { clear: () => void }[], solid: SolidRuntime): DisposalState => {
   let isDisposed = false;
   const dispose = (): void => {
     if (isDisposed) {
@@ -142,10 +132,7 @@ const setupDisposal = (
   return { isDisposed: () => isDisposed, dispose };
 };
 
-export const materializeSidebar = (
-  optionsOrView: SidebarMaterializeOptions | ActiveHooksView,
-  ...rest: readonly unknown[]
-): SidebarRenderHandle => {
+export const materializeSidebar = (optionsOrView: SidebarMaterializeOptions | ActiveHooksView, ...rest: readonly unknown[]): SidebarRenderHandle => {
   const options = resolveSidebarOptions(optionsOrView, rest);
   const { view, theme, solid, onRowClick, onRowHover, sessionID, notBefore = 0 } = options;
   const isInteractive = options.isInteractive ?? options.interactive ?? false;
@@ -153,9 +140,7 @@ export const materializeSidebar = (
   const rows = new Map<string, { readonly orb: unknown; readonly label: unknown }>();
   const colors = new Map<string, string>();
   const sessionStates = new Map<string, HookRunState>(options.initialStates);
-  const root = createElementNode(solid, 'box', { flexDirection: 'column' }, [
-    createElementNode(solid, 'text', { fg: theme.text }, [view.title]),
-  ]);
+  const root = createElementNode(solid, 'box', { flexDirection: 'column' }, [createElementNode(solid, 'text', { fg: theme.text }, [view.title])]);
 
   const { isDisposed, dispose } = setupDisposal([rows, colors, sessionStates], solid);
 

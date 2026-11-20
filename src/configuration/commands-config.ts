@@ -87,13 +87,9 @@ const configureSkillCommands = (config: OpenCodeConfig): void => {
     if (data['user-invocable'] !== true) {
       continue;
     }
-    const missing = REQUIRED_COMMAND_KEYS.filter(
-      (key) => typeof data[key] !== 'string' || data[key] === '',
-    );
+    const missing = REQUIRED_COMMAND_KEYS.filter((key) => typeof data[key] !== 'string' || data[key] === '');
     if (missing.length > 0) {
-      throw new Error(
-        `[owflow] Skill '${slug}' is user-invocable but is missing required frontmatter: ${missing.join(', ')}`,
-      );
+      throw new Error(`[owflow] Skill '${slug}' is user-invocable but is missing required frontmatter: ${missing.join(', ')}`);
     }
     const name = data.name;
     // Don't overwrite commands the user has explicitly configured

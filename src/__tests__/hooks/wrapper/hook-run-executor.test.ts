@@ -5,7 +5,7 @@ import { CircuitBreakerTracker } from '../../../hooks/runtime/circuit-breaker.js
 import { SessionAbortController } from '../../../hooks/runtime/failure-policy.js';
 import { StatusRecorder } from '../../../hooks/runtime/status-recorder.js';
 import { executeHookRun, type HookRunDependencies } from '../../../hooks/wrapper/hook-run-executor.js';
-import { HookEvent, HookRunState, type HookRegistryEntry } from '../../../types/hook-types.js';
+import { HookEventName, HookRunState, type HookRegistryEntry } from '../../../types/hook-types.js';
 import { removeScratchDirectory } from '../../fixtures/hooks/scratch-cleanup.js';
 import { bashInterpreter } from '../../fixtures/hooks/platform-support.js';
 
@@ -17,7 +17,7 @@ const SCRATCH_ROOT = path.join(process.cwd(), '.test-scratch', 'hook-run-executo
 
 const makeEntry = (scriptPath: string, isAvailable = true): HookRegistryEntry => ({
   path: scriptPath,
-  event: HookEvent.ToolExecuteBefore,
+  event: HookEventName.ToolExecuteBefore,
   interpreter: { resolved: isAvailable ? (bashInterpreter ?? '/bin/bash') : undefined, expected: 'bash', available: isAvailable },
   status: 'registered',
 });
@@ -70,7 +70,7 @@ describe('hook-run-executor (successful runs)', () => {
 
     await executeHookRun(makeRequest({ dependencies, entry }));
 
-    expect(dependencies.statusRecorder.getStatus(HookEvent.ToolExecuteBefore)?.status).toBe(HookRunState.SUCCESS);
+    expect(dependencies.statusRecorder.getStatus(HookEventName.ToolExecuteBefore)?.status).toBe(HookRunState.SUCCESS);
     expect(dependencies.circuitBreaker.check({ event: entry.event, scriptPath: entry.path }).tripped).toBe(false);
     expect(ended).toEqual([]);
   });
@@ -85,9 +85,9 @@ describe('hook-run-executor (successful runs)', () => {
     fs.writeFileSync(scriptPath, '#!/usr/bin/env bash\nexit 0\n', { mode: EXECUTABLE_MODE });
     const entry = makeEntry(scriptPath);
 
-    await executeHookRun(makeRequest({ dependencies, entry, overrides: { event: HookEvent.Event, sessionID: undefined, hookName: 'event' } }));
+    await executeHookRun(makeRequest({ dependencies, entry, overrides: { event: HookEventName.Event, sessionID: undefined, hookName: 'event' } }));
 
-    expect(dependencies.statusRecorder.getStatus(HookEvent.Event)).toBeUndefined();
+    expect(dependencies.statusRecorder.getStatus(HookEventName.Event)).toBeUndefined();
     expect(ended).toEqual([]);
   });
 });
@@ -105,7 +105,7 @@ describe('hook-run-executor (failing lifecycle-gate runs)', () => {
 
     await expect(executeHookRun(makeRequest({ dependencies, entry }))).rejects.toThrow(/Blocked: gate failed\./);
 
-    expect(dependencies.statusRecorder.getStatus(HookEvent.ToolExecuteBefore)?.status).toBe(HookRunState.FAILURE);
+    expect(dependencies.statusRecorder.getStatus(HookEventName.ToolExecuteBefore)?.status).toBe(HookRunState.FAILURE);
     expect(ended).toEqual(['ses_exec']);
   });
 
@@ -119,7 +119,7 @@ describe('hook-run-executor (failing lifecycle-gate runs)', () => {
     fs.writeFileSync(scriptPath, '#!/usr/bin/env bash\nexit 0\n', { mode: EXECUTABLE_MODE });
     const entry = makeEntry(scriptPath, false);
 
-    await expect(executeHookRun(makeRequest({ dependencies, entry, overrides: { event: HookEvent.Config } }))).rejects.toThrow(
+    await expect(executeHookRun(makeRequest({ dependencies, entry, overrides: { event: HookEventName.Config } }))).rejects.toThrow(
       /bash interpreter is not available/,
     );
     expect(ended).toEqual(['ses_exec']);
@@ -156,7 +156,7 @@ describe('hook-run-executor (open circuit)', () => {
       spawnSpy.mockRestore();
     }
 
-    const status = dependencies.statusRecorder.getStatus(HookEvent.ToolExecuteBefore);
+    const status = dependencies.statusRecorder.getStatus(HookEventName.ToolExecuteBefore);
     expect(status?.status).toBe(HookRunState.FAILURE);
     expect(status?.reason).toContain('Circuit breaker active');
     expect(ended).toEqual([]);

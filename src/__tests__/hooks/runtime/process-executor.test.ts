@@ -2,7 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HookSpawnError, buildExecutionArgs as buildExecutionArguments, executeHookProcess } from '../../../hooks/runtime/process-executor.js';
-import { HookEvent, type HookRegistryEntry } from '../../../types/hook-types.js';
+import { HookEventName, type HookRegistryEntry } from '../../../types/hook-types.js';
 import { removeScratchDirectory } from '../../fixtures/hooks/scratch-cleanup.js';
 import { bashInterpreter } from '../../fixtures/hooks/platform-support.js';
 
@@ -19,7 +19,7 @@ interface EntryOptions {
 
 const makeEntry = ({ scriptPath, resolved, expected }: EntryOptions): HookRegistryEntry => ({
   path: scriptPath,
-  event: HookEvent.ToolExecuteBefore,
+  event: HookEventName.ToolExecuteBefore,
   interpreter: { resolved, expected, available: true },
   status: 'registered',
 });
@@ -68,7 +68,7 @@ describe('process-executor (spawn failures)', () => {
     const root = path.join(SCRATCH_ROOT, 'spawn-failure');
     const entry: HookRegistryEntry = {
       path: path.join(root, 'nonexistent.sh'),
-      event: HookEvent.ToolExecuteBefore,
+      event: HookEventName.ToolExecuteBefore,
       interpreter: {
         resolved: '/nonexistent/interpreter',
         expected: 'bash',
@@ -87,7 +87,7 @@ describe('process-executor (spawn failures)', () => {
           entry,
           directory: root,
           stdinText: '{}',
-          event: HookEvent.ToolExecuteBefore,
+          event: HookEventName.ToolExecuteBefore,
         }),
       ).rejects.toBeInstanceOf(HookSpawnError);
     } finally {
@@ -104,7 +104,7 @@ describe('process-executor (real script execution)', () => {
     fs.writeFileSync(scriptPath, '#!/usr/bin/env bash\necho "out line"\necho "warn line" >&2\nexit 0\n', { mode: EXECUTABLE_MODE });
     const entry: HookRegistryEntry = {
       path: scriptPath,
-      event: HookEvent.ToolExecuteBefore,
+      event: HookEventName.ToolExecuteBefore,
       interpreter: { resolved: bashInterpreter!, expected: 'bash', available: true },
       status: 'registered',
     };
@@ -113,7 +113,7 @@ describe('process-executor (real script execution)', () => {
       entry,
       directory: root,
       stdinText: '{}',
-      event: HookEvent.ToolExecuteBefore,
+      event: HookEventName.ToolExecuteBefore,
       timeoutMs: TEST_TIMEOUT_MS,
     });
 
@@ -133,7 +133,7 @@ describe('process-executor (real script execution)', () => {
     fs.writeFileSync(scriptPath, '#!/usr/bin/env bash\necho "gate failed" >&2\nexit 2\n', { mode: EXECUTABLE_MODE });
     const entry: HookRegistryEntry = {
       path: scriptPath,
-      event: HookEvent.ToolExecuteBefore,
+      event: HookEventName.ToolExecuteBefore,
       interpreter: { resolved: bashInterpreter!, expected: 'bash', available: true },
       status: 'registered',
     };
@@ -142,7 +142,7 @@ describe('process-executor (real script execution)', () => {
       entry,
       directory: root,
       stdinText: '{}',
-      event: HookEvent.ToolExecuteBefore,
+      event: HookEventName.ToolExecuteBefore,
       timeoutMs: TEST_TIMEOUT_MS,
     });
 

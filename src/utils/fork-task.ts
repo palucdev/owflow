@@ -40,23 +40,18 @@ interface ResolveSourceOptions {
 
 const resolveSourceDirectory = (options: ResolveSourceOptions): string => {
   const { input, cwd, researchRoot } = options;
-  const sourceDirectory = [
-    path.resolve(cwd, input.source),
-    path.resolve(researchRoot, input.source),
-  ].find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory());
+  const sourceDirectory = [path.resolve(cwd, input.source), path.resolve(researchRoot, input.source)].find(
+    (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory(),
+  );
 
   if (sourceDirectory === undefined) {
     const hintPath = workflowRelativePath(TASKS_DIRECTORY_NAME, RESEARCH_DIRECTORY_NAME);
-    throw new Error(
-      `INVALID_SOURCE: no task directory at ${input.source}. Hint: pass the task path or a directory name under ${hintPath}/.`,
-    );
+    throw new Error(`INVALID_SOURCE: no task directory at ${input.source}. Hint: pass the task path or a directory name under ${hintPath}/.`);
   }
 
   if (!sourceDirectory.startsWith(researchRoot + path.sep)) {
     const hintPath = workflowRelativePath(TASKS_DIRECTORY_NAME, RESEARCH_DIRECTORY_NAME);
-    throw new Error(
-      `INVALID_SOURCE: ${input.source} is not a research task directory under ${hintPath}/.`,
-    );
+    throw new Error(`INVALID_SOURCE: ${input.source} is not a research task directory under ${hintPath}/.`);
   }
 
   return sourceDirectory;
@@ -64,23 +59,16 @@ const resolveSourceDirectory = (options: ResolveSourceOptions): string => {
 
 const validateForkStep = (from: string, completedPhases: readonly string[]): void => {
   if (from === FORK_TERMINAL_STEP) {
-    throw new Error(
-      `UNKNOWN_STEP: ${FORK_TERMINAL_STEP} is not a valid fork point — nothing diverges after completion.`,
-    );
+    throw new Error(`UNKNOWN_STEP: ${FORK_TERMINAL_STEP} is not a valid fork point — nothing diverges after completion.`);
   }
   if (completedPhases.includes(from)) {
     return;
   }
   const completedList = completedPhases.join(', ') || 'none';
-  throw new Error(
-    `UNKNOWN_STEP: ${from} is not completed in the source task. Completed steps: ${completedList}`,
-  );
+  throw new Error(`UNKNOWN_STEP: ${from} is not completed in the source task. Completed steps: ${completedList}`);
 };
 
-const loadSourceState = (
-  sourceDirectory: string,
-  inputSource: string,
-): { sourceState: Record<string, unknown>; completedPhases: string[] } => {
+const loadSourceState = (sourceDirectory: string, inputSource: string): { sourceState: Record<string, unknown>; completedPhases: string[] } => {
   const parsedSourceState = parseYamlFile(path.join(sourceDirectory, 'orchestrator-state.yml'));
   if (!parsedSourceState.isOk || !parsedSourceState.data) {
     const errorDetails = parsedSourceState.error ?? `no orchestrator-state.yml in ${inputSource}`;
@@ -120,10 +108,7 @@ const buildForkState = (context: ForkStateContext): Record<string, unknown> => {
   const sourceBasename = path.basename(context.sourceDirectory);
 
   orchestrator['started_phase'] = JSON.parse('null');
-  orchestrator['completed_phases'] = context.completedPhases.slice(
-    0,
-    context.completedPhases.indexOf(context.from) + 1,
-  );
+  orchestrator['completed_phases'] = context.completedPhases.slice(0, context.completedPhases.indexOf(context.from) + 1);
   orchestrator['entry_point'] = 'research-fork';
   orchestrator['task_path'] = relativeTaskPath;
   orchestrator['options'] = {
@@ -157,9 +142,7 @@ export const forkTask = (input: ForkTaskInput): ForkTaskResult => {
   const cwd = input.cwd ?? process.cwd();
 
   if (!input.slug || !RESEARCH_SLUG_PATTERN.test(input.slug)) {
-    throw new Error(
-      "INVALID_NAME: slug must be lowercase kebab-case, 3-5 words of [a-z0-9] (e.g. 'compare-caching-strategies')",
-    );
+    throw new Error("INVALID_NAME: slug must be lowercase kebab-case, 3-5 words of [a-z0-9] (e.g. 'compare-caching-strategies')");
   }
 
   const taskRoot = path.resolve(cwd, input.taskRoot);

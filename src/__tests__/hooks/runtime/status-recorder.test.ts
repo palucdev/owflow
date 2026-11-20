@@ -2,7 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { StatusRecorder } from '../../../hooks/runtime/status-recorder.js';
-import { HookEvent, HookRunState, type HookRunLogRecord } from '../../../types/hook-types.js';
+import { HookEventName, HookRunState, type HookRunLogRecord } from '../../../types/hook-types.js';
 import { removeScratchDirectory } from '../../fixtures/hooks/scratch-cleanup.js';
 
 const BOUNDED_CAPACITY = 1000;
@@ -14,7 +14,7 @@ const makeRecord = (root: string, id: number): HookRunLogRecord => ({
   runId: `run#${id}`,
   pid: 1,
   workspace: root,
-  event: HookEvent.ToolExecuteBefore,
+  event: HookEventName.ToolExecuteBefore,
   hook: '/hook.sh',
   name: 'tool-execute-before',
   startedAt: 1000,
@@ -121,13 +121,13 @@ describe('status-recorder (in-memory snapshot entries)', () => {
     fs.mkdirSync(root, { recursive: true });
     const recorder = new StatusRecorder({ directory: root });
 
-    expect(recorder.getStatus(HookEvent.ToolExecuteBefore)).toBeUndefined();
-    recorder.setStatus(HookEvent.ToolExecuteBefore, { status: HookRunState.SUCCESS, startedAt: 1 });
-    expect(recorder.getStatus(HookEvent.ToolExecuteBefore)?.status).toBe(HookRunState.SUCCESS);
+    expect(recorder.getStatus(HookEventName.ToolExecuteBefore)).toBeUndefined();
+    recorder.setStatus(HookEventName.ToolExecuteBefore, { status: HookRunState.SUCCESS, startedAt: 1 });
+    expect(recorder.getStatus(HookEventName.ToolExecuteBefore)?.status).toBe(HookRunState.SUCCESS);
     expect(recorder.getAllStatuses().size).toBe(1);
 
-    recorder.deleteStatus(HookEvent.ToolExecuteBefore);
-    expect(recorder.getStatus(HookEvent.ToolExecuteBefore)).toBeUndefined();
+    recorder.deleteStatus(HookEventName.ToolExecuteBefore);
+    expect(recorder.getStatus(HookEventName.ToolExecuteBefore)).toBeUndefined();
 
     recorder.dispose();
   });

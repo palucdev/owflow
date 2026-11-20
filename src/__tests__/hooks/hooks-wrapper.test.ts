@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import HooksWrapper from '../../hooks/hooks-wrapper.js';
 import { readHookLogRecords, readSessionHookLogs, resolveHooksLatestSymlink, resolveHooksLogFile } from '../../hooks/hooks-persistence.js';
-import { HookEvent, HookRunState, type HookRunLogRecord } from '../../types/hook-types.js';
+import { HookEventName, HookRunState, type HookRunLogRecord } from '../../types/hook-types.js';
 import { DEFAULT_HOOK_CONTENT, EXECUTABLE_MODE } from '../fixtures/hooks/hooks-wrapper-fixtures.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
 import { isSymlinkCreationSupported } from '../fixtures/hooks/platform-support.js';
@@ -47,7 +47,7 @@ describe('hooks-wrapper (initialization and persistence safety)', () => {
 
     const wrapper = new HooksWrapper(root);
     expect(wrapper.snapshot.entries).toHaveLength(1);
-    expect(wrapper.snapshot.entries[0]!.event).toBe(HookEvent.ToolExecuteBefore);
+    expect(wrapper.snapshot.entries[0]!.event).toBe(HookEventName.ToolExecuteBefore);
     wrapper.dispose();
   });
 
@@ -70,7 +70,7 @@ describe('hooks-wrapper (initialization and persistence safety)', () => {
         statusFile: danglingStatus,
         logFile: danglingLog,
       });
-      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_sym' }, output: {} });
+      await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: { sessionID: 'ses_sym' }, output: {} });
       wrapper.dispose();
 
       // Neither target file should have been created or written to
@@ -91,12 +91,12 @@ describe('hooks-wrapper (git-hooks execution)', () => {
     const wrapper = new HooksWrapper(root, { statusFile, logFile });
 
     // Session hook run writes stdout and stderr directly to JSONL records
-    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID: 'ses_ok' }, output: {} });
-    const latestOk = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, -Infinity, 'ses_ok').at(-1);
+    await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: { sessionID: 'ses_ok' }, output: {} });
+    const latestOk = readSessionHookLogs({file: logFile, event: HookEventName.ToolExecuteBefore, since: -Infinity, sessionID: 'ses_ok'}).at(-1);
     expect(latestOk?.status).toBe(HookRunState.SUCCESS);
     expect(latestOk?.stdout).toBe('out line\n');
     expect(latestOk?.stderr).toBe('warn line\n');
-    expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, Date.now() + FUTURE_OFFSET_MS)).toEqual([]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: Date.now() + FUTURE_OFFSET_MS })).toEqual([]);
 
     wrapper.dispose();
   });
@@ -109,14 +109,14 @@ describe('hooks-wrapper (git-hooks execution)', () => {
 
     const wrapper = new HooksWrapper(root, { logFile });
 
-    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
-    const nonSession = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore).at(-1);
+    await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: {}, output: {} });
+    const nonSession = readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore }).at(-1);
     expect(nonSession?.status).toBe(HookRunState.SUCCESS);
     expect(nonSession?.stdout).toBe('out line\n');
     expect(nonSession?.stderr).toBe('warn line\n');
 
     // Consecutive runs are each recorded with distinct runId in JSONL
-    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: {}, output: {} });
+    await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: {}, output: {} });
     const logsAfterRepeat = readHookLogRecords(logFile);
     expect(logsAfterRepeat.kind).toBe('ok');
     if (logsAfterRepeat.kind !== 'ok') throw new Error('unreachable');
@@ -139,7 +139,7 @@ describe('hooks-wrapper (git-hooks execution)', () => {
       logFile,
     });
 
-    await expect(wrapper.runHook({ event: HookEvent.ChatMessage, input: { sessionID: 'ses_fail' }, output: {} })).rejects.toThrow(
+    await expect(wrapper.runHook({ event: HookEventName.ChatMessage, input: { sessionID: 'ses_fail' }, output: {} })).rejects.toThrow(
       /Blocked: policy violation\./,
     );
     expect(ended).toEqual(['ses_fail']);
@@ -160,10 +160,10 @@ describe('hooks-wrapper (run history)', () => {
     const sessionID = 'ses_multi_run';
 
     for (let index = 0; index < HISTORY_RUN_COUNT; index += 1) {
-      await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID }, output: {} });
+      await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: { sessionID }, output: {} });
     }
 
-    const logs = readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, sessionID);
+    const logs = readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: 0, sessionID: sessionID });
     expect(logs).toHaveLength(HISTORY_RUN_COUNT);
     expect(logs.map((logRecord) => logRecord.runId)).toEqual([
       'tool.execute.before#1',
@@ -189,7 +189,7 @@ describe('hooks-wrapper (per-hook log isolation)', () => {
     const latestSymlink = resolveHooksLatestSymlink(root);
 
     // Run tool.execute.before
-    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID }, output: {} });
+    await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: { sessionID }, output: {} });
 
     const logFileTool = resolveHooksLogFile(root, 'tool-execute-before');
     const logFileChat = resolveHooksLogFile(root, 'chat-message');
@@ -216,14 +216,14 @@ describe('hooks-wrapper (per-hook log isolation)', () => {
     const wrapper = new HooksWrapper(root, { statusFile: path.join(root, 'status-isolated.json') });
     const sessionID = 'ses_per_hook';
     const latestSymlink = resolveHooksLatestSymlink(root);
-    await wrapper.runHook({ event: HookEvent.ToolExecuteBefore, input: { sessionID }, output: {} });
+    await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: { sessionID }, output: {} });
 
     const logFileTool = resolveHooksLogFile(root, 'tool-execute-before');
     const logFileChat = resolveHooksLogFile(root, 'chat-message');
     const toolCountBefore = countLogRecords(logFileTool);
 
     // Run chat.message
-    await wrapper.runHook({ event: HookEvent.ChatMessage, input: { sessionID }, output: {} });
+    await wrapper.runHook({ event: HookEventName.ChatMessage, input: { sessionID }, output: {} });
 
     expect(await Bun.file(logFileChat).exists()).toBe(true);
     if (isSymlinkCreationSupported) {

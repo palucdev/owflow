@@ -1,4 +1,4 @@
-import type { HookEventName, HookRegistryEntry } from '../../types/hook-types.js';
+import type { EventName, HookRegistryEntry } from '../../types/hook-types.js';
 import { createDefaultEnvironmentConfig, type EnvironmentConfig } from '../../utils/environment-config.js';
 import { readStream } from './stream-reader.js';
 
@@ -33,7 +33,7 @@ export interface ExecuteHookProcessOptions {
   entry: HookRegistryEntry;
   directory: string;
   stdinText: string;
-  event: HookEventName;
+  event: EventName;
   startedAt?: number;
   timeoutMs?: number;
   activeProcs?: Set<ReturnType<typeof Bun.spawn>>;

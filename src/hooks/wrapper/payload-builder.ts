@@ -1,9 +1,9 @@
-import type { HookEventName } from '../../types/hook-types.js';
+import type { EventName } from "../../types/hook-types.js";
 
 const IDENTITY_KEYS: readonly string[] = ['id', 'sessionID', 'messageID', 'partID', 'callID', 'providerID', 'type', 'name', 'tool'];
 
 export interface StdinPayloadOptions {
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly input?: unknown;
   readonly output?: unknown;
   readonly sessionID?: string;
@@ -102,14 +102,4 @@ export const buildStdinPayload = (options: StdinPayloadOptions): string => {
     },
     (_key, value) => serializeValue(value, seen),
   );
-};
-
-export const resolveStdinPayloadOptions = (eventOrOptions: HookEventName | StdinPayloadOptions, rest: readonly unknown[]): StdinPayloadOptions => {
-  if (typeof eventOrOptions === 'object') return eventOrOptions;
-  return {
-    event: eventOrOptions,
-    input: rest[0],
-    output: rest[1],
-    ...(typeof rest[2] === 'string' && { sessionID: rest[2] }),
-  };
 };

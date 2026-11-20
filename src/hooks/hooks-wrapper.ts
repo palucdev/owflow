@@ -1,14 +1,6 @@
 import path from 'node:path';
 import type { Hooks } from '@opencode-ai/plugin';
-import {
-  HookEvent,
-  isHostEventName,
-  type DispatchableEvent,
-  type HookEventName,
-  type HookRunOptions,
-  type HookScan,
-  type HooksWrapperOptions,
-} from '../types/hook-types.js';
+import { HookEventName, toHookEventName, type EventName, type HookRunOptions, type HookScan, type HooksWrapperOptions } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
 import { scanHooks } from './hooks-registry.js';
 import { CircuitBreakerTracker } from './runtime/circuit-breaker.js';
@@ -17,13 +9,7 @@ import { StatusRecorder } from './runtime/status-recorder.js';
 import { writeHookCrashLog } from './hooks-persistence.js';
 import { executeHookRun, type HookRunDependencies } from './wrapper/hook-run-executor.js';
 import { createEventRunSerializer } from './wrapper/event-run-serializer.js';
-import {
-  buildStdinPayload as composeStdinPayload,
-  eventTypeFrom,
-  resolveStdinPayloadOptions,
-  sessionIDFrom,
-  type StdinPayloadOptions,
-} from './wrapper/payload-builder.js';
+import { buildStdinPayload as composeStdinPayload, eventTypeFrom, sessionIDFrom, type StdinPayloadOptions } from './wrapper/payload-builder.js';
 
 export { CircuitBreakerTracker, type CircuitBreakerEntry } from './runtime/circuit-breaker.js';
 
@@ -40,21 +26,21 @@ export { HookSpawnError, executeHookProcess } from './runtime/process-executor.j
 export { NON_SESSION_STREAM_CAP_BYTES, StatusRecorder } from './runtime/status-recorder.js';
 
 const PASSTHROUGH_EVENTS = [
-  HookEvent.ToolExecuteAfter,
-  HookEvent.ToolDefinition,
-  HookEvent.ChatParams,
-  HookEvent.ChatHeaders,
-  HookEvent.CommandExecuteBefore,
-  HookEvent.ShellEnv,
-  HookEvent.ExperimentalChatMessagesTransform,
-  HookEvent.ExperimentalChatSystemTransform,
-  HookEvent.ExperimentalCompactionAutocontinue,
-  HookEvent.ExperimentalTextComplete,
-  HookEvent.Dispose,
-] as const satisfies readonly DispatchableEvent[];
+  HookEventName.ToolExecuteAfter,
+  HookEventName.ToolDefinition,
+  HookEventName.ChatParams,
+  HookEventName.ChatHeaders,
+  HookEventName.CommandExecuteBefore,
+  HookEventName.ShellEnv,
+  HookEventName.ExperimentalChatMessagesTransform,
+  HookEventName.ExperimentalChatSystemTransform,
+  HookEventName.ExperimentalCompactionAutocontinue,
+  HookEventName.ExperimentalTextComplete,
+  HookEventName.Dispose,
+] as const satisfies readonly EventName[];
 
 interface ReactiveRunOptions {
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly input: unknown;
   readonly crashSource: string;
 }
@@ -67,8 +53,7 @@ class HooksWrapper {
   private readonly directory: string;
   private runCounter = 0;
 
-  private buildStdinPayload = (eventOrOptions: HookEventName | StdinPayloadOptions, ...rest: readonly unknown[]): string =>
-    composeStdinPayload(resolveStdinPayloadOptions(eventOrOptions, rest));
+  private buildStdinPayload = (options: StdinPayloadOptions): string => composeStdinPayload(options);
 
   private createRunDependencies = (): HookRunDependencies => ({
     statusRecorder: this.statusRecorder,
@@ -102,7 +87,7 @@ class HooksWrapper {
     const { event, input, output } = options;
     const resolvedSessionID = sessionIDFrom(input);
 
-    if (resolvedSessionID && event === HookEvent.ChatMessage) {
+    if (resolvedSessionID && event === HookEventName.ChatMessage) {
       this.abortController.clearSession(resolvedSessionID);
     }
 
@@ -140,19 +125,19 @@ class HooksWrapper {
 
     return {
       ...handlers,
-      [HookEvent.Event]: async (input: unknown) => {
-        const eventType = eventTypeFrom(input);
-        if (eventType && isHostEventName(eventType) && !eventSerializer.has(eventType)) {
-          await eventSerializer.run(eventType, async () => {
+      [HookEventName.Event]: async (input: unknown) => {
+        const hookEventName = toHookEventName(eventTypeFrom(input));
+        if (hookEventName && !eventSerializer.has(hookEventName)) {
+          await eventSerializer.run(hookEventName, async () => {
             await this.runHookReactive({
-              event: eventType,
+              event: hookEventName,
               input,
-              crashSource: `reactive_host_event_${eventType}`,
+              crashSource: `reactive_host_event_${hookEventName}`,
             });
           });
         }
-        await eventSerializer.run(HookEvent.Event, async () => {
-          await this.runHookReactive({ event: HookEvent.Event, input, crashSource: 'catch_all_event_hook' });
+        await eventSerializer.run(HookEventName.Event, async () => {
+          await this.runHookReactive({ event: HookEventName.Event, input, crashSource: 'catch_all_event_hook' });
         });
       },
     };

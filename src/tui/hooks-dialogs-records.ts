@@ -26,21 +26,6 @@ export const createIdleRecord = (row: ActiveHookRow, sessionID?: string): HookRu
   status: HookRunState.IDLE,
 });
 
-const resolveOptions = (
-  fileOrOptions: string | ResolveSessionRecordsOptions,
-  rest: readonly unknown[],
-): ResolveSessionRecordsOptions => {
-  if (typeof fileOrOptions === 'object') {
-    return fileOrOptions;
-  }
-  const row = rest[0] as ActiveHookRow;
-  const notBefore = typeof rest[1] === 'number' ? rest[1] : 0;
-  const sessionID = typeof rest[2] === 'string' ? rest[2] : undefined;
-  const statusFile = typeof rest[3] === 'string' ? rest[3] : undefined;
-  const fallbackEntry = rest[4] as HookRuntimeEntry | undefined;
-  return { logFile: fileOrOptions, row, notBefore, sessionID, statusFile, fallbackEntry };
-};
-
 const resolveStatusEntry = (
   statusFile: string | undefined,
   context: { readonly eventName: string; readonly fallbackEntry?: HookRuntimeEntry },
@@ -101,17 +86,13 @@ const shouldAppendEntryRecord = (
 };
 
 export const resolveSessionRecords = (
-  fileOrOptions: string | ResolveSessionRecordsOptions,
-  ...rest: readonly unknown[]
+  options: ResolveSessionRecordsOptions
 ): readonly HookRunLogRecord[] => {
-  const { logFile, row, notBefore, sessionID, statusFile, fallbackEntry } = resolveOptions(
-    fileOrOptions,
-    rest,
-  );
+  const { logFile, row, notBefore, sessionID, statusFile, fallbackEntry } = options;
 
   let records: readonly HookRunLogRecord[] = [];
   try {
-    records = readSessionHookLogs(logFile, row.event, notBefore, sessionID);
+    records = readSessionHookLogs({file: logFile, event: row.event, since: notBefore, sessionID: sessionID});
   } catch {
     // ignore session hook logs read errors
   }

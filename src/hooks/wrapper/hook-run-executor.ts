@@ -1,4 +1,4 @@
-import { HookEvent } from '../../types/hook-types.js';
+import { HookEventName } from '../../types/hook-types.js';
 import { buildCircuitBreakerError, buildInterpreterUnavailableError, buildProcessFailureError, buildSpawnError } from '../runtime/failure-policy.js';
 import { HookSpawnError, type HookProcessResult } from '../runtime/process-executor.js';
 import { HookRunOperations, type HookRunRequest } from './run-operations.js';
@@ -52,7 +52,7 @@ const spawnHookProcess = async (request: HookRunRequest, ops: HookRunOperations)
 };
 
 const isSilentEventSuccess = (request: HookRunRequest, result: HookProcessResult): boolean =>
-  result.isOk && request.event === HookEvent.Event && result.rawStdout.trim().length === 0 && result.rawStderr.trim().length === 0;
+  result.isOk && request.event === HookEventName.Event && result.rawStdout.trim().length === 0 && result.rawStderr.trim().length === 0;
 
 export const executeHookRun = async (request: HookRunRequest): Promise<void> => {
   const ops = new HookRunOperations(request);

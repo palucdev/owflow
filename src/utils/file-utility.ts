@@ -17,10 +17,7 @@ export const loadMarkdownDirectory = (directoryPath: string): matter.GrayMatterF
       const raw = fs.readFileSync(path.join(fullPath, fileName), 'utf8');
       parsed.push(matter(raw));
     } catch (error) {
-      console.warn(
-        `[owflow] Skipping unparseable markdown file ${fileName} in ${directoryPath}:`,
-        error instanceof Error ? error.message : error,
-      );
+      console.warn(`[owflow] Skipping unparseable markdown file ${fileName} in ${directoryPath}:`, error instanceof Error ? error.message : error);
     }
   }
   return parsed;

@@ -5,15 +5,15 @@ import {
   EXCLUDED_EVENT_NAMES,
   HookDigestMode,
   HOOK_EVENT_NAMES,
-  type HookEventName,
   type HookRegistryEntry,
   type HookScan,
   type HookValidationFailure,
   type InterpreterResolution,
+  type EventName,
 } from '../types/hook-types.js';
 import { hooksLocationLabel } from '../utils/workflow-paths.js';
 
-const STEM_TO_EVENT = new Map<string, HookEventName>(HOOK_EVENT_NAMES.map((event) => [event.replaceAll('.', '-'), event]));
+const STEM_TO_EVENT = new Map<string, EventName>(HOOK_EVENT_NAMES.map((event) => [event.replaceAll('.', '-'), event]));
 const EXCLUDED_STEMS = new Map<string, string>(EXCLUDED_EVENT_NAMES.map((event) => [event.replaceAll('.', '-'), event]));
 export const IGNORED_FILENAMES = new Set(['.ds_store', 'thumbs.db', 'desktop.ini', '.gitkeep']);
 
@@ -27,7 +27,7 @@ const isLowercaseAsciiOrDigit = (character: string): boolean => (character >= 'a
 const isValidHookStem = (stem: string): boolean =>
   stem.split('-').every((segment) => segment.length > 0 && [...segment].every((character) => isLowercaseAsciiOrDigit(character)));
 
-type HookNameValidation = { readonly isValid: true; readonly event: HookEventName } | { readonly isValid: false; readonly error: string };
+type HookNameValidation = { readonly isValid: true; readonly event: EventName } | { readonly isValid: false; readonly error: string };
 
 const validateHookEvent = (stem: string): HookNameValidation => {
   if (!isValidHookStem(stem)) {

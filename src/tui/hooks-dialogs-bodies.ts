@@ -12,10 +12,7 @@ export interface HeaderOptions {
   readonly onClose: () => void;
 }
 
-const resolveHeaderOptions = (
-  solidOrOptions: SolidRuntime | HeaderOptions,
-  rest: readonly unknown[],
-): HeaderOptions => {
+const resolveHeaderOptions = (solidOrOptions: SolidRuntime | HeaderOptions, rest: readonly unknown[]): HeaderOptions => {
   if ('solid' in solidOrOptions) {
     return solidOrOptions;
   }
@@ -25,20 +22,12 @@ const resolveHeaderOptions = (
   return { solid: solidOrOptions, titleText, theme, onClose };
 };
 
-export const buildHeader = (
-  solidOrOptions: SolidRuntime | HeaderOptions,
-  ...rest: readonly unknown[]
-): unknown => {
+export const buildHeader = (solidOrOptions: SolidRuntime | HeaderOptions, ...rest: readonly unknown[]): unknown => {
   const { solid, titleText, theme, onClose } = resolveHeaderOptions(solidOrOptions, rest);
-  return createElementNode(
-    solid,
-    'box',
-    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 1 },
-    [
-      txt(solid, titleText, theme.text, { flexGrow: 1, textAlign: 'center' }),
-      txt(solid, 'esc', theme.textMuted, { flexShrink: 0, onMouseUp: onClose }),
-    ],
-  );
+  return createElementNode(solid, 'box', { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 1 }, [
+    txt(solid, titleText, theme.text, { flexGrow: 1, textAlign: 'center' }),
+    txt(solid, 'esc', theme.textMuted, { flexShrink: 0, onMouseUp: onClose }),
+  ]);
 };
 
 export interface HookLogsBodyOptions {
@@ -49,10 +38,7 @@ export interface HookLogsBodyOptions {
   readonly maxHeight: number;
 }
 
-const resolveHookLogsBodyOptions = (
-  recordOrOptions: HookRunLogRecord | HookLogsBodyOptions,
-  rest: readonly unknown[],
-): HookLogsBodyOptions => {
+const resolveHookLogsBodyOptions = (recordOrOptions: HookRunLogRecord | HookLogsBodyOptions, rest: readonly unknown[]): HookLogsBodyOptions => {
   if ('theme' in recordOrOptions) {
     return recordOrOptions;
   }
@@ -63,22 +49,11 @@ const resolveHookLogsBodyOptions = (
   return { record: recordOrOptions, theme, solid, onClose, maxHeight };
 };
 
-export const buildHookLogsBody = (
-  recordOrOptions: HookRunLogRecord | HookLogsBodyOptions,
-  ...rest: readonly unknown[]
-): unknown => {
-  const { record, theme, solid, onClose, maxHeight } = resolveHookLogsBodyOptions(
-    recordOrOptions,
-    rest,
-  );
+export const buildHookLogsBody = (recordOrOptions: HookRunLogRecord | HookLogsBodyOptions, ...rest: readonly unknown[]): unknown => {
+  const { record, theme, solid, onClose, maxHeight } = resolveHookLogsBodyOptions(recordOrOptions, rest);
   const fullText = formatHookLogsMessage(record);
   const bodyNode = txt(solid, fullText, theme.text, { width: '100%', textAlign: 'left' });
-  const scrollbox = createElementNode(
-    solid,
-    'scrollbox',
-    { width: '100%', height: maxHeight, focused: true },
-    [bodyNode],
-  );
+  const scrollbox = createElementNode(solid, 'scrollbox', { width: '100%', height: maxHeight, focused: true }, [bodyNode]);
 
   return createElementNode(
     solid,
@@ -108,10 +83,7 @@ export interface HookDetailBodyOptions {
   readonly totalRunsInSession?: number;
 }
 
-const resolveHookDetailBodyOptions = (
-  recordOrOptions: HookRunLogRecord | HookDetailBodyOptions,
-  rest: readonly unknown[],
-): HookDetailBodyOptions => {
+const resolveHookDetailBodyOptions = (recordOrOptions: HookRunLogRecord | HookDetailBodyOptions, rest: readonly unknown[]): HookDetailBodyOptions => {
   if ('logFile' in recordOrOptions) {
     return recordOrOptions;
   }
@@ -124,10 +96,7 @@ const resolveHookDetailBodyOptions = (
   return { record: recordOrOptions, logFile, theme, solid, onShowLogs, onClose, totalRunsInSession };
 };
 
-const createShowLogsButton = (
-  solid: SolidRuntime,
-  context: { readonly theme: SidebarTheme; readonly onShowLogs: () => void },
-): unknown => {
+const createShowLogsButton = (solid: SolidRuntime, context: { readonly theme: SidebarTheme; readonly onShowLogs: () => void }): unknown => {
   const { theme, onShowLogs } = context;
   const buttonLabel = txt(solid, SHOW_LOGS_LABEL, theme.selectedListItemText, { flexShrink: 0 });
   const buttonReference: { current: unknown } = { current: undefined };
@@ -156,19 +125,11 @@ const createShowLogsButton = (
   return buttonNode;
 };
 
-export const buildHookRunDetailBody = (
-  recordOrOptions: HookRunLogRecord | HookDetailBodyOptions,
-  ...rest: readonly unknown[]
-): unknown => {
-  const { record, logFile, theme, solid, onShowLogs, onClose, totalRunsInSession = 0 } =
-    resolveHookDetailBodyOptions(recordOrOptions, rest);
+export const buildHookRunDetailBody = (recordOrOptions: HookRunLogRecord | HookDetailBodyOptions, ...rest: readonly unknown[]): unknown => {
+  const { record, logFile, theme, solid, onShowLogs, onClose, totalRunsInSession = 0 } = resolveHookDetailBodyOptions(recordOrOptions, rest);
 
   const button = createShowLogsButton(solid, { theme, onShowLogs });
-  const detailsText = [
-    formatHookRunSummary(record),
-    `Runs in session: ${totalRunsInSession}`,
-    `Log file: ${logFile}`,
-  ].join('\n');
+  const detailsText = [formatHookRunSummary(record), `Runs in session: ${totalRunsInSession}`, `Log file: ${logFile}`].join('\n');
   const detailsNode = txt(solid, detailsText, theme.textMuted, { width: '100%', textAlign: 'center' });
 
   return createElementNode(
@@ -188,12 +149,7 @@ export const buildHookRunDetailBody = (
     [
       buildHeader(solid, `Hook run: ${record.name}`, theme, onClose),
       detailsNode,
-      createElementNode(
-        solid,
-        'box',
-        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' },
-        [button],
-      ),
+      createElementNode(solid, 'box', { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' }, [button]),
     ],
   );
 };

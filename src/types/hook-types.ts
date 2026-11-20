@@ -1,4 +1,4 @@
-export enum HookEvent {
+export enum HookEventName {
   ToolExecuteBefore = 'tool.execute.before',
   ToolExecuteAfter = 'tool.execute.after',
   ToolDefinition = 'tool.definition',
@@ -17,9 +17,7 @@ export enum HookEvent {
   Dispose = 'dispose',
 }
 
-export type DispatchableEvent = `${HookEvent}`;
-
-export const DISPATCHABLE_EVENTS: readonly DispatchableEvent[] = Object.values(HookEvent);
+export const DISPATCHABLE_EVENTS: readonly HookEventName[] = Object.values(HookEventName);
 
 export enum HostEventName {
   CommandExecuted = 'command.executed',
@@ -58,14 +56,18 @@ export enum HostEventName {
 
 export const HOST_EVENT_NAMES = Object.values(HostEventName);
 
-export type HookEventName = DispatchableEvent | HostEventName;
+export type EventName = HookEventName | HostEventName;
 
-export const HOOK_EVENT_NAMES: readonly HookEventName[] = [...DISPATCHABLE_EVENTS, ...HOST_EVENT_NAMES];
+export const HOOK_EVENT_NAMES: readonly EventName[] = [...DISPATCHABLE_EVENTS, ...HOST_EVENT_NAMES];
 
 export const EXCLUDED_EVENT_NAMES = ['permission.ask', 'tool', 'auth', 'provider', 'experimental.provider.small_model'] as const;
 
 export const isHostEventName = (value: string): boolean => {
   return HOST_EVENT_NAMES.includes(value as HostEventName);
+};
+
+export const toHookEventName = (value: string | undefined): EventName | undefined => {
+  return HOOK_EVENT_NAMES.find((eventName) => eventName === value);
 };
 
 /**
@@ -88,7 +90,7 @@ export interface InterpreterResolution {
 
 export interface HookRegistryEntry {
   readonly path: string;
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly interpreter: InterpreterResolution;
   readonly status: 'registered' | 'will-fail-closed';
 }
@@ -134,7 +136,7 @@ export interface HookRunLogRecord {
   readonly runId: string;
   readonly pid: number;
   readonly workspace: string;
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly hook: string;
   readonly name: string;
   readonly sessionID?: string;
@@ -153,7 +155,7 @@ export type HookLogReadResult =
   { readonly kind: 'missing' | 'invalid' } | { readonly kind: 'ok'; readonly records: readonly HookRunLogRecord[]; readonly truncated: boolean };
 
 export interface HookRunOptions {
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly input?: unknown;
   readonly output?: unknown;
 }

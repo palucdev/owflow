@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { interpreterLabel, renderSnapshot } from '../../hooks/hooks-diagnostics.js';
-import { HookEvent } from '../../types/hook-types.js';
+import { HookEventName } from '../../types/hook-types.js';
 
 describe('hooks-diagnostics (table, snapshot, and json rendering)', () => {
   test('interpreterLabel formats interpreter status and resolution', () => {
@@ -14,13 +14,13 @@ describe('hooks-diagnostics (table, snapshot, and json rendering)', () => {
       entries: [
         {
           path: '/p/config.sh',
-          event: HookEvent.Config,
+          event: HookEventName.Config,
           interpreter: { expected: 'bash', resolved: '/bin/bash', available: true },
           status: 'registered' as const,
         },
         {
           path: '/p/dispose.ps1',
-          event: HookEvent.Dispose,
+          event: HookEventName.Dispose,
           interpreter: { expected: 'pwsh', available: false },
           status: 'will-fail-closed' as const,
         },

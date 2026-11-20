@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createEventRunSerializer } from '../../../hooks/wrapper/event-run-serializer.js';
+import { HostEventName } from '../../../types/hook-types.js';
 
 const FIRST_RUN_DELAY_MS = 20;
 const SHORT_RUN_DELAY_MS = 5;
@@ -8,16 +9,16 @@ const DUPLICATE_DROP_DELAY_MS = 10;
 describe('event-run-serializer (per-key run serialization)', () => {
   test('has() reports in-flight keys only and clears after completion', async () => {
     const serializer = createEventRunSerializer();
-    expect(serializer.has('session.idle')).toBe(false);
+    expect(serializer.has(HostEventName.SessionIdle)).toBe(false);
 
     const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
-    const completion = serializer.run('session.idle', () => barrier);
+    const completion = serializer.run(HostEventName.SessionIdle, () => barrier);
 
-    expect(serializer.has('session.idle')).toBe(true);
+    expect(serializer.has(HostEventName.SessionIdle)).toBe(true);
 
     release();
     await completion;
-    expect(serializer.has('session.idle')).toBe(false);
+    expect(serializer.has(HostEventName.SessionIdle)).toBe(false);
   });
 
   test('runs for the same key are serialized while different keys run concurrently', async () => {
@@ -72,8 +73,8 @@ describe('event-run-serializer (duplicate dropping)', () => {
     const executed: string[] = [];
 
     const runDeduped = async (label: string): Promise<void> => {
-      if (serializer.has('session.idle')) return;
-      await serializer.run('session.idle', async () => {
+      if (serializer.has(HostEventName.SessionIdle)) return;
+      await serializer.run(HostEventName.SessionIdle, async () => {
         executed.push(label);
         await new Promise((resolve) => {
           setTimeout(resolve, DUPLICATE_DROP_DELAY_MS);

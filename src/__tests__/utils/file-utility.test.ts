@@ -3,18 +3,14 @@ import fs from 'node:fs';
 import { loadMarkdownDirectory } from '../../utils/file-utility.js';
 
 const PARSED_FILE_COUNT = 2;
-const MARKDOWN_FILE_NAMES = ['guide.md', 'notes.txt', 'extra.md'] as unknown as ReturnType<
-  typeof fs.readdirSync
->;
+const MARKDOWN_FILE_NAMES = ['guide.md', 'notes.txt', 'extra.md'] as unknown as ReturnType<typeof fs.readdirSync>;
 
 test('loadMarkdownDirectory returns parsed markdown files and ignores non-markdown names', () => {
   const readdirSpy = spyOn(fs, 'readdirSync').mockReturnValue(MARKDOWN_FILE_NAMES);
-  const readFileSpy = spyOn(fs, 'readFileSync').mockImplementation(
-    ((target: unknown) =>
-      String(target).endsWith('extra.md')
-        ? '---\ntitle: extra\n---\nextra body'
-        : '---\ntitle: guide\n---\nguide body') as unknown as typeof fs.readFileSync,
-  );
+  const readFileSpy = spyOn(fs, 'readFileSync').mockImplementation(((target: unknown) =>
+    String(target).endsWith('extra.md')
+      ? '---\ntitle: extra\n---\nextra body'
+      : '---\ntitle: guide\n---\nguide body') as unknown as typeof fs.readFileSync);
 
   try {
     const parsed = loadMarkdownDirectory('some-directory');
@@ -32,9 +28,7 @@ test('loadMarkdownDirectory returns an empty list when the directory cannot be r
 });
 
 test('loadMarkdownDirectory skips unreadable markdown files and continues parsing the rest', () => {
-  const readdirSpy = spyOn(fs, 'readdirSync').mockReturnValue(['good.md', 'broken.md'] as unknown as ReturnType<
-    typeof fs.readdirSync
-  >);
+  const readdirSpy = spyOn(fs, 'readdirSync').mockReturnValue(['good.md', 'broken.md'] as unknown as ReturnType<typeof fs.readdirSync>);
   const readFileSpy = spyOn(fs, 'readFileSync').mockImplementation(((target: unknown) => {
     if (String(target).endsWith('broken.md')) {
       throw new Error('EISDIR: illegal operation on a directory');

@@ -8,7 +8,7 @@ import {
   readSessionHookLogs,
   readSessionLatestLogs,
 } from '../../hooks/hooks-log-reader.js';
-import { HookEvent, HookRunState, type HookRunLogRecord, type HookStatusSnapshot } from '../../types/hook-types.js';
+import { HookEventName, HookRunState, type HookRunLogRecord, type HookStatusSnapshot } from '../../types/hook-types.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
 
 const SINCE_OFFSET_MS = 1500;
@@ -26,7 +26,7 @@ const makeRecord = (overrides: Partial<HookRunLogRecord> = {}): HookRunLogRecord
   runId: 'tool.execute.before#1',
   pid: 1,
   workspace: '/workspace',
-  event: HookEvent.ToolExecuteBefore,
+  event: HookEventName.ToolExecuteBefore,
   hook: '/hook1.sh',
   name: 'tool-execute-before',
   sessionID: 'ses_1',
@@ -52,7 +52,7 @@ const buildSessionFixture = (root: string): SessionFixture => {
   const recordB1 = makeRecord({
     workspace: root,
     runId: 'chat.message#1',
-    event: HookEvent.ChatMessage,
+    event: HookEventName.ChatMessage,
     hook: '/hook2.sh',
     name: 'chat-message',
     startedAt: 2500,
@@ -70,7 +70,7 @@ const buildSessionFixture = (root: string): SessionFixture => {
   const recordNoSession = makeRecord({
     workspace: root,
     runId: 'config#1',
-    event: HookEvent.Config,
+    event: HookEventName.Config,
     hook: '/hook3.sh',
     name: 'config',
     sessionID: undefined,
@@ -179,13 +179,13 @@ describe('hooks-log-reader (session retrieval)', () => {
     // readSessionLatestLogs returns latest record per event for ses_1
     const ses1Logs = readSessionLatestLogs(logFile, 'ses_1');
     expect(ses1Logs.size).toBe(EXPECTED_SES1_LATEST_COUNT);
-    expect(ses1Logs.get(HookEvent.ToolExecuteBefore)).toEqual(fixture.recordA2);
-    expect(ses1Logs.get(HookEvent.ChatMessage)).toEqual(fixture.recordB1);
+    expect(ses1Logs.get(HookEventName.ToolExecuteBefore)).toEqual(fixture.recordA2);
+    expect(ses1Logs.get(HookEventName.ChatMessage)).toEqual(fixture.recordB1);
 
     // ses_2 only has recordOther
     const ses2Logs = readSessionLatestLogs(logFile, 'ses_2');
     expect(ses2Logs.size).toBe(1);
-    expect(ses2Logs.get(HookEvent.ToolExecuteBefore)).toEqual(fixture.recordOther);
+    expect(ses2Logs.get(HookEventName.ToolExecuteBefore)).toEqual(fixture.recordOther);
   });
 
   test('readSessionHookLogs filters by session, event, and since, and returns all matching records', () => {
@@ -195,12 +195,12 @@ describe('hooks-log-reader (session retrieval)', () => {
     const fixture = buildSessionFixture(root);
     fs.writeFileSync(logFile, fixture.records.map((record) => JSON.stringify(record)).join('\n') + '\n', 'utf8');
 
-    expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_1')).toEqual([fixture.recordA1, fixture.recordA2]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: 0, sessionID: 'ses_1' })).toEqual([fixture.recordA1, fixture.recordA2]);
     // since filter must be respected even when sessionID matches
-    expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, SINCE_OFFSET_MS, 'ses_1')).toEqual([fixture.recordA2]);
-    expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore, 0, 'ses_2')).toEqual([fixture.recordOther]);
-    expect(readSessionHookLogs(logFile, HookEvent.Config)).toEqual([fixture.recordNoSession]);
-    expect(readSessionHookLogs(logFile, HookEvent.Config, FAR_FUTURE_TIMESTAMP_MS)).toEqual([]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: SINCE_OFFSET_MS, sessionID: 'ses_1'})).toEqual([fixture.recordA2]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: 0, sessionID: 'ses_2'})).toEqual([fixture.recordOther]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.Config})).toEqual([fixture.recordNoSession]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.Config, since: FAR_FUTURE_TIMESTAMP_MS})).toEqual([]);
   });
 
   test('readSessionLatestLogs and readSessionHookLogs handle missing or invalid files', () => {
@@ -209,7 +209,7 @@ describe('hooks-log-reader (session retrieval)', () => {
 
     expect(readSessionLatestLogs(logFile, 'ses_1')).toEqual(new Map());
     expect(readSessionLatestLogs(logFile, '')).toEqual(new Map());
-    expect(readSessionHookLogs(logFile, HookEvent.ToolExecuteBefore)).toEqual([]);
+    expect(readSessionHookLogs({file: logFile, event: HookEventName.ToolExecuteBefore})).toEqual([]);
   });
 });
 

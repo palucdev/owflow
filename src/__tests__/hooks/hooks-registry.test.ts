@@ -2,7 +2,7 @@ import { afterAll, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { scanHooks } from '../../hooks/hooks-registry.js';
-import { DISPATCHABLE_EVENTS, EXCLUDED_EVENT_NAMES, HOOK_EVENT_NAMES, HOST_EVENT_NAMES, HookDigestMode } from '../../types/hook-types.js';
+import { DISPATCHABLE_EVENTS, EXCLUDED_EVENT_NAMES, HOOK_EVENT_NAMES, HOST_EVENT_NAMES, HookDigestMode, HookEventName, HostEventName } from '../../types/hook-types.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
 
 const EXPECTED_DISPATCHABLE_EVENTS = 16;
@@ -52,13 +52,13 @@ test('scanHooks discovers valid hook scripts and resolves interpreters', () => {
   expect(valid.entries).toEqual([
     {
       path: path.join(hooksDirectory, 'session-idle.ps1'),
-      event: 'session.idle',
+      event: HostEventName.SessionIdle,
       interpreter: { expected: 'pwsh', available: false },
       status: 'will-fail-closed',
     },
     {
       path: path.join(hooksDirectory, 'tool-execute-before.sh'),
-      event: 'tool.execute.before',
+      event: HookEventName.ToolExecuteBefore,
       interpreter: { expected: 'bash', available: true, resolved: '/bin/bash' },
       status: 'registered',
     },
@@ -76,7 +76,7 @@ test('scanHooks correctly maps hyphenated host events like installation.update-a
   expect(valid.entries).toEqual([
     {
       path: path.join(hooksDirectory, 'installation-update-available.sh'),
-      event: 'installation.update-available',
+      event: HostEventName.InstallationUpdateAvailable,
       interpreter: { expected: 'bash', available: true, resolved: '/bin/bash' },
       status: 'registered',
     },
@@ -102,7 +102,7 @@ test('scanHooks flags invalid files, extensions, stems, excluded/unknown events,
     /User hooks are bypassed until the hooks directory validates; the built-in destructive-command guard remains active/,
   );
   const report = scanHooks(hooksDirectory, { mode: HookDigestMode.Report });
-  expect(report.entries.map((entry) => entry.event)).toEqual(['session.idle']);
+  expect(report.entries.map((entry) => entry.event)).toEqual([HostEventName.SessionIdle]);
   expect(report.failures).toHaveLength(EXPECTED_INVALID_ENTRY_COUNT);
 });
 
@@ -122,5 +122,5 @@ test('scanHooks silently ignores OS and editor noise (.DS_Store, README.md, thum
   const scan = scanHooks(hooksDirectory, { which: resolveBash });
   expect(scan.failures).toEqual([]);
   expect(scan.entries).toHaveLength(1);
-  expect(scan.entries[0]!.event).toBe('tool.execute.before');
+  expect(scan.entries[0]!.event).toBe(HookEventName.ToolExecuteBefore);
 });

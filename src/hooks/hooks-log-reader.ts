@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import {
-  type HookEventName,
+    type EventName,
   type HookLogReadResult,
   type HookRunLogRecord,
   type HookStatusReadResult,
@@ -137,29 +137,15 @@ export const readSessionLatestLogs = (file: string, sessionID: string): Map<stri
 
 export interface ReadSessionHookLogsOptions {
   readonly file: string;
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly since?: number;
   readonly sessionID?: string;
 }
 
-const resolveSessionHookLogArguments = (
-  fileOrOptions: string | ReadSessionHookLogsOptions,
-  rest: readonly [event?: HookEventName, since?: number, sessionID?: string] | [],
-): ReadSessionHookLogsOptions => {
-  if (typeof fileOrOptions === 'object') {
-    return fileOrOptions;
-  }
-  const event = rest[0] as HookEventName;
-  const since = typeof rest[1] === 'number' ? rest[1] : -Infinity;
-  const sessionID = rest[2];
-  return { file: fileOrOptions, event, since, sessionID };
-};
-
 export const readSessionHookLogs = (
-  fileOrOptions: string | ReadSessionHookLogsOptions,
-  ...rest: readonly [event?: HookEventName, since?: number, sessionID?: string] | []
+  options: ReadSessionHookLogsOptions
 ): readonly HookRunLogRecord[] => {
-  const { file, event, since = -Infinity, sessionID } = resolveSessionHookLogArguments(fileOrOptions, rest);
+  const { file, event, since = -Infinity, sessionID } = options;
   const result = readHookLogRecords(file);
   if (result.kind !== 'ok') {
     return [];

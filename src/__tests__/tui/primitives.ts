@@ -1,4 +1,4 @@
-import { HookRunState, type HookRunLogRecord } from '../../hooks/hooks-persistence.js';
+import { HookEventName, HookRunState, type HookRunLogRecord } from '../../hooks/hooks-persistence.js';
 import type { SidebarTheme } from '../../tui/primitives.js';
 
 export interface FakeNode {
@@ -124,7 +124,7 @@ export const makeLogRecord = (overrides: Partial<HookRunLogRecord> = {}): HookRu
   runId: 'tool.execute.before#1',
   pid: 1,
   workspace: '/project',
-  event: 'tool.execute.before',
+  event: HookEventName.ToolExecuteBefore,
   hook: '/project/.owflow/hooks/tool-execute-before.sh',
   name: 'tool-execute-before',
   startedAt: 1_000,

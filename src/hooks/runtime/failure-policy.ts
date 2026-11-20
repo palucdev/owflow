@@ -1,4 +1,4 @@
-import { HookEvent, isHostEventName, type HookEventName } from '../../types/hook-types.js';
+import { HookEventName, isHostEventName, type EventName } from '../../types/hook-types.js';
 
 export { HookFailureTracker, type FailureTrackerEntry } from './hook-failure-tracker.js';
 
@@ -8,10 +8,10 @@ export const MAX_HOOK_FAILURES = 3;
 const MAX_SUMMARY_CHARS = 200;
 const TRUNCATED_PREFIX_CHARS = 197;
 
-export const canAbortSessionForEvent = (event: HookEventName): boolean => !isHostEventName(event) && event !== HookEvent.Event;
+export const canAbortSessionForEvent = (event: EventName): boolean => !isHostEventName(event) && event !== HookEventName.Event;
 
 export interface AbortSessionOptions {
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly scriptPath: string;
   readonly sessionID?: string;
 }
@@ -59,7 +59,7 @@ export const buildInterpreterUnavailableError = (scriptPath: string, label: stri
   );
 
 export interface SpawnErrorOptions {
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly scriptPath: string;
   readonly spawnErrorMessage: string;
 }
@@ -75,7 +75,7 @@ export const buildSpawnError = (options: SpawnErrorOptions): Error => {
 export interface ProcessFailureErrorOptions {
   readonly scriptPath: string;
   readonly reason: string | undefined;
-  readonly event: HookEventName;
+  readonly event: EventName;
 }
 
 const extractSummary = (reason: string | undefined, defaultSummary: string): string => {

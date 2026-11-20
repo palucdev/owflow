@@ -1,4 +1,4 @@
-import { HookRunState, type HookEventName, type HookRegistryEntry, type HookRuntimeEntry } from '../../types/hook-types.js';
+import { HookRunState, type EventName, type HookRegistryEntry, type HookRuntimeEntry } from '../../types/hook-types.js';
 import type { CircuitBreakerCheckResult, CircuitBreakerTracker } from '../runtime/circuit-breaker.js';
 import type { SessionAbortController } from '../runtime/failure-policy.js';
 import { executeHookProcess, type HookProcessResult } from '../runtime/process-executor.js';
@@ -15,7 +15,7 @@ export interface HookRunDependencies {
 export interface HookRunRequest {
   readonly dependencies: HookRunDependencies;
   readonly entry: HookRegistryEntry;
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly sessionID?: string;
   readonly stdinText: string;
   readonly runId: string;
@@ -63,7 +63,7 @@ export class HookRunOperations {
   private readonly aborter: SessionAbortController;
   private readonly activeProcs: Set<ReturnType<typeof Bun.spawn>>;
   private readonly workspace: string;
-  private readonly event: HookEventName;
+  private readonly event: EventName;
   private readonly scriptPath: string;
   private readonly sessionID?: string;
   private readonly startedAt: number;
