@@ -45,6 +45,6 @@ describe('configureSkills', () => {
     configureSkills(config);
 
     expect(config.skills.paths).toEqual([expectedSkillsDir]);
-    expect(config.skills.paths.length).toBe(1);
+    expect(config.skills.paths).toHaveLength(1);
   });
 });

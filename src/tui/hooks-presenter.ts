@@ -1,15 +1,15 @@
 import path from 'node:path';
 import { scanHooks } from '../hooks/hooks-registry.js';
-import { HookDigestMode, HookRunState, type HookEventName, type HookRunLogRecord } from '../types/hook-types.js';
+import { HookDigestMode, HookRunState, type EventName, type HookRunLogRecord } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
 import type { SidebarTheme } from './primitives.js';
 
 const ACTIVE_HOOKS_TITLE = 'Active hooks:';
-const RUN_SUMMARY_MAX_CHARS = 4_000;
+const RUN_SUMMARY_MAX_CHARS = 4000;
 
 export interface ActiveHookRow {
   readonly name: string;
-  readonly event: HookEventName;
+  readonly event: EventName;
 }
 
 export interface ActiveHooksView {
@@ -30,27 +30,35 @@ export const buildActiveHooksView = (directory: string): ActiveHooksView => {
 
 export const statusLabelFor = (status: HookRunState | undefined): string => {
   switch (status) {
-    case HookRunState.PENDING:
+    case HookRunState.PENDING: {
       return 'In progress';
-    case HookRunState.SUCCESS:
+    }
+    case HookRunState.SUCCESS: {
       return 'Success';
-    case HookRunState.FAILURE:
+    }
+    case HookRunState.FAILURE: {
       return 'Error';
-    default:
+    }
+    default: {
       return 'Idle';
+    }
   }
 };
 
 export const colorForStatus = (status: HookRunState | undefined, theme: SidebarTheme): unknown => {
   switch (status) {
-    case HookRunState.PENDING:
+    case HookRunState.PENDING: {
       return theme.warning;
-    case HookRunState.SUCCESS:
+    }
+    case HookRunState.SUCCESS: {
       return theme.success;
-    case HookRunState.FAILURE:
+    }
+    case HookRunState.FAILURE: {
       return theme.error;
-    default:
+    }
+    default: {
       return theme.textMuted;
+    }
   }
 };
 

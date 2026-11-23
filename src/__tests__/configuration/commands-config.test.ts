@@ -6,7 +6,7 @@ import { PLUGIN_ROOT } from '../../utils/plugin-info.js';
 import * as commandsConfig from '../../configuration/commands-config.js';
 import { configureCommands } from '../../configuration/commands-config.js';
 import type { OpenCodeConfig } from '../../types/opencode-types.js';
-import * as fileUtil from '../../utils/file-util.js';
+import * as fileUtil from '../../utils/file-utility.js';
 
 describe('configureCommands', () => {
   test('should not overwrite a maintained content command the user configured', () => {

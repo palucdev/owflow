@@ -1,7 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { configureAgents } from '../../configuration/agents-config.js';
 import type { OpenCodeConfig } from '../../types/opencode-types.js';
-import * as fileUtil from '../../utils/file-util.js';
+import * as fileUtil from '../../utils/file-utility.js';
 
 describe('configureAgents', () => {
   test('should initialize config.agent object when agent is undefined', () => {

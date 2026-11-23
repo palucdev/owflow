@@ -3,20 +3,20 @@ import fs from 'node:fs';
 import { tasksDirectory } from '../../utils/workflow-paths.js';
 
 /**
- * Post-compaction reminder.
- * Injects orchestrator state reminder into the compaction context so the
- * AI knows to re-read orchestrator-state.yml after the context is rebuilt.
- */
+Post-compaction reminder.
+Injects orchestrator state reminder into the compaction context so the
+AI knows to re-read orchestrator-state.yml after the context is rebuilt.
+*/
 export const rereadOrchestratorState = async (
   directory: string,
   output: {
     context: string[];
-    prompt?: string | undefined;
+    prompt?: string;
   },
 ): Promise<void> => {
-  const tasksDir = tasksDirectory(directory);
+  const targetTasksDirectory = tasksDirectory(directory);
   try {
-    if (fs.existsSync(tasksDir) && fs.statSync(tasksDir).isDirectory()) {
+    if (fs.existsSync(targetTasksDirectory) && fs.statSync(targetTasksDirectory).isDirectory()) {
       output.context.push(`## owflow Workflow State
 If an orchestrator workflow was active before compaction, you MUST re-read
 orchestrator-state.yml in that task's directory to verify completed_phases

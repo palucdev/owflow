@@ -4,8 +4,18 @@ import type { HookRunLogRecord, HookRuntimeEntry, HookStatusSnapshot } from '../
 import { appendWithRotation, resolveHooksLatestSymlink, resolveHooksLogFile, resolveHooksStatusFile } from '../hooks-persistence.js';
 
 export const STATUS_DEBOUNCE_MS = 50;
-export const MAX_LOG_FILE_BYTES = 4 * 1024 * 1024;
-export const NON_SESSION_STREAM_CAP_BYTES = 16 * 1024;
+
+const BYTES_PER_KILOBYTE = 1024;
+const BYTES_PER_MEGABYTE = BYTES_PER_KILOBYTE * BYTES_PER_KILOBYTE;
+const LOG_FILE_MEGABYTES = 4;
+export const MAX_LOG_FILE_BYTES = LOG_FILE_MEGABYTES * BYTES_PER_MEGABYTE;
+
+const NON_SESSION_STREAM_CAP_KILOBYTES = 16;
+export const NON_SESSION_STREAM_CAP_BYTES = NON_SESSION_STREAM_CAP_KILOBYTES * BYTES_PER_KILOBYTE;
+
+const DIRECTORY_PERMISSIONS = 0o700;
+const STATUS_FILE_PERMISSIONS = 0o600;
+const MAX_RUN_RECORDS = 1000;
 
 export interface StatusRecorderOptions {
   directory: string;
@@ -13,13 +23,19 @@ export interface StatusRecorderOptions {
   logFile?: string;
 }
 
+export interface FlushStatusAtomicOptions {
+  readonly file: string;
+  readonly workspace: string;
+  readonly hooks: ReadonlyMap<string, HookRuntimeEntry>;
+}
+
 export class StatusRecorder {
-  readonly statusFile: string;
-  readonly logFile?: string;
-  readonly directory: string;
   private readonly statuses = new Map<string, HookRuntimeEntry>();
   private readonly writtenRunRecords = new Set<string>();
   private statusTimer: ReturnType<typeof setTimeout> | undefined;
+  readonly statusFile: string;
+  readonly logFile?: string;
+  readonly directory: string;
 
   constructor(options: StatusRecorderOptions) {
     this.directory = options.directory;
@@ -45,17 +61,23 @@ export class StatusRecorder {
     return this.statuses;
   }
 
-  flushStatusFileAtomic = (file: string, workspace: string, hooks: ReadonlyMap<string, HookRuntimeEntry>): void => {
+  flushStatusFileAtomic(options: FlushStatusAtomicOptions): void {
+    const { file, workspace, hooks } = options;
     const nonce = crypto.randomUUID();
-    const tmpFile = `${file}.${process.pid}.${nonce}.tmp`;
+    const temporaryFile = `${file}.${process.pid}.${nonce}.tmp`;
 
     try {
-      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+      fs.mkdirSync(path.dirname(file), { recursive: true, mode: DIRECTORY_PERMISSIONS });
 
       try {
-        if (fs.lstatSync(file).isSymbolicLink()) return;
-      } catch (err: any) {
-        if (err?.code !== 'ENOENT') return;
+        if (fs.lstatSync(file).isSymbolicLink()) {
+          return;
+        }
+      } catch (error: unknown) {
+        const errorRecord = error as { code?: string } | undefined;
+        if (errorRecord?.code !== 'ENOENT') {
+          return;
+        }
       }
 
       const snapshot: HookStatusSnapshot = {
@@ -67,25 +89,25 @@ export class StatusRecorder {
       };
 
       const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW ?? 0);
-      const fd = fs.openSync(tmpFile, flags, 0o600);
+      const fileDescriptor = fs.openSync(temporaryFile, flags, STATUS_FILE_PERMISSIONS);
       try {
-        fs.writeFileSync(fd, JSON.stringify(snapshot), { encoding: 'utf8' });
+        fs.writeFileSync(fileDescriptor, JSON.stringify(snapshot), { encoding: 'utf8' });
       } finally {
-        fs.closeSync(fd);
+        fs.closeSync(fileDescriptor);
       }
-      fs.renameSync(tmpFile, file);
+      fs.renameSync(temporaryFile, file);
     } catch {
-      fs.unlinkSync(tmpFile);
+      fs.unlinkSync(temporaryFile);
       // Best-effort status persistence never affects hook execution.
     }
-  };
+  }
 
   flushStatus(): void {
     if (this.statusTimer !== undefined) {
       clearTimeout(this.statusTimer);
       this.statusTimer = undefined;
     }
-    this.flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
+    this.flushStatusFileAtomic({ file: this.statusFile, workspace: this.directory, hooks: this.statuses });
   }
 
   schedulePendingStatus(): void {
@@ -94,7 +116,7 @@ export class StatusRecorder {
     }
     this.statusTimer = setTimeout(() => {
       this.statusTimer = undefined;
-      this.flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
+      this.flushStatusFileAtomic({ file: this.statusFile, workspace: this.directory, hooks: this.statuses });
     }, STATUS_DEBOUNCE_MS);
     this.statusTimer.unref?.();
   }
@@ -103,19 +125,23 @@ export class StatusRecorder {
     try {
       // Distinguish distinct runs by runId and terminal status
       const recordKey = `${record.runId}:${record.status}`;
-      if (this.writtenRunRecords.has(recordKey)) return;
+      if (this.writtenRunRecords.has(recordKey)) {
+        return;
+      }
 
       const targetLogFile = this.logFile ?? resolveHooksLogFile(this.directory, record.name);
-      appendWithRotation(targetLogFile, JSON.stringify(record));
+      appendWithRotation({ filePath: targetLogFile, line: JSON.stringify(record) });
       if (!this.logFile) {
         resolveHooksLatestSymlink(this.directory, targetLogFile);
       }
       this.writtenRunRecords.add(recordKey);
 
       // Bounded set eviction to prevent memory growth across thousands of runs
-      if (this.writtenRunRecords.size > 1000) {
+      if (this.writtenRunRecords.size > MAX_RUN_RECORDS) {
         const oldest = this.writtenRunRecords.values().next().value;
-        if (oldest) this.writtenRunRecords.delete(oldest);
+        if (oldest) {
+          this.writtenRunRecords.delete(oldest);
+        }
       }
     } catch {
       // Best-effort log persistence never affects hook execution.

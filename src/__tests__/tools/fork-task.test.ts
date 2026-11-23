@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import yaml from 'yaml';
 
-import { fork_task } from '../../tools/fork_task.js';
+import { fork_task } from '../../tools/fork-task.js';
 
 let tmpDir: string;
 
