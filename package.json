@@ -30,7 +30,7 @@
     "prepack": "bun run build",
     "prettify": "prettier --write .",
     "test": "bun test src",
-    "type-check": "bun tsc"
+    "type-check": "bun tsc && bun tsc -p src/__tests__/tsconfig.json"
   },
   "keywords": [
     "opencode",

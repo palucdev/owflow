@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { scanHooks } from '../hooks/hooks-registry.js';
-import { HookDigestMode, HookRunState, type HookEventName, type HookRunLogRecord } from '../types/hook-types.js';
+import { HookDigestMode, HookRunState, type EventName, type HookRunLogRecord } from '../types/hook-types.js';
 import { hooksDirectory } from '../utils/workflow-paths.js';
 import type { SidebarTheme } from './primitives.js';
 
@@ -9,7 +9,7 @@ const RUN_SUMMARY_MAX_CHARS = 4000;
 
 export interface ActiveHookRow {
   readonly name: string;
-  readonly event: HookEventName;
+  readonly event: EventName;
 }
 
 export interface ActiveHooksView {

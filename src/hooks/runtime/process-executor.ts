@@ -1,4 +1,4 @@
-import type { HookEventName, HookRegistryEntry } from '../../types/hook-types.js';
+import type { EventName, HookRegistryEntry } from '../../types/hook-types.js';
 import { createDefaultEnvironmentConfig, type EnvironmentConfig } from '../../utils/environment-config.js';
 import { readStream } from './stream-reader.js';
 
@@ -17,10 +17,7 @@ export class HookSpawnError extends Error {
 export const buildExecutionArguments = (entry: HookRegistryEntry): string[] => {
   const resolvedLower = (entry.interpreter.resolved ?? '').toLowerCase();
   const isPowerShell =
-    entry.path.endsWith('.ps1') ||
-    entry.interpreter.expected === 'pwsh' ||
-    resolvedLower.includes('powershell') ||
-    resolvedLower.includes('pwsh');
+    entry.path.endsWith('.ps1') || entry.interpreter.expected === 'pwsh' || resolvedLower.includes('powershell') || resolvedLower.includes('pwsh');
 
   return isPowerShell
     ? [entry.interpreter.resolved!, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', entry.path]
@@ -29,16 +26,14 @@ export const buildExecutionArguments = (entry: HookRegistryEntry): string[] => {
 
 export { buildExecutionArguments as buildExecutionArgs };
 
-export const resolveHookTimeoutMs = (
-  config: EnvironmentConfig = createDefaultEnvironmentConfig(),
-): number =>
+export const resolveHookTimeoutMs = (config: EnvironmentConfig = createDefaultEnvironmentConfig()): number =>
   config.hookTimeoutMs === undefined ? DEFAULT_HOOK_TIMEOUT_MS : Math.max(0, config.hookTimeoutMs);
 
 export interface ExecuteHookProcessOptions {
   entry: HookRegistryEntry;
   directory: string;
   stdinText: string;
-  event: HookEventName;
+  event: EventName;
   startedAt?: number;
   timeoutMs?: number;
   activeProcs?: Set<ReturnType<typeof Bun.spawn>>;
@@ -69,8 +64,8 @@ interface ProcessRunResult {
 
 const createProcessIoPromise = (proc: ReturnType<typeof Bun.spawn>) =>
   Promise.all([
-    readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined),
-    readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined),
+    readStream({stream: proc.stdout as ReadableStream<Uint8Array>}),
+    readStream({stream: proc.stderr as ReadableStream<Uint8Array>}),
     proc.exited,
   ]);
 
@@ -93,10 +88,7 @@ const createTimeoutPromise = (
   return { timeoutPromise, timer };
 };
 
-const waitForProcess = async (
-  proc: ReturnType<typeof Bun.spawn>,
-  timeoutMs: number,
-): Promise<ProcessRunResult> => {
+const waitForProcess = async (proc: ReturnType<typeof Bun.spawn>, timeoutMs: number): Promise<ProcessRunResult> => {
   const ioPromise = createProcessIoPromise(proc);
   if (timeoutMs <= 0) {
     const [rawStdout, rawStderr, code] = await ioPromise;
@@ -117,35 +109,22 @@ const waitForProcess = async (
   }
 };
 
-interface FailureReasonOptions {
-  readonly isOk: boolean;
-  readonly isTimedOut: boolean;
-  readonly timeoutMs: number;
-  readonly rawStderr: string;
-  readonly rawStdout: string;
-  readonly signal: string | undefined;
-  readonly exitCode: number | undefined;
-}
-
-const buildFailureReason = (options: FailureReasonOptions): string | undefined => {
-  if (options.isOk) {
-    return undefined;
-  }
-  if (options.isTimedOut) {
+const buildFailureReason = (options: FormatResultOptions): string | undefined => {
+  if (options.runResult.isTimedOut) {
     return `process timed out after ${Math.floor(options.timeoutMs)}ms`;
   }
-  const trimmedStderr = options.rawStderr.trim();
+  const trimmedStderr = options.runResult.rawStderr.trim();
   if (trimmedStderr) {
     return trimmedStderr;
   }
-  const trimmedStdout = options.rawStdout.trim();
+  const trimmedStdout = options.runResult.rawStdout.trim();
   if (trimmedStdout) {
     return trimmedStdout;
   }
   if (options.signal) {
     return `process terminated by signal ${options.signal}`;
   }
-  return `process exited with code ${options.exitCode ?? 'unknown'}`;
+  return `process exited with code ${options.runResult.exitCode ?? 'unknown'}`;
 };
 
 interface SpawnOptions {
@@ -154,9 +133,7 @@ interface SpawnOptions {
   readonly stdinText: string;
 }
 
-const spawnHookProcess = (
-  options: SpawnOptions,
-): ReturnType<typeof Bun.spawn> => {
+const spawnHookProcess = (options: SpawnOptions): ReturnType<typeof Bun.spawn> => {
   try {
     return Bun.spawn(buildExecutionArguments(options.entry), {
       cwd: options.directory,
@@ -180,15 +157,7 @@ const formatProcessResult = (options: FormatResultOptions): HookProcessResult =>
   const finishedAt = Date.now();
   const durationMs = Math.max(0, finishedAt - options.startedAt);
   const isOk = !options.runResult.isTimedOut && options.runResult.exitCode === 0 && options.signal === undefined;
-  const reason = buildFailureReason({
-    isOk,
-    isTimedOut: options.runResult.isTimedOut,
-    timeoutMs: options.timeoutMs,
-    rawStderr: options.runResult.rawStderr,
-    rawStdout: options.runResult.rawStdout,
-    signal: options.signal,
-    exitCode: options.runResult.exitCode,
-  });
+  const reason = isOk ? undefined : buildFailureReason(options);
   return {
     startedAt: options.startedAt,
     finishedAt,
@@ -205,19 +174,9 @@ const formatProcessResult = (options: FormatResultOptions): HookProcessResult =>
   };
 };
 
-export const executeHookProcess = async (
-  options: ExecuteHookProcessOptions,
-): Promise<HookProcessResult> => {
+export const executeHookProcess = async (options: ExecuteHookProcessOptions): Promise<HookProcessResult> => {
   const config = options.config ?? createDefaultEnvironmentConfig();
-  const {
-    entry,
-    directory,
-    stdinText,
-    event,
-    startedAt = Date.now(),
-    timeoutMs = resolveHookTimeoutMs(config),
-    activeProcs,
-  } = options;
+  const { entry, directory, stdinText, event, startedAt = Date.now(), timeoutMs = resolveHookTimeoutMs(config), activeProcs } = options;
 
   if (config.isDebugEnabled) {
     console.error(`[owflow:debug] [${event}] Spawning ${entry.path} (stdin: ${stdinText.length} bytes)`);
@@ -237,9 +196,7 @@ export const executeHookProcess = async (
   const result = formatProcessResult({ startedAt, runResult, signal, timeoutMs });
 
   if (config.isDebugEnabled) {
-    console.error(
-      `[owflow:debug] [${event}] Finished ${entry.path} in ${result.durationMs}ms (exitCode: ${runResult.exitCode}, ok: ${result.isOk})`,
-    );
+    console.error(`[owflow:debug] [${event}] Finished ${entry.path} in ${result.durationMs}ms (exitCode: ${runResult.exitCode}, ok: ${result.isOk})`);
   }
 
   return result;

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { buildActiveHooksView, colorForStatus, formatHookLogsMessage, formatHookRunSummary, statusLabelFor } from '../../tui/hooks-presenter.js';
 import { THEME, makeLogRecord } from './primitives.js';
-import { HookRunState } from '../../types/hook-types.js';
+import { HookEventName, HookRunState } from '../../types/hook-types.js';
 
 describe('TUI hooks-presenter', () => {
   let tmpDir: string;
@@ -29,8 +29,8 @@ describe('TUI hooks-presenter', () => {
     const view = buildActiveHooksView(tmpDir);
     expect(view.title).toBe('Active hooks:');
     expect(view.rows).toEqual([
-      { name: 'config', event: 'config' },
-      { name: 'tool-execute-before', event: 'tool.execute.before' },
+      { name: 'config', event: HookEventName.Config },
+      { name: 'tool-execute-before', event: HookEventName.ToolExecuteBefore },
     ]);
   });
 

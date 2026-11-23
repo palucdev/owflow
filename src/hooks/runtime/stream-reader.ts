@@ -16,22 +16,6 @@ interface StreamAccumulator {
   readonly onChunk?: (chunk: string) => void;
 }
 
-const resolveReadStreamOptions = (
-  streamOrOptions: ReadableStream<Uint8Array> | ReadStreamOptions | null | undefined,
-  rest: readonly unknown[],
-): ReadStreamOptions => {
-  if (streamOrOptions && typeof streamOrOptions === 'object' && 'stream' in streamOrOptions) {
-    return streamOrOptions as ReadStreamOptions;
-  }
-  const onChunk = typeof rest[0] === 'function' ? (rest[0] as (chunk: string) => void) : undefined;
-  const maxBytes = typeof rest[1] === 'number' ? rest[1] : MAX_STREAM_BUFFER_BYTES;
-  return {
-    stream: streamOrOptions as ReadableStream<Uint8Array> | null | undefined,
-    onChunk,
-    maxBytes,
-  };
-};
-
 const appendDecodedChunk = (accumulator: StreamAccumulator, chunk: string): void => {
   if (!chunk) {
     return;
@@ -42,14 +26,8 @@ const appendDecodedChunk = (accumulator: StreamAccumulator, chunk: string): void
   accumulator.onChunk?.(chunk);
 };
 
-export const readStream = async (
-  streamOrOptions: ReadableStream<Uint8Array> | ReadStreamOptions | null | undefined,
-  ...rest: readonly unknown[]
-): Promise<string> => {
-  const { stream, onChunk, maxBytes = MAX_STREAM_BUFFER_BYTES } = resolveReadStreamOptions(
-    streamOrOptions,
-    rest,
-  );
+export const readStream = async (options: ReadStreamOptions): Promise<string> => {
+  const { stream, onChunk, maxBytes = MAX_STREAM_BUFFER_BYTES } = options;
   if (!stream) {
     return '';
   }

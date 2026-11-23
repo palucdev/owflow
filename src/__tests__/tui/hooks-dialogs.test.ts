@@ -6,7 +6,7 @@ import path from 'node:path';
 import * as hookLogs from '../../hooks/hooks-persistence.js';
 import { registerActiveHooksSidebar } from '../../tui.js';
 import { buildHookLogsBody, buildHookRunDetailBody, getActiveDialogHandle } from '../../tui/hooks-dialogs.js';
-import { HookEvent, HookRunState } from '../../types/hook-types.js';
+import { HookEventName, HookRunState } from '../../types/hook-types.js';
 import { THEME, collectText, findClickableByContent, makeFakeApi, makeLogRecord, makeSolid, type FakeNode } from './primitives.js';
 
 describe('TUI hook-dialogs', () => {
@@ -122,7 +122,7 @@ describe('TUI hook-dialogs', () => {
       const now = 200;
       const inProgressRecord = makeLogRecord({
         runId: 'tool.execute.before#1',
-        event: HookEvent.ToolExecuteBefore,
+        event: HookEventName.ToolExecuteBefore,
         hook: path.join(hooksDir, 'tool-execute-before.sh'),
         name: 'tool-execute-before',
         status: HookRunState.PENDING,
@@ -342,7 +342,7 @@ describe('TUI hook-dialogs', () => {
 
       const record = makeLogRecord({
         runId: 'tool.execute.before#1',
-        event: HookEvent.ToolExecuteBefore,
+        event: HookEventName.ToolExecuteBefore,
         hook: path.join(hooksDir, 'tool-execute-before.sh'),
         name: 'tool-execute-before',
         status: HookRunState.SUCCESS,

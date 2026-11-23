@@ -19,8 +19,7 @@ export const parseYamlFile = (absolutePath: string): ParsedYaml => {
   }
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 interface StructuralErrorOptions {
   readonly templateObject: unknown;
@@ -60,7 +59,5 @@ const checkStructuralErrors = (options: StructuralErrorOptions): string[] => {
   return errors;
 };
 
-export const findStructuralErrors = (
-  templateObject: unknown,
-  targetObject: unknown,
-): string[] => checkStructuralErrors({ templateObject, targetObject });
+export const findStructuralErrors = (templateObject: unknown, targetObject: unknown): string[] =>
+  checkStructuralErrors({ templateObject, targetObject });

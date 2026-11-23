@@ -1,0 +1,118 @@
+import { describe, expect, test } from 'bun:test';
+import {
+  SessionAbortController,
+  buildCircuitBreakerError,
+  buildInterpreterUnavailableError,
+  buildProcessFailureError,
+  buildSpawnError,
+  canAbortSessionForEvent,
+} from '../../../hooks/runtime/failure-policy.js';
+import { HookEventName, HostEventName } from '../../../types/hook-types.js';
+
+const LONG_LINE_LENGTH = 300;
+const TRUNCATED_PREFIX_LENGTH = 197;
+
+describe('failure-policy (session abort gating)', () => {
+  test('should only allow session abort for active lifecycle gate events, not reactive host events or catch-all event', () => {
+    expect(canAbortSessionForEvent(HookEventName.ToolExecuteBefore)).toBe(true);
+    expect(canAbortSessionForEvent(HookEventName.ChatMessage)).toBe(true);
+    expect(canAbortSessionForEvent(HookEventName.CommandExecuteBefore)).toBe(true);
+    expect(canAbortSessionForEvent(HookEventName.Config)).toBe(true);
+
+    expect(canAbortSessionForEvent(HostEventName.SessionIdle)).toBe(false);
+    expect(canAbortSessionForEvent(HostEventName.SessionStatus)).toBe(false);
+    expect(canAbortSessionForEvent(HostEventName.SessionError)).toBe(false);
+    expect(canAbortSessionForEvent(HostEventName.FileEdited)).toBe(false);
+    expect(canAbortSessionForEvent(HookEventName.Event)).toBe(false);
+  });
+});
+
+describe('failure-policy (session abort controller)', () => {
+  test('SessionAbortController manages cooldown, session clearing, and disposal', async () => {
+    const aborted: string[] = [];
+    const controller = new SessionAbortController((sessionID) => {
+      aborted.push(sessionID);
+    });
+
+    await controller.abortSession({ event: HookEventName.ToolExecuteBefore, sessionID: 'ses_abc', scriptPath: '/path/to/script.sh' });
+    expect(aborted).toEqual(['ses_abc']);
+
+    // Within cooldown, second abort is suppressed
+    await controller.abortSession({ event: HookEventName.ToolExecuteBefore, sessionID: 'ses_abc', scriptPath: '/path/to/script.sh' });
+    expect(aborted).toEqual(['ses_abc']);
+
+    // Clearing session cooldown allows another abort
+    controller.clearSession('ses_abc');
+    await controller.abortSession({ event: HookEventName.ToolExecuteBefore, sessionID: 'ses_abc', scriptPath: '/path/to/script.sh' });
+    expect(aborted).toEqual(['ses_abc', 'ses_abc']);
+
+    controller.dispose();
+  });
+
+  test('SessionAbortController skips abort without sessionID, endSession, or for non-abortable events', async () => {
+    const aborted: string[] = [];
+    const controller = new SessionAbortController((sessionID) => {
+      aborted.push(sessionID);
+    });
+
+    // No sessionID
+    await controller.abortSession({ event: HookEventName.ToolExecuteBefore, scriptPath: '/a.sh' });
+    // Non-abortable reactive event
+    await controller.abortSession({ event: HostEventName.SessionIdle, sessionID: 'ses_x', scriptPath: '/a.sh' });
+    expect(aborted).toEqual([]);
+
+    // endSession throwing is swallowed with a warning
+    const failing = new SessionAbortController(() => {
+      throw new Error('abort exploded');
+    });
+    const warnSpy = console.warn;
+    console.warn = () => {};
+    try {
+      await failing.abortSession({ event: HookEventName.ChatMessage, sessionID: 'ses_y', scriptPath: '/a.sh' });
+    } finally {
+      console.warn = warnSpy;
+    }
+
+    controller.dispose();
+  });
+});
+
+describe('failure-policy (Blocked error builders)', () => {
+  test('error builders generate expected Blocked error messages and hints', () => {
+    const callbackError = buildCircuitBreakerError('/path/hook.sh', 'too many failures');
+    expect(callbackError.message).toBe('Blocked: too many failures. Hint: fix /path/hook.sh or wait for cooldown.');
+
+    const interpError = buildInterpreterUnavailableError('/path/hook.sh', 'pwsh');
+    expect(interpError.message).toContain('the pwsh interpreter is not available');
+
+    const spawnError = buildSpawnError({
+      event: HookEventName.ToolExecuteBefore,
+      scriptPath: '/path/hook.sh',
+      spawnErrorMessage: 'permission denied',
+    });
+    expect(spawnError.message).toContain('failed to spawn hook /path/hook.sh: permission denied');
+    expect(spawnError.message).toContain('failure ends the current session; fail closed');
+
+    const procError = buildProcessFailureError({ event: HookEventName.ToolExecuteBefore, scriptPath: '/path/hook.sh', reason: 'exit 1' });
+    expect(procError.message).toContain('Blocked: exit 1. Hint: fix the failing script');
+
+    const nonAbortProcError = buildProcessFailureError({ event: HostEventName.SessionIdle, scriptPath: '/path/hook.sh', reason: 'exit 1' });
+    expect(nonAbortProcError.message).toContain('failure recorded; fail closed');
+  });
+
+  test('buildProcessFailureError summarizes multiline reasons and truncates long first lines', () => {
+    const multiline = buildProcessFailureError({
+      event: HookEventName.ChatMessage,
+      scriptPath: '/a.sh',
+      reason: '\n\n  first line matters\nsecond line',
+    });
+    expect(multiline.message).toContain('Blocked: first line matters');
+
+    const longLine = 'x'.repeat(LONG_LINE_LENGTH);
+    const truncated = buildProcessFailureError({ event: HookEventName.ChatMessage, scriptPath: '/a.sh', reason: longLine });
+    expect(truncated.message).toContain('x'.repeat(TRUNCATED_PREFIX_LENGTH) + '...');
+
+    const missingReason = buildProcessFailureError({ event: HookEventName.ChatMessage, scriptPath: '/a.sh', reason: undefined });
+    expect(missingReason.message).toContain('hook /a.sh failed');
+  });
+});

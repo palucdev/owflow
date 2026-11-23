@@ -5,10 +5,12 @@
   // no `types`, no NodeNext resolution) and cannot resolve "bun:test" →
   // ts(2307). This nested config is picked up by the nearest-config lookup, so
   // tests get the same compiler options as src/ without changing build output.
+  // Ambient declarations under src/types are not reachable via imports, so
+  // they are included explicitly to keep module resolution identical to src/.
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["**/*"],
+  "include": ["**/*", "../types/**/*.d.ts"],
   "exclude": ["fixtures"]
 }

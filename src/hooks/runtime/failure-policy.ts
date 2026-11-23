@@ -1,4 +1,4 @@
-import { HookEvent, isHostEventName, type HookEventName } from '../../types/hook-types.js';
+import { HookEventName, isHostEventName, type EventName } from '../../types/hook-types.js';
 
 export { HookFailureTracker, type FailureTrackerEntry } from './hook-failure-tracker.js';
 
@@ -8,25 +8,13 @@ export const MAX_HOOK_FAILURES = 3;
 const MAX_SUMMARY_CHARS = 200;
 const TRUNCATED_PREFIX_CHARS = 197;
 
-export const canAbortSessionForEvent = (event: HookEventName): boolean => !isHostEventName(event) && event !== HookEvent.Event;
+export const canAbortSessionForEvent = (event: EventName): boolean => !isHostEventName(event) && event !== HookEventName.Event;
 
 export interface AbortSessionOptions {
-  readonly event: HookEventName;
-  readonly sessionID?: string;
+  readonly event: EventName;
   readonly scriptPath: string;
+  readonly sessionID?: string;
 }
-
-const resolveAbortSessionOptions = (
-  eventOrOptions: HookEventName | AbortSessionOptions,
-  rest: readonly (string | undefined)[],
-): AbortSessionOptions => {
-  if (typeof eventOrOptions === 'object') {
-    return eventOrOptions;
-  }
-  const sessionID = rest[0];
-  const scriptPath = rest[1] ?? '';
-  return { event: eventOrOptions, sessionID, scriptPath };
-};
 
 export class SessionAbortController {
   private readonly abortingSessions = new Map<string, number>();
@@ -37,11 +25,8 @@ export class SessionAbortController {
     this.abortingSessions.delete(sessionID);
   }
 
-  async abortSession(
-    eventOrOptions: HookEventName | AbortSessionOptions,
-    ...rest: readonly (string | undefined)[]
-  ): Promise<void> {
-    const { event, sessionID, scriptPath } = resolveAbortSessionOptions(eventOrOptions, rest);
+  async abortSession(options: AbortSessionOptions): Promise<void> {
+    const { event, sessionID, scriptPath } = options;
     if (!sessionID || !this.endSession || !canAbortSessionForEvent(event)) {
       return;
     }
@@ -73,37 +58,15 @@ export const buildInterpreterUnavailableError = (scriptPath: string, label: stri
       `Hint: install ${label} and restart OpenCode, or remove the script to stop failing closed.`,
   );
 
-type ErrorRestArgument = string | HookEventName | undefined;
-
 export interface SpawnErrorOptions {
+  readonly event: EventName;
   readonly scriptPath: string;
   readonly spawnErrorMessage: string;
-  readonly event: HookEventName;
 }
 
-const resolveSpawnErrorArguments = (
-  scriptPathOrOptions: string | SpawnErrorOptions,
-  rest: readonly ErrorRestArgument[],
-): SpawnErrorOptions => {
-  if (typeof scriptPathOrOptions === 'object') {
-    return scriptPathOrOptions;
-  }
-  const spawnErrorMessage = typeof rest[0] === 'string' ? rest[0] : '';
-  const event = (rest[1] as HookEventName) ?? HookEvent.Event;
-  return { scriptPath: scriptPathOrOptions, spawnErrorMessage, event };
-};
-
-export const buildSpawnError = (
-  scriptPathOrOptions: string | SpawnErrorOptions,
-  ...rest: readonly ErrorRestArgument[]
-): Error => {
-  const { scriptPath, spawnErrorMessage, event } = resolveSpawnErrorArguments(
-    scriptPathOrOptions,
-    rest,
-  );
-  const failPosture = canAbortSessionForEvent(event)
-    ? 'failure ends the current session; fail closed'
-    : 'failure recorded; fail closed';
+export const buildSpawnError = (options: SpawnErrorOptions): Error => {
+  const { scriptPath, spawnErrorMessage, event } = options;
+  const failPosture = canAbortSessionForEvent(event) ? 'failure ends the current session; fail closed' : 'failure recorded; fail closed';
   return new Error(
     `Blocked: failed to spawn hook ${scriptPath}: ${spawnErrorMessage}. Hint: fix the failing script ${scriptPath} (${failPosture}), or remove it and restart OpenCode to proceed.`,
   );
@@ -112,20 +75,8 @@ export const buildSpawnError = (
 export interface ProcessFailureErrorOptions {
   readonly scriptPath: string;
   readonly reason: string | undefined;
-  readonly event: HookEventName;
+  readonly event: EventName;
 }
-
-const resolveProcessFailureArguments = (
-  scriptPathOrOptions: string | ProcessFailureErrorOptions,
-  rest: readonly ErrorRestArgument[],
-): ProcessFailureErrorOptions => {
-  if (typeof scriptPathOrOptions === 'object') {
-    return scriptPathOrOptions;
-  }
-  const reason = typeof rest[0] === 'string' ? rest[0] : undefined;
-  const event = (rest[1] as HookEventName) ?? HookEvent.Event;
-  return { scriptPath: scriptPathOrOptions, reason, event };
-};
 
 const extractSummary = (reason: string | undefined, defaultSummary: string): string => {
   if (!reason) {
@@ -147,16 +98,11 @@ const extractSummary = (reason: string | undefined, defaultSummary: string): str
   return firstLine;
 };
 
-export const buildProcessFailureError = (
-  scriptPathOrOptions: string | ProcessFailureErrorOptions,
-  ...rest: readonly ErrorRestArgument[]
-): Error => {
-  const { scriptPath, reason, event } = resolveProcessFailureArguments(scriptPathOrOptions, rest);
+export const buildProcessFailureError = (options: ProcessFailureErrorOptions): Error => {
+  const { scriptPath, reason, event } = options;
   const summary = extractSummary(reason, reason || `hook ${scriptPath} failed`);
   const body = summary.startsWith('Blocked:') ? summary : `Blocked: ${summary}`;
-  const failPosture = canAbortSessionForEvent(event)
-    ? 'failure ends the current session; fail closed'
-    : 'failure recorded; fail closed';
+  const failPosture = canAbortSessionForEvent(event) ? 'failure ends the current session; fail closed' : 'failure recorded; fail closed';
   const punctuation = body.endsWith('.') ? '' : '.';
   return new Error(
     `${body}${punctuation} Hint: fix the failing script ${scriptPath} (${failPosture}), or remove it and restart OpenCode to proceed.`,

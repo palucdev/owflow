@@ -1,4 +1,4 @@
-export enum HookEvent {
+export enum HookEventName {
   ToolExecuteBefore = 'tool.execute.before',
   ToolExecuteAfter = 'tool.execute.after',
   ToolDefinition = 'tool.definition',
@@ -17,53 +17,58 @@ export enum HookEvent {
   Dispose = 'dispose',
 }
 
-export type DispatchableEvent = `${HookEvent}`;
+export const DISPATCHABLE_EVENTS: readonly HookEventName[] = Object.values(HookEventName);
 
-export const DISPATCHABLE_EVENTS: readonly DispatchableEvent[] = Object.values(HookEvent);
+export enum HostEventName {
+  CommandExecuted = 'command.executed',
+  FileEdited = 'file.edited',
+  FileWatcherUpdated = 'file.watcher.updated',
+  InstallationUpdateAvailable = 'installation.update-available',
+  InstallationUpdated = 'installation.updated',
+  LSPClientDiagnostics = 'lsp.client.diagnostics',
+  LSPUpdated = 'lsp.updated',
+  MessagePartRemoved = 'message.part.removed',
+  MessagePartUpdated = 'message.part.updated',
+  MessageRemoved = 'message.removed',
+  MessageUpdated = 'message.updated',
+  PermissonReplied = 'permission.replied',
+  PermissionUpdated = 'permission.updated',
+  VirtualTerminalCreated = 'pty.created',
+  VirtualTerminalDeleted = 'pty.deleted',
+  VirtualTerminalExited = 'pty.exited',
+  VirtualTerminalUpdated = 'pty.updated',
+  ServerConnected = 'server.connected',
+  ServerInstanceDisposed = 'server.instance.disposed',
+  SessionCompated = 'session.compacted',
+  SessionCreated = 'session.created',
+  SessionDeleted = 'session.deleted',
+  SessionDiff = 'session.diff',
+  SessionError = 'session.error',
+  SessionIdle = 'session.idle',
+  SessionStatus = 'session.status',
+  SessionUpdated = 'session.updated',
+  ToDoUpdated = 'todo.updated',
+  TUICommandExecute = 'tui.command.execute',
+  TUIPromptAppend = 'tui.prompt.append',
+  TUIToastShow = 'tui.toast.show',
+  VSCBranchUpdated = 'vcs.branch.updated',
+}
 
-export const HOST_EVENT_NAMES = [
-  'command.executed',
-  'file.edited',
-  'file.watcher.updated',
-  'installation.update-available',
-  'installation.updated',
-  'lsp.client.diagnostics',
-  'lsp.updated',
-  'message.part.removed',
-  'message.part.updated',
-  'message.removed',
-  'message.updated',
-  'permission.replied',
-  'permission.updated',
-  'pty.created',
-  'pty.deleted',
-  'pty.exited',
-  'pty.updated',
-  'server.connected',
-  'server.instance.disposed',
-  'session.compacted',
-  'session.created',
-  'session.deleted',
-  'session.diff',
-  'session.error',
-  'session.idle',
-  'session.status',
-  'session.updated',
-  'todo.updated',
-  'tui.command.execute',
-  'tui.prompt.append',
-  'tui.toast.show',
-  'vcs.branch.updated',
-] as const;
+export const HOST_EVENT_NAMES = Object.values(HostEventName);
 
-export type HostEventName = (typeof HOST_EVENT_NAMES)[number];
-export type HookEventName = DispatchableEvent | HostEventName;
+export type EventName = HookEventName | HostEventName;
 
-export const HOOK_EVENT_NAMES: readonly HookEventName[] = [...DISPATCHABLE_EVENTS, ...HOST_EVENT_NAMES];
+export const HOOK_EVENT_NAMES: readonly EventName[] = [...DISPATCHABLE_EVENTS, ...HOST_EVENT_NAMES];
 
 export const EXCLUDED_EVENT_NAMES = ['permission.ask', 'tool', 'auth', 'provider', 'experimental.provider.small_model'] as const;
 
-export const isHostEventName = (value: string): value is HostEventName => (HOST_EVENT_NAMES as readonly string[]).includes(value);
+export const isHostEventName = (value: string): boolean => {
+  return HOST_EVENT_NAMES.includes(value as HostEventName);
+};
+
+export const toHookEventName = (value: string | undefined): EventName | undefined => {
+  return HOOK_EVENT_NAMES.find((eventName) => eventName === value);
+};
 
 /**
 Validation digest mode for `scanHooks`.
@@ -85,7 +90,7 @@ export interface InterpreterResolution {
 
 export interface HookRegistryEntry {
   readonly path: string;
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly interpreter: InterpreterResolution;
   readonly status: 'registered' | 'will-fail-closed';
 }
@@ -131,7 +136,7 @@ export interface HookRunLogRecord {
   readonly runId: string;
   readonly pid: number;
   readonly workspace: string;
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly hook: string;
   readonly name: string;
   readonly sessionID?: string;
@@ -149,13 +154,13 @@ export interface HookRunLogRecord {
 export type HookLogReadResult =
   { readonly kind: 'missing' | 'invalid' } | { readonly kind: 'ok'; readonly records: readonly HookRunLogRecord[]; readonly truncated: boolean };
 
-export interface HookDispatchContext {
-  readonly event: HookEventName;
-  readonly sessionID?: string;
-  readonly context?: Record<string, unknown>;
+export interface HookRunOptions {
+  readonly event: EventName;
+  readonly input?: unknown;
+  readonly output?: unknown;
 }
 
-export type HookDispatchCallback = (dispatchContext: HookDispatchContext) => Promise<void>;
+export type HookRunCallback = (options: HookRunOptions) => Promise<void>;
 
 export type HookReportRow = Readonly<Record<'path' | 'event' | 'interpreter' | 'status', string>>;
 
@@ -166,7 +171,7 @@ export interface HookReportInput {
 }
 
 export interface HooksWrapper {
-  readonly dispatch: HookDispatchCallback;
+  readonly runHook: HookRunCallback;
   readonly snapshot: HookReportInput;
   dispose(): void;
 }
@@ -174,4 +179,5 @@ export interface HooksWrapper {
 export interface HooksWrapperOptions {
   readonly statusFile?: string;
   readonly logFile?: string;
+  readonly endSession?: (sessionID: string) => Promise<void> | void;
 }

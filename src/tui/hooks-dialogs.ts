@@ -1,5 +1,5 @@
 import type { TuiPluginApi } from '@opencode-ai/plugin/tui';
-import type { HookEventName, HookRuntimeEntry } from '../types/hook-types.js';
+import type { EventName, HookRuntimeEntry } from '../types/hook-types.js';
 import type { ActiveHookRow } from './hooks-presenter.js';
 import type { SidebarTheme, SolidElement, SolidRuntime } from './primitives.js';
 import { buildHookLogsBody, buildHookRunDetailBody } from './hooks-dialogs-bodies.js';
@@ -24,7 +24,7 @@ const HEIGHT_SCALE_DENOMINATOR = 4;
 const HEIGHT_OFFSET = 8;
 
 export interface ActiveDialogHandle {
-  readonly event: HookEventName;
+  readonly event: EventName;
   readonly row: ActiveHookRow;
   readonly notBefore: number;
   readonly sessionID?: string;
@@ -58,10 +58,7 @@ export interface OpenHookLogPopupOptions {
   readonly fallbackEntry?: HookRuntimeEntry;
 }
 
-const resolveOpenPopupOptions = (
-  apiOrOptions: TuiPluginApi | OpenHookLogPopupOptions,
-  rest: readonly unknown[],
-): OpenHookLogPopupOptions => {
+const resolveOpenPopupOptions = (apiOrOptions: TuiPluginApi | OpenHookLogPopupOptions, rest: readonly unknown[]): OpenHookLogPopupOptions => {
   if ('api' in apiOrOptions) {
     return apiOrOptions;
   }
@@ -97,10 +94,7 @@ interface HandleOptions {
   readonly sessionID?: string;
 }
 
-const createDialogHandle = (
-  row: ActiveHookRow,
-  options: HandleOptions,
-): ActiveDialogHandle => {
+const createDialogHandle = (row: ActiveHookRow, options: HandleOptions): ActiveDialogHandle => {
   const { notBefore, sessionID } = options;
   const handle: ActiveDialogHandle = {
     event: row.event,
@@ -116,12 +110,8 @@ const createDialogHandle = (
   return handle;
 };
 
-export const openHookLogPopup = (
-  apiOrOptions: TuiPluginApi | OpenHookLogPopupOptions,
-  ...rest: readonly unknown[]
-): void => {
-  const { api, solid, logFile, row, theme, notBefore, sessionID, statusFile, fallbackEntry } =
-    resolveOpenPopupOptions(apiOrOptions, rest);
+export const openHookLogPopup = (apiOrOptions: TuiPluginApi | OpenHookLogPopupOptions, ...rest: readonly unknown[]): void => {
+  const { api, solid, logFile, row, theme, notBefore, sessionID, statusFile, fallbackEntry } = resolveOpenPopupOptions(apiOrOptions, rest);
 
   dialogStateManager.getHandle()?.dispose();
   const records = resolveSessionRecords({ logFile, row, notBefore, sessionID, statusFile, fallbackEntry });

@@ -17,20 +17,9 @@ export {
   type ActiveHookRow,
   type ActiveHooksView,
 } from './tui/hooks-presenter.js';
-export {
-  buildHookLogsBody,
-  buildHookRunDetailBody,
-  getActiveDialogHandle,
-  type ActiveDialogHandle,
-} from './tui/hooks-dialogs.js';
-export {
-  materializeSidebar,
-  type SidebarRenderHandle,
-} from './tui/hooks-sidebar.js';
-export {
-  type SidebarTheme,
-  type SolidRuntime,
-} from './tui/primitives.js';
+export { buildHookLogsBody, buildHookRunDetailBody, getActiveDialogHandle, type ActiveDialogHandle } from './tui/hooks-dialogs.js';
+export { materializeSidebar, type SidebarRenderHandle } from './tui/hooks-sidebar.js';
+export { type SidebarTheme, type SolidRuntime } from './tui/primitives.js';
 
 const SIDEBAR_SLOT = 'sidebar_content';
 
@@ -39,10 +28,7 @@ interface SessionStateOptions {
   readonly rows: readonly ActiveHookRow[];
 }
 
-const loadInitialSessionStates = (
-  directory: string,
-  options: SessionStateOptions,
-): Map<string, HookRunState> => {
+const loadInitialSessionStates = (directory: string, options: SessionStateOptions): Map<string, HookRunState> => {
   const initialStates = new Map<string, HookRunState>();
   if (!options.sessionID) {
     return initialStates;
@@ -103,10 +89,7 @@ const setupCleanupHandler = (
   }
 };
 
-const renderSlotHandle = (
-  context: SlotHandlerContext,
-  renderOptions: { readonly theme: SidebarTheme; readonly sessionID?: string },
-): unknown => {
+const renderSlotHandle = (context: SlotHandlerContext, renderOptions: { readonly theme: SidebarTheme; readonly sessionID?: string }): unknown => {
   const { api, solid, directory, view, statusFile, isPollingEnabled, handles, statusContainer } = context;
   const { theme, sessionID } = renderOptions;
   const notBefore = resolveSessionEpoch(context.sessionEpochs, sessionID);
@@ -121,17 +104,7 @@ const renderSlotHandle = (
         return;
       }
       const rowLogFile = resolveHooksLogFile(directory, row.name);
-      openHookLogPopup(
-        api,
-        solid,
-        rowLogFile,
-        row,
-        rowTheme,
-        notBefore,
-        sessionID,
-        statusFile,
-        statusContainer.current.get(row.event),
-      );
+      openHookLogPopup(api, solid, rowLogFile, row, rowTheme, notBefore, sessionID, statusFile, statusContainer.current.get(row.event));
     },
     () => api.renderer.requestRender(),
     isPollingEnabled,
@@ -164,10 +137,8 @@ const registerSidebarSlot = (options: SlotRegistrationOptions): void => {
   options.api.slots.register({
     order: 50,
     slots: {
-      [SIDEBAR_SLOT]: (
-        slotContext: { readonly theme: { readonly current: SidebarTheme } },
-        slotProperties?: { readonly session_id?: string },
-      ) => renderSlotHandle(context, { theme: slotContext.theme.current, sessionID: slotProperties?.session_id }),
+      [SIDEBAR_SLOT]: (slotContext: { readonly theme: { readonly current: SidebarTheme } }, slotProperties?: { readonly session_id?: string }) =>
+        renderSlotHandle(context, { theme: slotContext.theme.current, sessionID: slotProperties?.session_id }),
     },
   });
 };
@@ -179,10 +150,7 @@ export interface RegisterSidebarOptions {
   readonly config?: EnvironmentConfig;
 }
 
-const resolveRegisterOptions = (
-  apiOrOptions: TuiPluginApi | RegisterSidebarOptions,
-  rest: readonly unknown[],
-): RegisterSidebarOptions => {
+const resolveRegisterOptions = (apiOrOptions: TuiPluginApi | RegisterSidebarOptions, rest: readonly unknown[]): RegisterSidebarOptions => {
   if ('api' in apiOrOptions) {
     return apiOrOptions;
   }
@@ -196,8 +164,7 @@ export const hasRegisteredActiveHooksSidebar = async (
   apiOrOptions: TuiPluginApi | RegisterSidebarOptions,
   ...rest: readonly unknown[]
 ): Promise<boolean> => {
-  const { api, directory, loadSolid = loadSolidRuntime, config = createDefaultEnvironmentConfig() } =
-    resolveRegisterOptions(apiOrOptions, rest);
+  const { api, directory, loadSolid = loadSolidRuntime, config = createDefaultEnvironmentConfig() } = resolveRegisterOptions(apiOrOptions, rest);
 
   const solid = await loadSolid();
   if (solid === null) {

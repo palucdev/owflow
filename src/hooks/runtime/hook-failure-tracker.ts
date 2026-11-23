@@ -4,49 +4,28 @@ export interface FailureTrackerEntry {
   readonly sessionID?: string;
 }
 
-const formatTrackerKey = (components: FailureTrackerEntry): string => {
-  const sessionID = components.sessionID ?? 'global';
-  return `${components.event}::${components.checkKey}::${sessionID}`;
-};
-
-const resolveTrackerKey = (
-  eventOrEntry: FailureTrackerEntry | string,
-  rest: readonly (string | undefined)[],
-): string => {
-  if (typeof eventOrEntry === 'object') {
-    return formatTrackerKey(eventOrEntry);
-  }
-  const checkKey = rest[0] ?? '';
-  const sessionID = rest[1] && rest[1].length > 0 ? rest[1] : 'global';
-  return formatTrackerKey({ event: eventOrEntry, checkKey, sessionID });
+const formatTrackerKey = (entry: FailureTrackerEntry): string => {
+  const sessionID = entry.sessionID && entry.sessionID.length > 0 ? entry.sessionID : 'global';
+  return `${entry.event}::${entry.checkKey}::${sessionID}`;
 };
 
 export class HookFailureTracker {
   private readonly failures = new Map<string, number>();
 
-  recordFailure(
-    eventOrEntry: FailureTrackerEntry | string,
-    ...rest: readonly (string | undefined)[]
-  ): number {
-    const sessionKey = resolveTrackerKey(eventOrEntry, rest);
+  recordFailure(entry: FailureTrackerEntry): number {
+    const sessionKey = formatTrackerKey(entry);
     const nextCount = (this.failures.get(sessionKey) ?? 0) + 1;
     this.failures.set(sessionKey, nextCount);
     return nextCount;
   }
 
-  recordSuccess(
-    eventOrEntry: FailureTrackerEntry | string,
-    ...rest: readonly (string | undefined)[]
-  ): void {
-    const sessionKey = resolveTrackerKey(eventOrEntry, rest);
+  recordSuccess(entry: FailureTrackerEntry): void {
+    const sessionKey = formatTrackerKey(entry);
     this.failures.delete(sessionKey);
   }
 
-  getCount(
-    eventOrEntry: FailureTrackerEntry | string,
-    ...rest: readonly (string | undefined)[]
-  ): number {
-    const sessionKey = resolveTrackerKey(eventOrEntry, rest);
+  getCount(entry: FailureTrackerEntry): number {
+    const sessionKey = formatTrackerKey(entry);
     return this.failures.get(sessionKey) ?? 0;
   }
 

@@ -33,29 +33,11 @@ const buildKey = (components: KeyComponents): string => {
   return `${components.event}::${components.scriptPath}::${sessionID}`;
 };
 
-const resolveNow = (
-  invocationOrEvent: CircuitBreakerInvocation | string,
-  rest: readonly unknown[],
-): number => {
-  if (typeof invocationOrEvent === 'object' && invocationOrEvent.now !== undefined) {
-    return invocationOrEvent.now;
-  }
-  return typeof rest[2] === 'number' ? rest[2] : Date.now();
-};
-
-const resolveTiming = (
-  invocationOrEvent: CircuitBreakerInvocation | string,
-  rest: readonly unknown[],
-): { startedAt: number; finishedAt: number } => {
-  if (typeof invocationOrEvent === 'object') {
-    return {
-      startedAt: invocationOrEvent.startedAt ?? Date.now(),
-      finishedAt: invocationOrEvent.finishedAt ?? Date.now(),
-    };
-  }
-  const startedAt = typeof rest[2] === 'number' ? rest[2] : Date.now();
-  const finishedAt = typeof rest[3] === 'number' ? rest[3] : Date.now();
-  return { startedAt, finishedAt };
+const resolveTiming = (invocation: CircuitBreakerInvocation): { startedAt: number; finishedAt: number } => {
+  return {
+    startedAt: invocation.startedAt ?? Date.now(),
+    finishedAt: invocation.finishedAt ?? Date.now(),
+  };
 };
 
 const calculateFailureState = (
@@ -71,26 +53,14 @@ const calculateFailureState = (
 export class CircuitBreakerTracker {
   private readonly breakers = new Map<string, CircuitBreakerEntry>();
 
-  private resolveKey(
-    invocationOrEvent: CircuitBreakerInvocation | string,
-    rest: readonly unknown[],
-  ): { circuitKey: string; event: string; scriptPath: string } {
-    if (typeof invocationOrEvent === 'object') {
-      const circuitKey = buildKey(invocationOrEvent);
-      return { circuitKey, event: invocationOrEvent.event, scriptPath: invocationOrEvent.scriptPath };
-    }
-    const scriptPath = typeof rest[0] === 'string' ? rest[0] : '';
-    const sessionID = typeof rest[1] === 'string' && rest[1] ? rest[1] : 'global';
-    const circuitKey = buildKey({ event: invocationOrEvent, scriptPath, sessionID });
-    return { circuitKey, event: invocationOrEvent, scriptPath };
+  private resolveKey(invocation: CircuitBreakerInvocation): { circuitKey: string; event: string; scriptPath: string } {
+    const circuitKey = buildKey(invocation);
+    return { circuitKey, event: invocation.event, scriptPath: invocation.scriptPath };
   }
 
-  check(
-    invocationOrEvent: CircuitBreakerInvocation | string,
-    ...rest: readonly unknown[]
-  ): CircuitBreakerCheckResult {
-    const { circuitKey, scriptPath } = this.resolveKey(invocationOrEvent, rest);
-    const now = resolveNow(invocationOrEvent, rest);
+  check(invocation: CircuitBreakerInvocation): CircuitBreakerCheckResult {
+    const { circuitKey, scriptPath } = this.resolveKey(invocation);
+    const now = invocation.now ?? Date.now();
 
     const breaker = this.breakers.get(circuitKey);
     if (breaker && now < breaker.trippedUntil) {
@@ -100,20 +70,14 @@ export class CircuitBreakerTracker {
     return { tripped: false };
   }
 
-  recordSuccess(
-    invocationOrEvent: CircuitBreakerInvocation | string,
-    ...rest: readonly (string | undefined)[]
-  ): void {
-    const { circuitKey } = this.resolveKey(invocationOrEvent, rest);
+  recordSuccess(invocation: CircuitBreakerInvocation): void {
+    const { circuitKey } = this.resolveKey(invocation);
     this.breakers.delete(circuitKey);
   }
 
-  recordFailure(
-    invocationOrEvent: CircuitBreakerInvocation | string,
-    ...rest: readonly (string | number | undefined)[]
-  ): { trippedUntil: number; rapidFailures: number } {
-    const { circuitKey, event, scriptPath } = this.resolveKey(invocationOrEvent, rest);
-    const { startedAt, finishedAt } = resolveTiming(invocationOrEvent, rest);
+  recordFailure(invocation: CircuitBreakerInvocation): { trippedUntil: number; rapidFailures: number } {
+    const { circuitKey, event, scriptPath } = this.resolveKey(invocation);
+    const { startedAt, finishedAt } = resolveTiming(invocation);
     const previous = this.breakers.get(circuitKey);
     const { rapidFailures, trippedUntil } = calculateFailureState(previous, { startedAt, finishedAt });
 

@@ -71,15 +71,11 @@ const isDestructiveRmCommand = (command: string): boolean => {
   return hasShortRecursiveAndForceFlags(commandArguments);
 };
 
-const isDestructiveCommand = (command: string): boolean =>
-  isDestructiveGitCommand(command) || isDestructiveRmCommand(command);
+const isDestructiveCommand = (command: string): boolean => isDestructiveGitCommand(command) || isDestructiveRmCommand(command);
 
 const extractGuardContext = (
   contextOrInput: GuardContext | { tool: string; sessionID: string },
-  remainingArguments: readonly [
-    output?: { args?: Record<string, unknown> },
-    agentBySessionMap?: ReadonlyMap<string, string>,
-  ],
+  remainingArguments: readonly [output?: { args?: Record<string, unknown> }, agentBySessionMap?: ReadonlyMap<string, string>],
 ): GuardContext => {
   if ('agentBySessionMap' in contextOrInput) {
     return contextOrInput;
@@ -93,15 +89,9 @@ const extractGuardContext = (
 
 export const guardAgainstDestructiveActions = async (
   contextOrInput: GuardContext | { tool: string; sessionID: string },
-  ...remainingArguments: [
-    output?: { args?: Record<string, unknown> },
-    agentBySessionMap?: ReadonlyMap<string, string>,
-  ] | []
+  ...remainingArguments: [output?: { args?: Record<string, unknown> }, agentBySessionMap?: ReadonlyMap<string, string>] | []
 ): Promise<void> => {
-  const { input, output, agentBySessionMap } = extractGuardContext(
-    contextOrInput,
-    remainingArguments,
-  );
+  const { input, output, agentBySessionMap } = extractGuardContext(contextOrInput, remainingArguments);
 
   if (input.tool !== 'bash') {
     return;

@@ -14,9 +14,7 @@ interface ResolveTemplatePathOptions {
 
 const resolveTemplatePath = (options: ResolveTemplatePathOptions): string | undefined => {
   const config = options.config ?? createDefaultEnvironmentConfig();
-  const templatesDirectory = path.resolve(
-    config.templatesDirectory ?? path.join(__dirname, '../templates'),
-  );
+  const templatesDirectory = path.resolve(config.templatesDirectory ?? path.join(__dirname, '../templates'));
   const safeTemplateName = path.basename(options.templateName);
   const templatePath = path.resolve(templatesDirectory, safeTemplateName);
 
@@ -30,13 +28,10 @@ const resolveTemplatePath = (options: ResolveTemplatePathOptions): string | unde
 };
 
 export const verify_template = tool({
-  description:
-    'Check if file in the given path exists and follows correct YAML structure by checking against the template file from /templates.',
+  description: 'Check if file in the given path exists and follows correct YAML structure by checking against the template file from /templates.',
   args: {
     filePath: tool.schema.string().describe('Path to the file to check'),
-    templateName: tool.schema
-      .string()
-      .describe('Name of the template from /templates (e.g. orchestrator-state-development.yml)'),
+    templateName: tool.schema.string().describe('Name of the template from /templates (e.g. orchestrator-state-development.yml)'),
   },
   async execute({ filePath, templateName }, context) {
     const absolutePath = path.resolve(context.directory, filePath);
