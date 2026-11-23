@@ -81,17 +81,17 @@ test('appendWithRotation appends newlines, ignores empty lines, and rotates file
   const logFile = path.join(root, 'rot-test.log');
 
   // Basic append with automatic newline
-  appendWithRotation(logFile, 'line 1');
-  appendWithRotation(logFile, 'line 2\n');
+  appendWithRotation({ filePath: logFile, line: 'line 1' });
+  appendWithRotation({ filePath: logFile, line: 'line 2\n' });
   expect(fs.readFileSync(logFile, 'utf8')).toBe('line 1\nline 2\n');
 
   // Empty or empty-like line does nothing
-  appendWithRotation(logFile, '');
+  appendWithRotation({ filePath: logFile, line: '' });
   expect(fs.readFileSync(logFile, 'utf8')).toBe('line 1\nline 2\n');
 
   // Rotation when file size exceeds maxBytes
-  appendWithRotation(logFile, 'line that pushes over cap', ROTATION_MAX_BYTES);
-  appendWithRotation(logFile, 'line after rotation', ROTATION_MAX_BYTES);
+  appendWithRotation({ filePath: logFile, line: 'line that pushes over cap', maxBytes: ROTATION_MAX_BYTES });
+  appendWithRotation({ filePath: logFile, line: 'line after rotation', maxBytes: ROTATION_MAX_BYTES });
   expect(fs.existsSync(`${logFile}.1`)).toBe(true);
   expect(fs.readFileSync(logFile, 'utf8')).toBe('line after rotation\n');
 });
@@ -102,7 +102,7 @@ test('appendWithRotation rejects dangling symlinks and replaces symlink rotation
   const targetFile = path.join(root, 'target.txt');
   const symLog = path.join(root, 'dangling.log');
   fs.symlinkSync(targetFile, symLog);
-  appendWithRotation(symLog, 'malicious payload');
+  appendWithRotation({ filePath: symLog, line: 'malicious payload' });
   expect(fs.existsSync(targetFile)).toBe(false);
 
   // Safe rotation target replacement when .1 is a symlink
@@ -110,7 +110,7 @@ test('appendWithRotation rejects dangling symlinks and replaces symlink rotation
   fs.writeFileSync(largeLog, 'x'.repeat(LARGE_LOG_BYTES));
   const rotationSymlink = `${largeLog}.1`;
   fs.symlinkSync(targetFile, rotationSymlink);
-  appendWithRotation(largeLog, 'chunk after rotation', ROTATION_MAX_BYTES);
+  appendWithRotation({ filePath: largeLog, line: 'chunk after rotation', maxBytes: ROTATION_MAX_BYTES });
   expect(fs.lstatSync(rotationSymlink).isSymbolicLink()).toBe(false);
   expect(fs.existsSync(targetFile)).toBe(false);
 });
@@ -121,7 +121,7 @@ test('writeHookCrashLog writes formatted crash entries to owflow-hooks-crash.log
   const crashLogFile = path.join(userDirectory, 'owflow-hooks-crash.log');
 
   const error = new Error('test crash failure');
-  writeHookCrashLog(root, 'test_source', error);
+  writeHookCrashLog({ workspace: root, source: 'test_source', error });
 
   const content = await Bun.file(crashLogFile).text();
   expect(content).toContain('[test_source]');
@@ -129,7 +129,7 @@ test('writeHookCrashLog writes formatted crash entries to owflow-hooks-crash.log
   expect(content).toContain('test crash failure');
 
   // String error variant
-  writeHookCrashLog(root, 'string_source', 'raw string failure');
+  writeHookCrashLog({ workspace: root, source: 'string_source', error: 'raw string failure' });
   const updated = await Bun.file(crashLogFile).text();
   expect(updated).toContain('[string_source]');
   expect(updated).toContain('raw string failure');
@@ -143,7 +143,7 @@ test('resolveHooksLatestSymlink creates and resolves symlink pointing to active 
   expect(symlinkPath).toBe(path.join(getUserTemporaryDirectory(), expectedName));
   expect(symlinkPath).toMatch(/owflow-hooks-latest-[a-f0-9]{16}\.jsonl$/);
   const expectedTarget = resolveHooksLogFile(root);
-  appendWithRotation(expectedTarget, 'latest-symlink-seed');
+  appendWithRotation({ filePath: expectedTarget, line: 'latest-symlink-seed' });
   expect(fs.readlinkSync(symlinkPath)).toBe(expectedTarget);
 
   // Calling it again updates or preserves the symlink safely
@@ -151,7 +151,7 @@ test('resolveHooksLatestSymlink creates and resolves symlink pointing to active 
 
   // Calling it with a targetLogFile updates the symlink to that target
   const targetFile = resolveHooksLogFile(root, 'tool-execute-before');
-  appendWithRotation(targetFile, 'latest-symlink-updated-seed');
+  appendWithRotation({ filePath: targetFile, line: 'latest-symlink-updated-seed' });
   expect(resolveHooksLatestSymlink(root, targetFile)).toBe(symlinkPath);
   expect(fs.readlinkSync(symlinkPath)).toBe(targetFile);
 });
@@ -168,8 +168,8 @@ test('resolveHooksLatestSymlink maintains distinct symlinks across multiple work
 
   const target1 = resolveHooksLogFile(root1);
   const target2 = resolveHooksLogFile(root2);
-  appendWithRotation(target1, 'multi-workspace-one-seed');
-  appendWithRotation(target2, 'multi-workspace-two-seed');
+  appendWithRotation({ filePath: target1, line: 'multi-workspace-one-seed' });
+  appendWithRotation({ filePath: target2, line: 'multi-workspace-two-seed' });
   expect(fs.readlinkSync(symlink1)).toBe(target1);
   expect(fs.readlinkSync(symlink2)).toBe(target2);
 

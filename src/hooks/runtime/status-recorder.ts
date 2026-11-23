@@ -132,7 +132,7 @@ export class StatusRecorder {
       }
 
       const targetLogFile = this.logFile ?? resolveHooksLogFile(this.directory, record.name);
-      appendWithRotation(targetLogFile, JSON.stringify(record));
+      appendWithRotation({filePath: targetLogFile, line: JSON.stringify(record)});
       if (!this.logFile) {
         resolveHooksLatestSymlink(this.directory, targetLogFile);
       }

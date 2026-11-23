@@ -129,17 +129,8 @@ export interface AppendLogOptions {
   readonly maxBytes?: number;
 }
 
-const resolveAppendArguments = (pathOrOptions: string | AppendLogOptions, rest: readonly (string | number | undefined)[]): AppendLogOptions => {
-  if (typeof pathOrOptions === 'object') {
-    return pathOrOptions;
-  }
-  const line = typeof rest[0] === 'string' ? rest[0] : '';
-  const maxBytes = typeof rest[1] === 'number' ? rest[1] : DEFAULT_LOG_ROTATION_BYTES;
-  return { filePath: pathOrOptions, line, maxBytes };
-};
-
-export const appendWithRotation = (pathOrOptions: string | AppendLogOptions, ...rest: readonly (string | number | undefined)[]): void => {
-  const { filePath, line, maxBytes = DEFAULT_LOG_ROTATION_BYTES } = resolveAppendArguments(pathOrOptions, rest);
+export const appendWithRotation = (options: AppendLogOptions): void => {
+  const { filePath, line, maxBytes = DEFAULT_LOG_ROTATION_BYTES } = options;
   if (!line) {
     return;
   }
@@ -175,26 +166,14 @@ export interface CrashLogOptions {
   readonly error: unknown;
 }
 
-const resolveCrashLogOptions = (
-  optionsOrWorkspace: string | CrashLogOptions,
-  rest: readonly [source?: string, error?: unknown] | [],
-): CrashLogOptions => {
-  if (typeof optionsOrWorkspace === 'object') {
-    return optionsOrWorkspace;
-  }
-  const source = rest[0] ?? '';
-  const error = rest[1];
-  return { workspace: optionsOrWorkspace, source, error };
-};
-
-export const writeHookCrashLog = (optionsOrWorkspace: string | CrashLogOptions, ...rest: readonly [source?: string, error?: unknown] | []): void => {
-  const { workspace, source, error } = resolveCrashLogOptions(optionsOrWorkspace, rest);
+export const writeHookCrashLog = (options: CrashLogOptions): void => {
+  const { workspace, source, error } = options;
   try {
     const crashFile = path.join(getUserTemporaryDirectory(), 'owflow-hooks-crash.log');
     const timestamp = new Date().toISOString();
     const errorString = error instanceof Error ? (error.stack ?? error.message) : String(error);
     const entry = `[${timestamp}] [${source}] [workspace: ${workspace}]\n${errorString}\n\n`;
-    appendWithRotation(crashFile, entry);
+    appendWithRotation({filePath: crashFile, line: entry});
   } catch {
     // Best-effort crash logging never throws
   }

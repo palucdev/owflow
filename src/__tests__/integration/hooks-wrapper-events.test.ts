@@ -78,9 +78,8 @@ describe('hooks-wrapper (host event isolation)', () => {
     const root = path.join(SCRATCH_ROOT, 'event-isolation');
     const wrapper = new HooksWrapper(root);
     const crashEvents: Array<{ source: string; error: unknown }> = [];
-    const crashSpy = spyOn(hooksPersistenceModule, 'writeHookCrashLog').mockImplementation((...writeArguments) => {
-      const [, source = '', error] = writeArguments;
-      crashEvents.push({ source, error });
+    const crashSpy = spyOn(hooksPersistenceModule, 'writeHookCrashLog').mockImplementation((options) => {
+      crashEvents.push({ source: options.source, error: options.error });
     });
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 

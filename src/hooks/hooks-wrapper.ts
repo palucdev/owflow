@@ -67,7 +67,7 @@ class HooksWrapper {
     try {
       await this.runHook({ event: options.event, input: options.input });
     } catch (error) {
-      writeHookCrashLog(this.directory, options.crashSource, error);
+      writeHookCrashLog({workspace: this.directory, source: options.crashSource, error});
     }
   };
 

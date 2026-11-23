@@ -14,32 +14,30 @@ import OwflowPlugin from '../index.js';
 import { fork_task } from '../tools/fork-task.js';
 import { verify_template } from '../tools/verify-template.js';
 
-const mockPluginInput = (directory: string, client?: any) =>
+const mockPluginInput = (directory: string, client?: unknown) =>
   ({
-    $: {} as any,
     directory,
     client: client ?? ({} as any),
     project: {} as any,
     worktree: directory,
-    experimental_workspace: {} as any,
     serverUrl: new URL('http://localhost'),
   }) as any;
 
 describe('OwflowPlugin', () => {
-  let tmpDir: string;
+  let pluginDirectory: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'owflow-index-test-'));
+    pluginDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'owflow-index-test-'));
   });
 
   afterEach(() => {
-    if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (fs.existsSync(pluginDirectory)) {
+      fs.rmSync(pluginDirectory, { recursive: true, force: true });
     }
   });
 
   test('should export default plugin factory and register tools and hooks', async () => {
-    const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+    const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
     expect(plugin).toBeDefined();
     expect(plugin.tool?.verify_template).toBe(verify_template);
     expect(plugin.tool?.fork_task).toBe(fork_task);
@@ -59,14 +57,14 @@ describe('OwflowPlugin', () => {
       const consoleLogSpy = spyOn(console, 'log').mockImplementation(() => {});
 
       try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+        const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
         const inputConfig = {};
 
-        await plugin.config!(inputConfig as any);
+        await plugin.config!(inputConfig);
 
-        expect(skillsSpy).toHaveBeenCalledWith(inputConfig as any);
-        expect(commandsSpy).toHaveBeenCalledWith(inputConfig as any);
-        expect(agentsSpy).toHaveBeenCalledWith(inputConfig as any);
+        expect(skillsSpy).toHaveBeenCalledWith(inputConfig);
+        expect(commandsSpy).toHaveBeenCalledWith(inputConfig);
+        expect(agentsSpy).toHaveBeenCalledWith(inputConfig);
       } finally {
         skillsSpy.mockRestore();
         commandsSpy.mockRestore();
@@ -81,11 +79,11 @@ describe('OwflowPlugin', () => {
       const rereadSpy = spyOn(sessionCompaction, 'rereadOrchestratorState').mockImplementation(async () => {});
 
       try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+        const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
         const output = { context: [] };
         await plugin['experimental.session.compacting']!({ sessionID: 'sess-1' }, output);
 
-        expect(rereadSpy).toHaveBeenCalledWith(tmpDir, output);
+        expect(rereadSpy).toHaveBeenCalledWith(pluginDirectory, output);
       } finally {
         rereadSpy.mockRestore();
       }
@@ -94,7 +92,7 @@ describe('OwflowPlugin', () => {
 
   describe('chat.message and tool.execute.before hooks', () => {
     test('should track session agent and guard against destructive commands', async () => {
-      const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+      const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
 
       // Non-whitelisted agent
       await plugin['chat.message']!({ sessionID: 'sess-1', agent: 'codebase-analyzer' }, {} as any);
@@ -122,7 +120,7 @@ describe('OwflowPlugin', () => {
       const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
       try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+        const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
         await expect(
           plugin['tool.execute.before']!({ tool: 'bash', sessionID: 's-1', callID: 'c-1' }, { args: { command: 'ls' } }),
         ).resolves.toBeUndefined();
@@ -141,7 +139,7 @@ describe('OwflowPlugin', () => {
       const consoleLogSpy = spyOn(console, 'log').mockImplementation(() => {});
 
       try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+        const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
         expect(plugin.tool).toBeDefined();
         expect(plugin.config).toBeDefined();
         expect(plugin['tool.execute.before']).toBeDefined();
@@ -159,9 +157,9 @@ describe('OwflowPlugin', () => {
       const aborts: Array<{ path: { id: string } }> = [];
       const client = {
         session: {
-          abort: async (opts: { path: { id: string } }) => {
-            aborts.push(opts);
-            if (opts.path.id === 'sess-abort-err') throw new Error('Client network error');
+          abort: async (options: { path: { id: string } }) => {
+            aborts.push(options);
+            if (options.path.id === 'sess-abort-err') throw new Error('Client network error');
           },
         },
       };
@@ -186,7 +184,7 @@ describe('OwflowPlugin', () => {
       const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
 
       try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir, client));
+        const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory, client));
         await expect(
           plugin['tool.execute.before']!({ tool: 'bash', sessionID: 'sess-gate-fail', callID: 'c-1' }, { args: { command: 'ls' } }),
         ).rejects.toThrow('Blocked: gate check failed');
@@ -220,7 +218,7 @@ describe('OwflowPlugin', () => {
       );
 
       try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+        const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
         await plugin.dispose?.();
         expect(wrapperDisposed).toBe(true);
       } finally {
@@ -236,9 +234,9 @@ describe('OwflowPlugin', () => {
       const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
       try {
-        const plugin = await OwflowPlugin(mockPluginInput(tmpDir));
+        const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
 
-        expect(crashSpy).toHaveBeenCalledWith(tmpDir, 'startup_digest_failed', expect.any(Error));
+        expect(crashSpy).toHaveBeenCalledWith({workspace: pluginDirectory, source: 'startup_digest_failed', error: expect.any(Error)});
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('user hooks failed to load'));
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('destructive command guard remains ACTIVE'));
 
