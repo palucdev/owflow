@@ -64,8 +64,8 @@ interface ProcessRunResult {
 
 const createProcessIoPromise = (proc: ReturnType<typeof Bun.spawn>) =>
   Promise.all([
-    readStream(proc.stdout as ReadableStream<Uint8Array> | null | undefined),
-    readStream(proc.stderr as ReadableStream<Uint8Array> | null | undefined),
+    readStream({stream: proc.stdout as ReadableStream<Uint8Array>}),
+    readStream({stream: proc.stderr as ReadableStream<Uint8Array>}),
     proc.exited,
   ]);
 

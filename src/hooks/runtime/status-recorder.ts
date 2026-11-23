@@ -29,18 +29,6 @@ export interface FlushStatusAtomicOptions {
   readonly hooks: ReadonlyMap<string, HookRuntimeEntry>;
 }
 
-const resolveFlushOptions = (
-  fileOrOptions: string | FlushStatusAtomicOptions,
-  rest: readonly [workspace?: string, hooks?: ReadonlyMap<string, HookRuntimeEntry>] | [],
-): FlushStatusAtomicOptions => {
-  if (typeof fileOrOptions === 'object') {
-    return fileOrOptions;
-  }
-  const workspace = rest[0] ?? '';
-  const hooks = rest[1] ?? new Map<string, HookRuntimeEntry>();
-  return { file: fileOrOptions, workspace, hooks };
-};
-
 export class StatusRecorder {
   private readonly statuses = new Map<string, HookRuntimeEntry>();
   private readonly writtenRunRecords = new Set<string>();
@@ -74,10 +62,9 @@ export class StatusRecorder {
   }
 
   flushStatusFileAtomic(
-    fileOrOptions: string | FlushStatusAtomicOptions,
-    ...rest: readonly [workspace?: string, hooks?: ReadonlyMap<string, HookRuntimeEntry>] | []
+    options: FlushStatusAtomicOptions
   ): void {
-    const { file, workspace, hooks } = resolveFlushOptions(fileOrOptions, rest);
+    const { file, workspace, hooks } = options;
     const nonce = crypto.randomUUID();
     const temporaryFile = `${file}.${process.pid}.${nonce}.tmp`;
 
@@ -122,7 +109,7 @@ export class StatusRecorder {
       clearTimeout(this.statusTimer);
       this.statusTimer = undefined;
     }
-    this.flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
+    this.flushStatusFileAtomic({file: this.statusFile, workspace: this.directory, hooks: this.statuses});
   }
 
   schedulePendingStatus(): void {
@@ -131,7 +118,7 @@ export class StatusRecorder {
     }
     this.statusTimer = setTimeout(() => {
       this.statusTimer = undefined;
-      this.flushStatusFileAtomic(this.statusFile, this.directory, this.statuses);
+      this.flushStatusFileAtomic({file: this.statusFile, workspace: this.directory, hooks: this.statuses});
     }, STATUS_DEBOUNCE_MS);
     this.statusTimer.unref?.();
   }
