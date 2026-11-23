@@ -17,7 +17,8 @@ export {
   type ActiveHookRow,
   type ActiveHooksView,
 } from './tui/hooks-presenter.js';
-export { buildHookLogsBody, buildHookRunDetailBody, getActiveDialogHandle, type ActiveDialogHandle } from './tui/hooks-dialogs.js';
+export { buildHookLogsBody, buildHookRunDetailBody } from './tui/hooks-dialogs-bodies.js';
+export { getActiveDialogHandle, type ActiveDialogHandle } from './tui/hooks-dialogs.js';
 export { materializeSidebar, type SidebarRenderHandle } from './tui/hooks-sidebar.js';
 export { type SidebarTheme, type SolidRuntime } from './tui/primitives.js';
 
@@ -95,23 +96,33 @@ const renderSlotHandle = (context: SlotHandlerContext, renderOptions: { readonly
   const notBefore = resolveSessionEpoch(context.sessionEpochs, sessionID);
   const initialStates = loadInitialSessionStates(directory, { sessionID: sessionID ?? '', rows: view.rows });
 
-  const handle = materializeSidebar(
+  const handle = materializeSidebar({
     view,
     theme,
     solid,
-    (row: ActiveHookRow, rowTheme: SidebarTheme) => {
+    onRowClick: (row: ActiveHookRow, rowTheme: SidebarTheme) => {
       if (!isPollingEnabled) {
         return;
       }
       const rowLogFile = resolveHooksLogFile(directory, row.name);
-      openHookLogPopup(api, solid, rowLogFile, row, rowTheme, notBefore, sessionID, statusFile, statusContainer.current.get(row.event));
+      openHookLogPopup({
+        api,
+        solid,
+        logFile: rowLogFile,
+        row,
+        theme: rowTheme,
+        notBefore,
+        sessionID,
+        statusFile,
+        fallbackEntry: statusContainer.current.get(row.event),
+      });
     },
-    () => api.renderer.requestRender(),
-    isPollingEnabled,
+    onRowHover: () => api.renderer.requestRender(),
+    isInteractive: isPollingEnabled,
     notBefore,
     sessionID,
     initialStates,
-  );
+  });
 
   handle.applyStatuses(statusContainer.current);
   handles.push(handle);
@@ -150,21 +161,10 @@ export interface RegisterSidebarOptions {
   readonly config?: EnvironmentConfig;
 }
 
-const resolveRegisterOptions = (apiOrOptions: TuiPluginApi | RegisterSidebarOptions, rest: readonly unknown[]): RegisterSidebarOptions => {
-  if ('api' in apiOrOptions) {
-    return apiOrOptions;
-  }
-  const directory = typeof rest[0] === 'string' ? rest[0] : '';
-  const loadSolid = typeof rest[1] === 'function' ? (rest[1] as () => Promise<SolidRuntime | null>) : loadSolidRuntime;
-  const config = rest[2] as EnvironmentConfig | undefined;
-  return { api: apiOrOptions, directory, loadSolid, config };
-};
-
 export const hasRegisteredActiveHooksSidebar = async (
-  apiOrOptions: TuiPluginApi | RegisterSidebarOptions,
-  ...rest: readonly unknown[]
+  options: RegisterSidebarOptions
 ): Promise<boolean> => {
-  const { api, directory, loadSolid = loadSolidRuntime, config = createDefaultEnvironmentConfig() } = resolveRegisterOptions(apiOrOptions, rest);
+  const { api, directory, loadSolid = loadSolidRuntime, config = createDefaultEnvironmentConfig() } = options;
 
   const solid = await loadSolid();
   if (solid === null) {
@@ -202,7 +202,7 @@ const tui = async (api: TuiPluginApi): Promise<void> => {
     console.warn('[owflow] workspace directory unavailable; cannot render the active hooks panel.');
     return;
   }
-  await hasRegisteredActiveHooksSidebar(api, directory);
+  await hasRegisteredActiveHooksSidebar({api, directory});
 };
 
 export default { id: 'owflow', tui } satisfies TuiPluginModule;

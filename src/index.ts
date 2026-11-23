@@ -56,7 +56,7 @@ const createHooksWrapper = (options: WrapperCreationOptions): HooksWrapper | und
   try {
     return new HooksWrapper(options.directory, { endSession: createEndSession(options.client) });
   } catch (error) {
-    writeHookCrashLog({workspace: options.directory, source: 'startup_digest_failed', error});
+    writeHookCrashLog({ workspace: options.directory, source: 'startup_digest_failed', error });
     console.error(`[owflow] ERROR: user hooks failed to load (${formatErrorMessage(error)}).`);
     console.error('[owflow] Built-in destructive command guard remains ACTIVE.');
     console.error('[owflow] User hooks bypassed until fixed. See crash log.');

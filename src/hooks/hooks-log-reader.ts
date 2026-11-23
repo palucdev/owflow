@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import {
-    type EventName,
+  type EventName,
   type HookLogReadResult,
   type HookRunLogRecord,
   type HookStatusReadResult,
@@ -142,9 +142,7 @@ export interface ReadSessionHookLogsOptions {
   readonly sessionID?: string;
 }
 
-export const readSessionHookLogs = (
-  options: ReadSessionHookLogsOptions
-): readonly HookRunLogRecord[] => {
+export const readSessionHookLogs = (options: ReadSessionHookLogsOptions): readonly HookRunLogRecord[] => {
   const { file, event, since = -Infinity, sessionID } = options;
   const result = readHookLogRecords(file);
   if (result.kind !== 'ok') {

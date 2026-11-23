@@ -105,7 +105,7 @@ describe('status-recorder (atomic status flush)', () => {
     });
 
     try {
-      recorder.flushStatusFileAtomic({file: statusFile, workspace: root, hooks: new Map()});
+      recorder.flushStatusFileAtomic({ file: statusFile, workspace: root, hooks: new Map() });
       const temporaryFiles = fs.readdirSync(root).filter((file) => file.endsWith('.tmp'));
       expect(temporaryFiles).toHaveLength(0);
     } finally {

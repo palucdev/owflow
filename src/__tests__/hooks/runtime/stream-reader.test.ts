@@ -7,14 +7,17 @@ const NULL_VALUE: null = JSON.parse('null');
 
 describe('stream-reader (bounded subprocess output reading)', () => {
   test('readStream reads stream within limit and handles null/undefined streams', async () => {
-    expect(await readStream({stream: NULL_VALUE, onChunk: () => {}})).toBe('');
-    expect(await readStream({stream: undefined, onChunk: () => {}})).toBe('');
+    expect(await readStream({ stream: NULL_VALUE, onChunk: () => {} })).toBe('');
+    expect(await readStream({ stream: undefined, onChunk: () => {} })).toBe('');
 
     const stream = new Response('hello world').body;
     const chunks: string[] = [];
-    const result = await readStream({stream, onChunk: (chunk: string) => {
-      chunks.push(chunk);
-    }});
+    const result = await readStream({
+      stream,
+      onChunk: (chunk: string) => {
+        chunks.push(chunk);
+      },
+    });
     expect(result).toBe('hello world');
     expect(chunks.join('')).toBe('hello world');
   });
@@ -33,7 +36,7 @@ describe('stream-reader (bounded subprocess output reading)', () => {
       },
     });
 
-    const result = await readStream({stream, onChunk: undefined, maxBytes: SMALL_MAX_BYTES});
+    const result = await readStream({ stream, onChunk: undefined, maxBytes: SMALL_MAX_BYTES });
     expect(isCancelCalled).toBe(true);
     expect(cancelReason).toBe('Stream limit exceeded');
     expect(result.length).toBeLessThanOrEqual(SMALL_MAX_BYTES);

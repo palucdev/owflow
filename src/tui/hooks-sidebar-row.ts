@@ -59,10 +59,10 @@ const buildInteractiveRowHandlers = (
 export const createSidebarRow = (options: SidebarRowOptions): SidebarRowResult => {
   const { solid, theme, row, initialStatus, isInteractive } = options;
   const initialKey = initialStatus ?? 'idle';
-  const orb = txt(solid, '•', colorForStatus(initialStatus, theme), { flexShrink: 0 });
-  const name = txt(solid, row.name, theme.text);
-  const label = txt(solid, statusLabelFor(initialStatus), theme.textMuted);
-  const hint = isInteractive ? txt(solid, OPEN_HINT, theme.textMuted, { flexShrink: 0 }) : undefined;
+  const orb = txt({ solid, content: '•', foreground: colorForStatus(initialStatus, theme), extra: { flexShrink: 0 } });
+  const name = txt({ solid, content: row.name, foreground: theme.text });
+  const label = txt({ solid, content: statusLabelFor(initialStatus), foreground: theme.textMuted });
+  const hint = isInteractive ? txt({ solid, content: OPEN_HINT, foreground: theme.textMuted, extra: { flexShrink: 0 } }) : undefined;
 
   const lineReference: { current: unknown } = { current: undefined };
   const handlers = buildInteractiveRowHandlers(options, {
@@ -71,16 +71,16 @@ export const createSidebarRow = (options: SidebarRowOptions): SidebarRowResult =
     hint,
   });
 
-  const lineNode = createElementNode(
+  const lineNode = createElementNode({
     solid,
-    'box',
-    {
+    tag: 'box',
+    properties: {
       flexDirection: 'row',
       gap: 1,
       ...handlers,
     },
-    [orb, name, label, hint],
-  );
+    children: [orb, name, label, hint],
+  });
   lineReference.current = lineNode;
 
   return { line: lineNode, nodes: { orb, label }, initialKey };
@@ -103,7 +103,7 @@ export interface PopulateRowsOptions {
 export const populateSidebarRows = (options: PopulateRowsOptions): void => {
   const { viewRows, solid, theme, root, rows, colors, sessionStates } = options;
   if (viewRows.length === 0) {
-    solid.insert(root, txt(solid, EMPTY_HOOKS_NAME, theme.textMuted));
+    solid.insert(root, txt({ solid, content: EMPTY_HOOKS_NAME, foreground: theme.textMuted }));
     return;
   }
   for (const row of viewRows) {

@@ -1,106 +1,99 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { buildActiveHooksView, colorForStatus, formatHookLogsMessage, formatHookRunSummary, statusLabelFor } from '../../tui/hooks-presenter.js';
+import { HookEventName, HookRunState, type HookRunLogRecord } from '../../types/hook-types.js';
 import { THEME, makeLogRecord } from './primitives.js';
-import { HookEventName, HookRunState } from '../../types/hook-types.js';
+import { createWorkspaceHarness } from './workspace.js';
 
-describe('TUI hooks-presenter', () => {
-  let tmpDir: string;
-  let hooksDir: string;
+const TRUNCATION_LIMIT = 40;
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'owflow-tui-formatting-test-'));
-    hooksDir = path.join(tmpDir, '.owflow', 'hooks');
-    fs.mkdirSync(hooksDir, { recursive: true });
+const workspaceHarness = createWorkspaceHarness('tui-formatting');
+
+const makeErrorLogRecord = (): HookRunLogRecord =>
+  makeLogRecord({
+    status: HookRunState.FAILURE,
+    exitCode: 1,
+    reason: 'policy violation',
+    stdout: 'secret stdout',
+    stderr: 'secret stderr',
+    sessionID: 'ses-123',
   });
 
-  afterEach(() => {
-    if (fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
+beforeEach(() => {
+  workspaceHarness.setup();
+});
 
-  test('buildActiveHooksView should return active hook rows from hooks directory', () => {
-    fs.writeFileSync(path.join(hooksDir, 'tool-execute-before.sh'), '');
-    fs.writeFileSync(path.join(hooksDir, 'config.sh'), '');
+afterEach(() => {
+  workspaceHarness.teardown();
+});
 
-    const view = buildActiveHooksView(tmpDir);
-    expect(view.title).toBe('Active hooks:');
-    expect(view.rows).toEqual([
-      { name: 'config', event: HookEventName.Config },
-      { name: 'tool-execute-before', event: HookEventName.ToolExecuteBefore },
-    ]);
-  });
+test('buildActiveHooksView should return active hook rows from the hooks directory', () => {
+  const { temporaryDirectory, hooksDirectory } = workspaceHarness.workspace();
+  fs.writeFileSync(path.join(hooksDirectory, 'tool-execute-before.sh'), '');
+  fs.writeFileSync(path.join(hooksDirectory, 'config.sh'), '');
 
-  test('statusLabelFor and colorForStatus should map states to labels and theme colors', () => {
-    expect(statusLabelFor(HookRunState.IDLE)).toBe('Idle');
-    expect(statusLabelFor(HookRunState.PENDING)).toBe('In progress');
-    expect(statusLabelFor(HookRunState.SUCCESS)).toBe('Success');
-    expect(statusLabelFor(HookRunState.FAILURE)).toBe('Error');
-    expect(statusLabelFor(undefined)).toBe('Idle');
+  const view = buildActiveHooksView(temporaryDirectory);
+  expect(view.title).toBe('Active hooks:');
+  expect(view.rows).toEqual([
+    { name: 'config', event: HookEventName.Config },
+    { name: 'tool-execute-before', event: HookEventName.ToolExecuteBefore },
+  ]);
+});
 
-    expect(colorForStatus(HookRunState.IDLE, THEME)).toBe('muted-color');
-    expect(colorForStatus(HookRunState.PENDING, THEME)).toBe('warning-color');
-    expect(colorForStatus(HookRunState.SUCCESS, THEME)).toBe('success-color');
-    expect(colorForStatus(HookRunState.FAILURE, THEME)).toBe('error-color');
-    expect(colorForStatus(undefined, THEME)).toBe('muted-color');
-  });
+test('statusLabelFor and colorForStatus should map states to labels and theme colors', () => {
+  expect(statusLabelFor(HookRunState.IDLE)).toBe('Idle');
+  expect(statusLabelFor(HookRunState.PENDING)).toBe('In progress');
+  expect(statusLabelFor(HookRunState.SUCCESS)).toBe('Success');
+  expect(statusLabelFor(HookRunState.FAILURE)).toBe('Error');
+  expect(statusLabelFor(undefined)).toBe('Idle');
 
-  test('formatHookRunSummary should format identical run metadata structure without logs across states', () => {
-    const errorRecord = makeLogRecord({
-      status: HookRunState.FAILURE,
-      exitCode: 1,
-      reason: 'policy violation',
-      stdout: 'secret stdout',
-      stderr: 'secret stderr',
-      sessionID: 'ses-123',
-    });
-    const errorSummary = formatHookRunSummary(errorRecord);
-    expect(errorSummary).toContain('Event:  tool.execute.before');
-    expect(errorSummary).toContain('Status: Error — 123 ms');
-    expect(errorSummary).toContain('Session: ses-123');
-    expect(errorSummary).toContain('Exit:   1');
-    expect(errorSummary).not.toContain('policy violation');
-    expect(errorSummary).not.toContain('secret stdout');
-    expect(errorSummary).not.toContain('secret stderr');
-    expect(errorSummary).not.toContain('\n\n');
+  expect(colorForStatus(HookRunState.IDLE, THEME)).toBe('muted-color');
+  expect(colorForStatus(HookRunState.PENDING, THEME)).toBe('warning-color');
+  expect(colorForStatus(HookRunState.SUCCESS, THEME)).toBe('success-color');
+  expect(colorForStatus(HookRunState.FAILURE, THEME)).toBe('error-color');
+  expect(colorForStatus(undefined, THEME)).toBe('muted-color');
+});
 
-    const pendingSummary = formatHookRunSummary(makeLogRecord({ status: HookRunState.PENDING, durationMs: 45 }));
-    expect(pendingSummary).toContain('Status: In progress — 45 ms');
-    expect(pendingSummary).toContain('Session: none');
-    expect(pendingSummary).toContain('Exit:   none');
+test('formatHookRunSummary should format an error run without leaking logs or the failure reason', () => {
+  const errorSummary = formatHookRunSummary(makeErrorLogRecord());
+  expect(errorSummary).toBe(
+    ['Event:  tool.execute.before', 'Status: Error — 123 ms', 'Time:   1970-01-01T00:00:01.123Z', 'Session: ses-123', 'Exit:   1'].join('\n'),
+  );
+  expect(errorSummary).not.toContain('policy violation');
+  expect(errorSummary).not.toContain('secret stdout');
+  expect(errorSummary).not.toContain('secret stderr');
+  expect(errorSummary).not.toContain('\n\n');
+});
 
-    const idleSummary = formatHookRunSummary(makeLogRecord({ status: HookRunState.IDLE, startedAt: 0, finishedAt: 0, durationMs: 0 }));
-    expect(idleSummary).toContain('Status: Idle — 0 ms');
-    expect(idleSummary).toContain('Time:   none');
-    expect(idleSummary).toContain('Session: none');
-    expect(idleSummary).toContain('Exit:   none');
+test('formatHookRunSummary should format a pending run with none placeholders', () => {
+  const pendingSummary = formatHookRunSummary(makeLogRecord({ status: HookRunState.PENDING, durationMs: 45 }));
+  expect(pendingSummary).toBe(
+    ['Event:  tool.execute.before', 'Status: In progress — 45 ms', 'Time:   1970-01-01T00:00:01.123Z', 'Session: none', 'Exit:   none'].join('\n'),
+  );
+});
 
-    // Identical line count and field labels across Idle, In progress, and Error
-    const labels = (s: string) => s.split('\n').map((line) => line.split(':')[0]);
-    expect(labels(idleSummary)).toEqual(['Event', 'Status', 'Time', 'Session', 'Exit']);
-    expect(labels(pendingSummary)).toEqual(['Event', 'Status', 'Time', 'Session', 'Exit']);
-    expect(labels(errorSummary)).toEqual(['Event', 'Status', 'Time', 'Session', 'Exit']);
+test('formatHookRunSummary should format an idle run without timestamps', () => {
+  const idleSummary = formatHookRunSummary(makeLogRecord({ status: HookRunState.IDLE, startedAt: 0, finishedAt: 0, durationMs: 0 }));
+  expect(idleSummary).toBe(
+    ['Event:  tool.execute.before', 'Status: Idle — 0 ms', 'Time:   none', 'Session: none', 'Exit:   none'].join('\n'),
+  );
+});
 
-    const truncated = formatHookRunSummary(errorRecord, 40);
-    expect(truncated).toContain('[message truncated]');
-    expect(truncated.length).toBeLessThanOrEqual(40);
-  });
+test('formatHookRunSummary should truncate the message to the requested character limit', () => {
+  const truncated = formatHookRunSummary(makeErrorLogRecord(), TRUNCATION_LIMIT);
+  expect(truncated).toContain('[message truncated]');
+  expect(truncated.length).toBeLessThanOrEqual(TRUNCATION_LIMIT);
+});
 
-  test('formatHookLogsMessage should format stdout, stderr, reason, and empty outputs', () => {
-    // Empty output
-    expect(formatHookLogsMessage(makeLogRecord())).toBe('No output captured for this run.');
+test('formatHookLogsMessage should format stdout, stderr, reason, and empty outputs', () => {
+  expect(formatHookLogsMessage(makeLogRecord())).toBe('No output captured for this run.');
 
-    // Captured stdout & stderr
-    const record = makeLogRecord({ stdout: 'out-line 1\nout-line 2', stderr: 'err-line 1\nerr-line 2' });
-    const message = formatHookLogsMessage(record);
-    expect(message).toContain('--- stderr ---\nerr-line 1\nerr-line 2');
-    expect(message).toContain('--- stdout ---\nout-line 1\nout-line 2');
+  const record = makeLogRecord({ stdout: 'out-line 1\nout-line 2', stderr: 'err-line 1\nerr-line 2' });
+  const message = formatHookLogsMessage(record);
+  expect(message).toContain('--- stderr ---\nerr-line 1\nerr-line 2');
+  expect(message).toContain('--- stdout ---\nout-line 1\nout-line 2');
 
-    // Reason fallback when stdio is empty
-    const reasonOnly = makeLogRecord({ status: HookRunState.FAILURE, reason: 'hook failed' });
-    expect(formatHookLogsMessage(reasonOnly)).toBe('hook failed');
-  });
+  const reasonOnly = makeLogRecord({ status: HookRunState.FAILURE, reason: 'hook failed' });
+  expect(formatHookLogsMessage(reasonOnly)).toBe('hook failed');
 });

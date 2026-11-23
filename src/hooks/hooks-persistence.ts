@@ -173,7 +173,7 @@ export const writeHookCrashLog = (options: CrashLogOptions): void => {
     const timestamp = new Date().toISOString();
     const errorString = error instanceof Error ? (error.stack ?? error.message) : String(error);
     const entry = `[${timestamp}] [${source}] [workspace: ${workspace}]\n${errorString}\n\n`;
-    appendWithRotation({filePath: crashFile, line: entry});
+    appendWithRotation({ filePath: crashFile, line: entry });
   } catch {
     // Best-effort crash logging never throws
   }
