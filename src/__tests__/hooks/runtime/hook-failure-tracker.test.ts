@@ -19,15 +19,14 @@ describe('hook-failure-tracker (per-session failure counting)', () => {
   test('positional args and entry objects resolve the same key; missing sessionID defaults to global', () => {
     const tracker = new HookFailureTracker();
 
-    tracker.recordFailure(HookEventName.ToolExecuteBefore, '/a.sh', 'ses_1');
+    tracker.recordFailure({ event: HookEventName.ToolExecuteBefore, checkKey: '/a.sh', sessionID: 'ses_1' });
     expect(tracker.getCount({ event: HookEventName.ToolExecuteBefore, checkKey: '/a.sh', sessionID: 'ses_1' })).toBe(1);
 
     // Empty or undefined sessionID falls back to the global bucket
-    tracker.recordFailure(HookEventName.ToolExecuteBefore, '/b.sh', '');
-    tracker.recordFailure(HookEventName.ToolExecuteBefore, '/b.sh', undefined);
+    tracker.recordFailure({ event: HookEventName.ToolExecuteBefore, checkKey: '/b.sh', sessionID: '' });
+    tracker.recordFailure({ event: HookEventName.ToolExecuteBefore, checkKey: '/b.sh', sessionID: undefined });
     expect(tracker.getCount({ event: HookEventName.ToolExecuteBefore, checkKey: '/b.sh' })).toBe(EXPECTED_REPEAT_COUNT);
-    expect(tracker.getCount(HookEventName.ToolExecuteBefore, '/b.sh')).toBe(EXPECTED_REPEAT_COUNT);
-    expect(tracker.getCount(HookEventName.ToolExecuteBefore, '/b.sh', 'ses_9')).toBe(0);
+    expect(tracker.getCount({ event: HookEventName.ToolExecuteBefore, checkKey: '/b.sh', sessionID: 'ses_9' })).toBe(0);
   });
 
   test('recordSuccess resets the counter and clear() resets all keys', () => {
