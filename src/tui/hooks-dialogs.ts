@@ -5,16 +5,6 @@ import type { SidebarTheme, SolidElement, SolidRuntime } from './primitives.js';
 import { buildHookLogsBody, buildHookRunDetailBody } from './hooks-dialogs-bodies.js';
 import { createIdleRecord, resolveSessionRecords } from './hooks-dialogs-records.js';
 
-export { createIdleRecord, resolveSessionRecords, type ResolveSessionRecordsOptions } from './hooks-dialogs-records.js';
-export {
-  buildHeader,
-  buildHookLogsBody,
-  buildHookRunDetailBody,
-  type HeaderOptions,
-  type HookLogsBodyOptions,
-  type HookDetailBodyOptions,
-} from './hooks-dialogs-bodies.js';
-
 const DETAIL_DIALOG_SIZE = 'large';
 
 const MIN_LOGS_HEIGHT = 4;
@@ -58,31 +48,6 @@ export interface OpenHookLogPopupOptions {
   readonly fallbackEntry?: HookRuntimeEntry;
 }
 
-const resolveOpenPopupOptions = (apiOrOptions: TuiPluginApi | OpenHookLogPopupOptions, rest: readonly unknown[]): OpenHookLogPopupOptions => {
-  if ('api' in apiOrOptions) {
-    return apiOrOptions;
-  }
-  const solid = rest[0] as SolidRuntime;
-  const logFile = typeof rest[1] === 'string' ? rest[1] : '';
-  const row = rest[2] as ActiveHookRow;
-  const theme = rest[3] as SidebarTheme;
-  const notBefore = typeof rest[4] === 'number' ? rest[4] : 0;
-  const sessionID = typeof rest[5] === 'string' ? rest[5] : undefined;
-  const statusFile = typeof rest[6] === 'string' ? rest[6] : undefined;
-  const fallbackEntry = rest[7] as HookRuntimeEntry | undefined;
-  return {
-    api: apiOrOptions,
-    solid,
-    logFile,
-    row,
-    theme,
-    notBefore,
-    sessionID,
-    statusFile,
-    fallbackEntry,
-  };
-};
-
 const calculateMaxHeight = (rendererHeight: number): number => {
   const effectiveHeight = rendererHeight > 0 ? rendererHeight : DEFAULT_TERMINAL_HEIGHT;
   const scaledHeight = Math.floor((effectiveHeight * HEIGHT_SCALE_NUMERATOR) / HEIGHT_SCALE_DENOMINATOR);
@@ -110,8 +75,8 @@ const createDialogHandle = (row: ActiveHookRow, options: HandleOptions): ActiveD
   return handle;
 };
 
-export const openHookLogPopup = (apiOrOptions: TuiPluginApi | OpenHookLogPopupOptions, ...rest: readonly unknown[]): void => {
-  const { api, solid, logFile, row, theme, notBefore, sessionID, statusFile, fallbackEntry } = resolveOpenPopupOptions(apiOrOptions, rest);
+export const openHookLogPopup = (options: OpenHookLogPopupOptions): void => {
+  const { api, solid, logFile, row, theme, notBefore, sessionID, statusFile, fallbackEntry } = options;
 
   dialogStateManager.getHandle()?.dispose();
   const records = resolveSessionRecords({ logFile, row, notBefore, sessionID, statusFile, fallbackEntry });

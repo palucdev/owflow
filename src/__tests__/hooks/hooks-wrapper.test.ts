@@ -92,7 +92,7 @@ describe('hooks-wrapper (git-hooks execution)', () => {
 
     // Session hook run writes stdout and stderr directly to JSONL records
     await wrapper.runHook({ event: HookEventName.ToolExecuteBefore, input: { sessionID: 'ses_ok' }, output: {} });
-    const latestOk = readSessionHookLogs({file: logFile, event: HookEventName.ToolExecuteBefore, since: -Infinity, sessionID: 'ses_ok'}).at(-1);
+    const latestOk = readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: -Infinity, sessionID: 'ses_ok' }).at(-1);
     expect(latestOk?.status).toBe(HookRunState.SUCCESS);
     expect(latestOk?.stdout).toBe('out line\n');
     expect(latestOk?.stderr).toBe('warn line\n');

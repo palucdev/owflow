@@ -17,37 +17,10 @@ export interface SidebarMaterializeOptions {
   readonly onRowClick: (row: ActiveHookRow, theme: SidebarTheme) => void;
   readonly onRowHover: () => void;
   readonly isInteractive?: boolean;
-  readonly interactive?: boolean;
   readonly notBefore?: number;
   readonly sessionID?: string;
   readonly initialStates?: ReadonlyMap<string, HookRunState>;
 }
-
-const resolveSidebarOptions = (optionsOrView: SidebarMaterializeOptions | ActiveHooksView, rest: readonly unknown[]): SidebarMaterializeOptions => {
-  if ('view' in optionsOrView) {
-    return optionsOrView;
-  }
-  const theme = rest[0] as SidebarTheme;
-  const solid = rest[1] as SolidRuntime;
-  const onRowClick = rest[2] as (row: ActiveHookRow, theme: SidebarTheme) => void;
-  const onRowHover = rest[3] as () => void;
-  const isInteractive = typeof rest[4] === 'boolean' && rest[4];
-  const notBefore = typeof rest[5] === 'number' ? rest[5] : 0;
-  const sessionID = typeof rest[6] === 'string' ? rest[6] : undefined;
-  const initialStates = rest[7] as ReadonlyMap<string, HookRunState> | undefined;
-
-  return {
-    view: optionsOrView,
-    theme,
-    solid,
-    onRowClick,
-    onRowHover,
-    isInteractive,
-    notBefore,
-    sessionID,
-    initialStates,
-  };
-};
 
 interface UpdateContext {
   readonly rows: ReadonlyMap<string, { readonly orb: unknown; readonly label: unknown }>;
@@ -132,15 +105,18 @@ const setupDisposal = (maps: readonly { clear: () => void }[], solid: SolidRunti
   return { isDisposed: () => isDisposed, dispose };
 };
 
-export const materializeSidebar = (optionsOrView: SidebarMaterializeOptions | ActiveHooksView, ...rest: readonly unknown[]): SidebarRenderHandle => {
-  const options = resolveSidebarOptions(optionsOrView, rest);
-  const { view, theme, solid, onRowClick, onRowHover, sessionID, notBefore = 0 } = options;
-  const isInteractive = options.isInteractive ?? options.interactive ?? false;
+export const materializeSidebar = (options: SidebarMaterializeOptions): SidebarRenderHandle => {
+  const { view, theme, solid, onRowClick, onRowHover, sessionID, notBefore = 0, isInteractive = false } = options;
 
   const rows = new Map<string, { readonly orb: unknown; readonly label: unknown }>();
   const colors = new Map<string, string>();
   const sessionStates = new Map<string, HookRunState>(options.initialStates);
-  const root = createElementNode(solid, 'box', { flexDirection: 'column' }, [createElementNode(solid, 'text', { fg: theme.text }, [view.title])]);
+  const root = createElementNode({
+    solid,
+    tag: 'box',
+    properties: { flexDirection: 'column' },
+    children: [createElementNode({ solid, tag: 'text', properties: { fg: theme.text }, children: [view.title] })],
+  });
 
   const { isDisposed, dispose } = setupDisposal([rows, colors, sessionStates], solid);
 

@@ -195,12 +195,19 @@ describe('hooks-log-reader (session retrieval)', () => {
     const fixture = buildSessionFixture(root);
     fs.writeFileSync(logFile, fixture.records.map((record) => JSON.stringify(record)).join('\n') + '\n', 'utf8');
 
-    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: 0, sessionID: 'ses_1' })).toEqual([fixture.recordA1, fixture.recordA2]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: 0, sessionID: 'ses_1' })).toEqual([
+      fixture.recordA1,
+      fixture.recordA2,
+    ]);
     // since filter must be respected even when sessionID matches
-    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: SINCE_OFFSET_MS, sessionID: 'ses_1'})).toEqual([fixture.recordA2]);
-    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: 0, sessionID: 'ses_2'})).toEqual([fixture.recordOther]);
-    expect(readSessionHookLogs({ file: logFile, event: HookEventName.Config})).toEqual([fixture.recordNoSession]);
-    expect(readSessionHookLogs({ file: logFile, event: HookEventName.Config, since: FAR_FUTURE_TIMESTAMP_MS})).toEqual([]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: SINCE_OFFSET_MS, sessionID: 'ses_1' })).toEqual([
+      fixture.recordA2,
+    ]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore, since: 0, sessionID: 'ses_2' })).toEqual([
+      fixture.recordOther,
+    ]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.Config })).toEqual([fixture.recordNoSession]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.Config, since: FAR_FUTURE_TIMESTAMP_MS })).toEqual([]);
   });
 
   test('readSessionLatestLogs and readSessionHookLogs handle missing or invalid files', () => {
@@ -209,7 +216,7 @@ describe('hooks-log-reader (session retrieval)', () => {
 
     expect(readSessionLatestLogs(logFile, 'ses_1')).toEqual(new Map());
     expect(readSessionLatestLogs(logFile, '')).toEqual(new Map());
-    expect(readSessionHookLogs({file: logFile, event: HookEventName.ToolExecuteBefore})).toEqual([]);
+    expect(readSessionHookLogs({ file: logFile, event: HookEventName.ToolExecuteBefore })).toEqual([]);
   });
 });
 

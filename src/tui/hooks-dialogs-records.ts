@@ -85,14 +85,12 @@ const shouldAppendEntryRecord = (
     : lastRecord === undefined || lastRecord.startedAt < entry.startedAt;
 };
 
-export const resolveSessionRecords = (
-  options: ResolveSessionRecordsOptions
-): readonly HookRunLogRecord[] => {
+export const resolveSessionRecords = (options: ResolveSessionRecordsOptions): readonly HookRunLogRecord[] => {
   const { logFile, row, notBefore, sessionID, statusFile, fallbackEntry } = options;
 
   let records: readonly HookRunLogRecord[] = [];
   try {
-    records = readSessionHookLogs({file: logFile, event: row.event, since: notBefore, sessionID: sessionID});
+    records = readSessionHookLogs({ file: logFile, event: row.event, since: notBefore, sessionID: sessionID });
   } catch {
     // ignore session hook logs read errors
   }

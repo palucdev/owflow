@@ -61,9 +61,7 @@ export class StatusRecorder {
     return this.statuses;
   }
 
-  flushStatusFileAtomic(
-    options: FlushStatusAtomicOptions
-  ): void {
+  flushStatusFileAtomic(options: FlushStatusAtomicOptions): void {
     const { file, workspace, hooks } = options;
     const nonce = crypto.randomUUID();
     const temporaryFile = `${file}.${process.pid}.${nonce}.tmp`;
@@ -109,7 +107,7 @@ export class StatusRecorder {
       clearTimeout(this.statusTimer);
       this.statusTimer = undefined;
     }
-    this.flushStatusFileAtomic({file: this.statusFile, workspace: this.directory, hooks: this.statuses});
+    this.flushStatusFileAtomic({ file: this.statusFile, workspace: this.directory, hooks: this.statuses });
   }
 
   schedulePendingStatus(): void {
@@ -118,7 +116,7 @@ export class StatusRecorder {
     }
     this.statusTimer = setTimeout(() => {
       this.statusTimer = undefined;
-      this.flushStatusFileAtomic({file: this.statusFile, workspace: this.directory, hooks: this.statuses});
+      this.flushStatusFileAtomic({ file: this.statusFile, workspace: this.directory, hooks: this.statuses });
     }, STATUS_DEBOUNCE_MS);
     this.statusTimer.unref?.();
   }
@@ -132,7 +130,7 @@ export class StatusRecorder {
       }
 
       const targetLogFile = this.logFile ?? resolveHooksLogFile(this.directory, record.name);
-      appendWithRotation({filePath: targetLogFile, line: JSON.stringify(record)});
+      appendWithRotation({ filePath: targetLogFile, line: JSON.stringify(record) });
       if (!this.logFile) {
         resolveHooksLatestSymlink(this.directory, targetLogFile);
       }

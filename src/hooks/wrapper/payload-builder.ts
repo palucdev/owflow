@@ -1,4 +1,4 @@
-import type { EventName } from "../../types/hook-types.js";
+import type { EventName } from '../../types/hook-types.js';
 
 const IDENTITY_KEYS: readonly string[] = ['id', 'sessionID', 'messageID', 'partID', 'callID', 'providerID', 'type', 'name', 'tool'];
 

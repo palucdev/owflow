@@ -236,7 +236,7 @@ describe('OwflowPlugin', () => {
       try {
         const plugin = await OwflowPlugin(mockPluginInput(pluginDirectory));
 
-        expect(crashSpy).toHaveBeenCalledWith({workspace: pluginDirectory, source: 'startup_digest_failed', error: expect.any(Error)});
+        expect(crashSpy).toHaveBeenCalledWith({ workspace: pluginDirectory, source: 'startup_digest_failed', error: expect.any(Error) });
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('user hooks failed to load'));
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('destructive command guard remains ACTIVE'));
 

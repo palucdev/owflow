@@ -2,7 +2,15 @@ import { afterAll, expect, test } from 'bun:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { scanHooks } from '../../hooks/hooks-registry.js';
-import { DISPATCHABLE_EVENTS, EXCLUDED_EVENT_NAMES, HOOK_EVENT_NAMES, HOST_EVENT_NAMES, HookDigestMode, HookEventName, HostEventName } from '../../types/hook-types.js';
+import {
+  DISPATCHABLE_EVENTS,
+  EXCLUDED_EVENT_NAMES,
+  HOOK_EVENT_NAMES,
+  HOST_EVENT_NAMES,
+  HookDigestMode,
+  HookEventName,
+  HostEventName,
+} from '../../types/hook-types.js';
 import { removeScratchDirectory } from '../fixtures/hooks/scratch-cleanup.js';
 
 const EXPECTED_DISPATCHABLE_EVENTS = 16;

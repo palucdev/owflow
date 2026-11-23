@@ -27,18 +27,8 @@ export interface ElementCreationOptions {
   readonly children?: readonly unknown[];
 }
 
-const resolveElementCreationOptions = (solidOrOptions: SolidRuntime | ElementCreationOptions, rest: readonly unknown[]): ElementCreationOptions => {
-  if ('solid' in solidOrOptions) {
-    return solidOrOptions;
-  }
-  const tag = typeof rest[0] === 'string' ? rest[0] : '';
-  const properties = (rest[1] as Record<string, unknown> | undefined) ?? {};
-  const children = (rest[2] as readonly unknown[] | undefined) ?? [];
-  return { solid: solidOrOptions, tag, properties, children };
-};
-
-export const createElementNode = (solidOrOptions: SolidRuntime | ElementCreationOptions, ...rest: readonly unknown[]): unknown => {
-  const { solid, tag, properties = {}, children = [] } = resolveElementCreationOptions(solidOrOptions, rest);
+export const createElementNode = (options: ElementCreationOptions): unknown => {
+  const { solid, tag, properties = {}, children = [] } = options;
   const node = solid.createElement(tag);
   for (const [propertyKey, propertyValue] of Object.entries(properties)) {
     if (propertyValue !== undefined) {
@@ -57,8 +47,6 @@ export const createElementNode = (solidOrOptions: SolidRuntime | ElementCreation
   return node;
 };
 
-export { createElementNode as el };
-
 export interface TextCreationOptions {
   readonly solid: SolidRuntime;
   readonly content: string;
@@ -66,29 +54,19 @@ export interface TextCreationOptions {
   readonly extra?: Record<string, unknown>;
 }
 
-const resolveTextOptions = (solidOrOptions: SolidRuntime | TextCreationOptions, rest: readonly unknown[]): TextCreationOptions => {
-  if ('solid' in solidOrOptions) {
-    return solidOrOptions;
-  }
-  const content = typeof rest[0] === 'string' ? rest[0] : '';
-  const foreground = rest[1];
-  const extra = (rest[2] as Record<string, unknown> | undefined) ?? {};
-  return { solid: solidOrOptions, content, foreground, extra };
-};
-
-export const createTextNode = (solidOrOptions: SolidRuntime | TextCreationOptions, ...rest: readonly unknown[]): unknown => {
-  const { solid, content, foreground, extra = {} } = resolveTextOptions(solidOrOptions, rest);
-  return createElementNode(solid, 'text', { fg: foreground, content, ...extra });
+export const createTextNode = (options: TextCreationOptions): unknown => {
+  const { solid, content, foreground, extra = {} } = options;
+  return createElementNode({ solid, tag: 'text', properties: { fg: foreground, content, ...extra } });
 };
 
 export { createTextNode as txt };
 
 const resolveCleanupFunction = async (
-  runtime: Record<string, unknown>,
+  runtime: Partial<SolidRuntime>,
   importSolidJs: () => Promise<unknown>,
 ): Promise<((cleanupFunction: () => void) => void) | undefined> => {
-  if (typeof runtime['onCleanup'] === 'function') {
-    return runtime['onCleanup'] as (cleanupFunction: () => void) => void;
+  if (typeof runtime.onCleanup === 'function') {
+    return runtime.onCleanup;
   }
   try {
     const solidJs = (await importSolidJs()) as { onCleanup?: (cleanupFunction: () => void) => void };
@@ -104,7 +82,7 @@ export const loadSolidRuntime = async (
 ): Promise<SolidRuntime | null> => {
   try {
     const runtime = (await importSolid()) as Partial<SolidRuntime>;
-    const onCleanup = await resolveCleanupFunction(runtime as Record<string, unknown>, importSolidJs);
+    const onCleanup = await resolveCleanupFunction(runtime, importSolidJs);
 
     const isCompleteRuntime =
       typeof runtime.createElement === 'function' && typeof runtime.insert === 'function' && typeof runtime.setProp === 'function';
