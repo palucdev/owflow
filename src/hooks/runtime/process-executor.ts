@@ -109,35 +109,22 @@ const waitForProcess = async (proc: ReturnType<typeof Bun.spawn>, timeoutMs: num
   }
 };
 
-interface FailureReasonOptions {
-  readonly isOk: boolean;
-  readonly isTimedOut: boolean;
-  readonly timeoutMs: number;
-  readonly rawStderr: string;
-  readonly rawStdout: string;
-  readonly signal: string | undefined;
-  readonly exitCode: number | undefined;
-}
-
-const buildFailureReason = (options: FailureReasonOptions): string | undefined => {
-  if (options.isOk) {
-    return undefined;
-  }
-  if (options.isTimedOut) {
+const buildFailureReason = (options: FormatResultOptions): string | undefined => {
+  if (options.runResult.isTimedOut) {
     return `process timed out after ${Math.floor(options.timeoutMs)}ms`;
   }
-  const trimmedStderr = options.rawStderr.trim();
+  const trimmedStderr = options.runResult.rawStderr.trim();
   if (trimmedStderr) {
     return trimmedStderr;
   }
-  const trimmedStdout = options.rawStdout.trim();
+  const trimmedStdout = options.runResult.rawStdout.trim();
   if (trimmedStdout) {
     return trimmedStdout;
   }
   if (options.signal) {
     return `process terminated by signal ${options.signal}`;
   }
-  return `process exited with code ${options.exitCode ?? 'unknown'}`;
+  return `process exited with code ${options.runResult.exitCode ?? 'unknown'}`;
 };
 
 interface SpawnOptions {
@@ -170,15 +157,7 @@ const formatProcessResult = (options: FormatResultOptions): HookProcessResult =>
   const finishedAt = Date.now();
   const durationMs = Math.max(0, finishedAt - options.startedAt);
   const isOk = !options.runResult.isTimedOut && options.runResult.exitCode === 0 && options.signal === undefined;
-  const reason = buildFailureReason({
-    isOk,
-    isTimedOut: options.runResult.isTimedOut,
-    timeoutMs: options.timeoutMs,
-    rawStderr: options.runResult.rawStderr,
-    rawStdout: options.runResult.rawStdout,
-    signal: options.signal,
-    exitCode: options.runResult.exitCode,
-  });
+  const reason = isOk ? undefined : buildFailureReason(options);
   return {
     startedAt: options.startedAt,
     finishedAt,
