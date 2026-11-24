@@ -36,7 +36,7 @@ test('should update status from the status file and stop polling after dispose',
   const { runtime } = makeSolid();
 
   mockStatusPolling(statusFile);
-  await registerActiveHooksSidebar(api, temporaryDirectory, async () => runtime);
+  await registerActiveHooksSidebar({api, directory: temporaryDirectory, loadSolid: async () => runtime});
 
   const rendered = renderSidebarSlot({ slots });
   expect(collectText(rendered)).toContain('Idle');
@@ -63,7 +63,7 @@ test('should deregister disposed handles on slot unmount and prevent memory accu
   const { runtime, triggerCleanup } = makeSolid();
 
   mockStatusPolling(statusFile);
-  await registerActiveHooksSidebar(api, temporaryDirectory, async () => runtime);
+  await registerActiveHooksSidebar({api, directory: temporaryDirectory, loadSolid: async () => runtime});
 
   const rendered1 = renderSidebarSlot({ slots, sessionID: 's1' });
   expect(collectText(rendered1)).toContain('Idle');
@@ -84,7 +84,7 @@ test('should dispose all active handles when the api lifecycle onDispose fires',
   const { api, slots, disposeCallbacks } = makeFakeApi(temporaryDirectory);
   const { runtime } = makeSolid();
 
-  await registerActiveHooksSidebar(api, temporaryDirectory, async () => runtime);
+  await registerActiveHooksSidebar({api, directory: temporaryDirectory, loadSolid: async () => runtime});
 
   const rendered = renderSidebarSlot({ slots, sessionID: 's1' });
   expect(collectText(rendered)).toContain('Idle');

@@ -32,7 +32,7 @@ test('should register the sidebar slot and render active hooks or (none) when em
   const { runtime } = makeSolid();
 
   const { api, slots } = makeFakeApi(temporaryDirectory);
-  await registerActiveHooksSidebar(api, temporaryDirectory, async () => runtime);
+  await registerActiveHooksSidebar({api, directory: temporaryDirectory, loadSolid: async () => runtime});
   expect(slots).toHaveLength(1);
   expect(slots[0]!.order).toBe(SIDEBAR_SLOT_ORDER);
 
@@ -41,7 +41,7 @@ test('should register the sidebar slot and render active hooks or (none) when em
 
   writeToolExecuteBeforeHook();
   const { api: apiWithHooks, slots: slotsWithHooks } = makeFakeApi(temporaryDirectory);
-  await registerActiveHooksSidebar(apiWithHooks, temporaryDirectory, async () => runtime);
+  await registerActiveHooksSidebar({api: apiWithHooks, directory: temporaryDirectory, loadSolid: async () => runtime});
 
   const hookRender = renderSidebarSlot({ slots: slotsWithHooks, sessionID: 'ses-test' });
   const text = collectText(hookRender);
@@ -57,7 +57,7 @@ test('should disable polling and interactions when the config marks hooks disabl
   const { runtime } = makeSolid();
 
   const config = createTestEnvironmentConfig({ isHooksDisabled: true });
-  await registerActiveHooksSidebar(api, temporaryDirectory, async () => runtime, config);
+  await registerActiveHooksSidebar({api, directory: temporaryDirectory, loadSolid: async () => runtime, config});
 
   const rendered = renderSidebarSlot({ slots });
   const hookRow = findClickableByContent(rendered, 'tool-execute-before');
