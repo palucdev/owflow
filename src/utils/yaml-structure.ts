@@ -3,7 +3,6 @@ import yaml from 'yaml';
 
 export interface ParsedYaml {
   readonly isOk: boolean;
-  readonly ok: boolean;
   readonly data?: unknown;
   readonly error?: string;
 }
@@ -12,10 +11,10 @@ export const parseYamlFile = (absolutePath: string): ParsedYaml => {
   try {
     const fileContent = fs.readFileSync(absolutePath, 'utf8');
     const parsedData: unknown = yaml.parse(fileContent);
-    return { isOk: true, ok: true, data: parsedData };
+    return { isOk: true, data: parsedData };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { isOk: false, ok: false, error: errorMessage };
+    return { isOk: false, error: errorMessage };
   }
 };
 
@@ -40,20 +39,23 @@ const checkStructuralErrors = (options: StructuralErrorOptions): string[] => {
   for (const [key, templateValue] of Object.entries(templateObject)) {
     const newPath = currentPath ? `${currentPath}.${key}` : key;
 
-    if (!isTargetRecord || !Object.prototype.hasOwnProperty.call(targetObject, key)) {
+    if (!isTargetRecord || !Object.hasOwn(targetObject, key)) {
       errors.push(`Missing key: ${newPath}`);
       continue;
     }
 
-    if (isRecord(templateValue)) {
-      errors.push(
-        ...checkStructuralErrors({
-          templateObject: templateValue,
-          targetObject: targetObject[key],
-          currentPath: newPath,
-        }),
-      );
+    if (!isRecord(templateValue)) {
+      continue;
     }
+
+    const nestedTarget = Reflect.get(targetObject, key);
+    errors.push(
+      ...checkStructuralErrors({
+        templateObject: templateValue,
+        targetObject: nestedTarget,
+        currentPath: newPath,
+      }),
+    );
   }
 
   return errors;

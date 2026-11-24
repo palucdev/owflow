@@ -24,7 +24,7 @@ export const createDefaultEnvironmentConfig = (): EnvironmentConfig => {
   };
 };
 
-export const defaultEnvironmentConfig = createDefaultEnvironmentConfig();
+const defaultEnvironmentConfig = createDefaultEnvironmentConfig();
 
 export const createTestEnvironmentConfig = (overrides?: Partial<EnvironmentConfig>): EnvironmentConfig => ({
   ...defaultEnvironmentConfig,
