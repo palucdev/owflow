@@ -1,22 +1,9 @@
-import fs from "fs";
+import fs from 'node:fs';
 
-// Copy the 'skills' folder recursively into 'dist/skills'
-fs.cpSync("src/skills", "dist/skills", { recursive: true });
+// Markdown assets are shipped inside dist/ alongside the compiled plugin.
+const DIST_FOLDERS = ['skills', 'agents', 'commands', 'templates'];
 
-console.log("Copied skills to dist/");
-
-// Copy the 'agents' folder recursively into 'dist/agents'
-fs.cpSync("src/agents", "dist/agents", { recursive: true });
-
-console.log("Copied agents to dist/");
-
-// Copy the 'commands' folder recursively into 'dist/commands'
-fs.cpSync("src/commands", "dist/commands", { recursive: true });
-
-console.log("Copied commands to dist/");
-
-// Copy the 'templates' folder recursively into 'dist/templates'
-fs.cpSync("src/templates", "dist/templates", { recursive: true });
-
-console.log("Copied templates to dist/");
-
+for (const folder of DIST_FOLDERS) {
+  fs.cpSync(`src/${folder}`, `dist/${folder}`, { recursive: true });
+  console.log(`Copied ${folder} to dist/`);
+}
