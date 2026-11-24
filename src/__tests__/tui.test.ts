@@ -40,7 +40,7 @@ test('should warn and return false when the solid runtime is unavailable', async
   try {
     const { temporaryDirectory } = workspaceHarness.workspace();
     const { api } = makeFakeApi(temporaryDirectory);
-    const isRegistered = await registerActiveHooksSidebar(api, temporaryDirectory, async () => JSON.parse('null') as null);
+    const isRegistered = await registerActiveHooksSidebar({api, directory: temporaryDirectory, loadSolid: async () => JSON.parse('null') as null});
     expect(isRegistered).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('TUI Solid runtime unavailable'));
   } finally {

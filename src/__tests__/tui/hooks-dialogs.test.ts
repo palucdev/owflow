@@ -42,7 +42,7 @@ const writeHookLogFile = (logFile: string, record: HookRunLogRecord): void => {
 const registerSidebarWithFake = async (runtime: SolidRuntime): Promise<ReturnType<typeof makeFakeApi>> => {
   const { temporaryDirectory } = workspaceHarness.workspace();
   const fakeApi = makeFakeApi(temporaryDirectory);
-  await registerActiveHooksSidebar(fakeApi.api, temporaryDirectory, async () => runtime);
+  await registerActiveHooksSidebar({api: fakeApi.api, directory: temporaryDirectory, loadSolid: async () => runtime});
   return fakeApi;
 };
 

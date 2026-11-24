@@ -1,210 +1,187 @@
-import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verify_template } from '../../tools/verify-template.js';
+
+import { createVerifyTemplateTool, verify_template } from '../../tools/verify-template.js';
+import { createTestEnvironmentConfig } from '../../utils/environment-config.js';
+import { createToolContext, outputOf } from '../fixtures/tools/tool-test-harness.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-describe('verify_template tool', () => {
-  const templatesDir = path.join(__dirname, '../../templates');
-  const fixturesDir = path.join(__dirname, '../fixtures/verify-template');
-  const testTemplateName = 'test-template.yml';
+const templatesDirectory = path.join(__dirname, '../../templates');
+const fixturesDirectory = path.join(__dirname, '../fixtures/verify-template');
+const testTemplateName = 'test-template.yml';
 
-  describe('general tool behavior', () => {
-    beforeAll(() => {
-      process.env.OWFLOW_TEMPLATES_DIR = path.join(fixturesDir, 'templates');
-    });
+const fixtureTemplatesTool = createVerifyTemplateTool(createTestEnvironmentConfig({ templatesDirectory: path.join(fixturesDirectory, 'templates') }));
 
-    afterAll(() => {
-      delete process.env.OWFLOW_TEMPLATES_DIR;
-    });
+const executeFixtureTool = async (filePath: string, templateName: string): Promise<string> =>
+  outputOf(await fixtureTemplatesTool.execute({ filePath, templateName }, createToolContext(fixturesDirectory)));
 
-    test('should return error if file not found', async () => {
-      const result = await verify_template.execute({ filePath: 'nonexistent.yml', templateName: testTemplateName }, {
-        directory: fixturesDir,
-      } as any);
-      expect((result as any).output).toContain('File not found at nonexistent.yml');
-    });
+const executeDefaultTool = async (directory: string, toolArguments: { readonly filePath: string; readonly templateName: string }): Promise<string> =>
+  outputOf(await verify_template.execute(toolArguments, createToolContext(directory)));
 
-    test('should return error if template not found', async () => {
-      const result = await verify_template.execute({ filePath: 'target.yml', templateName: 'nonexistent-template.yml' }, {
-        directory: fixturesDir,
-      } as any);
-      expect((result as any).output).toContain("Template 'nonexistent-template.yml' not found");
-    });
+const STATE_TEMPLATE_NAMES: string[] = [
+  'orchestrator-state-base.yml',
+  'orchestrator-state-development.yml',
+  'orchestrator-state-migration.yml',
+  'orchestrator-state-performance.yml',
+  'orchestrator-state-research.yml',
+];
 
-    test('should return error if target file has invalid YAML syntax', async () => {
-      const result = await verify_template.execute({ filePath: 'templates/invalid-template.yml', templateName: testTemplateName }, {
-        directory: fixturesDir,
-      } as any);
-      expect((result as any).output).toContain('YAML Syntax Error in templates/invalid-template.yml');
-    });
+const UNSAFE_TEMPLATE_NAMES: string[] = ['../../package.json', 'nested/template.yml', 'nested\\template.yml'];
 
-    test('should return error if reference template file has invalid YAML syntax', async () => {
-      const invalidTemplateName = 'invalid-template.yml';
-      const result = await verify_template.execute({ filePath: 'target.yml', templateName: invalidTemplateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain(`Internal Error: Failed to parse reference template YAML '${invalidTemplateName}'`);
-    });
+interface MissingKeyCase {
+  readonly title: string;
+  readonly fixture: string;
+  readonly templateName: string;
+  readonly missingKey: string;
+}
 
-    test('should return error if target file is missing keys from template', async () => {
-      const result = await verify_template.execute({ filePath: 'missing-keys.yml', templateName: testTemplateName }, {
-        directory: fixturesDir,
-      } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: key2');
-    });
+const MISSING_KEY_CASES: MissingKeyCase[] = [
+  {
+    title: "base: missing top-level section 'task'",
+    fixture: 'base-missing-task.yml',
+    templateName: 'orchestrator-state-base.yml',
+    missingKey: 'task',
+  },
+  {
+    title: "base: missing nested key 'orchestrator.created'",
+    fixture: 'base-missing-nested.yml',
+    templateName: 'orchestrator-state-base.yml',
+    missingKey: 'orchestrator.created',
+  },
+  {
+    title: "development: missing top-level section 'task_context'",
+    fixture: 'dev-missing-context.yml',
+    templateName: 'orchestrator-state-development.yml',
+    missingKey: 'task_context',
+  },
+  {
+    title: "development: missing nested section 'task_context.data_lifecycle'",
+    fixture: 'dev-missing-nested.yml',
+    templateName: 'orchestrator-state-development.yml',
+    missingKey: 'task_context.data_lifecycle',
+  },
+  {
+    title: "migration: missing top-level section 'migration_context'",
+    fixture: 'migration-missing-context.yml',
+    templateName: 'orchestrator-state-migration.yml',
+    missingKey: 'migration_context',
+  },
+  {
+    title: "migration: missing nested key 'migration_context.target_system'",
+    fixture: 'migration-missing-nested.yml',
+    templateName: 'orchestrator-state-migration.yml',
+    missingKey: 'migration_context.target_system',
+  },
+  {
+    title: "performance: missing top-level section 'performance_context'",
+    fixture: 'performance-missing-context.yml',
+    templateName: 'orchestrator-state-performance.yml',
+    missingKey: 'performance_context',
+  },
+  {
+    title: "performance: missing nested key 'performance_context.bottleneck_priorities'",
+    fixture: 'performance-missing-nested.yml',
+    templateName: 'orchestrator-state-performance.yml',
+    missingKey: 'performance_context.bottleneck_priorities',
+  },
+  {
+    title: "research: missing top-level section 'research_outputs'",
+    fixture: 'research-missing-outputs.yml',
+    templateName: 'orchestrator-state-research.yml',
+    missingKey: 'research_outputs',
+  },
+  {
+    title: "research: missing nested key 'research_context.gathering_strategy'",
+    fixture: 'research-missing-nested.yml',
+    templateName: 'orchestrator-state-research.yml',
+    missingKey: 'research_context.gathering_strategy',
+  },
+  {
+    title: "research: missing nested key 'orchestrator.entry_point'",
+    fixture: 'research-missing-entry-point.yml',
+    templateName: 'orchestrator-state-research.yml',
+    missingKey: 'orchestrator.entry_point',
+  },
+  {
+    title: "research: missing nested key 'research_context.phase_summaries.converge.decision_areas'",
+    fixture: 'research-missing-decision-areas.yml',
+    templateName: 'orchestrator-state-research.yml',
+    missingKey: 'research_context.phase_summaries.converge.decision_areas',
+  },
+];
 
-    test('should pass if target file matches template structure', async () => {
-      const result = await verify_template.execute({ filePath: 'valid.yml', templateName: testTemplateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
+interface BindingProofCase {
+  readonly title: string;
+  readonly fixture: string;
+  readonly templateName: string;
+}
 
-    test('should prevent path traversal outside templates directory', async () => {
-      const result = await verify_template.execute({ filePath: 'valid.yml', templateName: '../../package.json' }, {
-        directory: fixturesDir,
-      } as any);
-      expect((result as any).output).toContain("Template '../../package.json' not found");
-    });
+const BINDING_PROOF_CASES: BindingProofCase[] = [
+  {
+    title: 'binding proof: re-keyed migration state instance with completed_phases [state-analysed] validates against co-landed template',
+    fixture: 'migration-binding-proof.yml',
+    templateName: 'orchestrator-state-migration.yml',
+  },
+  {
+    title: 'binding proof: re-keyed research state instance with completed_phases [brief-written] validates against co-landed template',
+    fixture: 'research-binding-proof.yml',
+    templateName: 'orchestrator-state-research.yml',
+  },
+];
 
-    test('should reject template names containing slashes or backslashes', async () => {
-      const slashResult = await verify_template.execute({ filePath: 'valid.yml', templateName: 'nested/template.yml' }, {
-        directory: fixturesDir,
-      } as any);
-      expect((slashResult as any).output).toContain("Template 'nested/template.yml' not found");
-
-      const backslashResult = await verify_template.execute({ filePath: 'valid.yml', templateName: 'nested\\template.yml' }, {
-        directory: fixturesDir,
-      } as any);
-      expect((backslashResult as any).output).toContain("Template 'nested\\template.yml' not found");
-    });
+describe('verify_template tool: general behavior', () => {
+  test('should return error if file not found', async () => {
+    expect(await executeFixtureTool('nonexistent.yml', testTemplateName)).toContain('File not found at nonexistent.yml');
   });
 
-  describe('template: orchestrator-state-base.yml', () => {
-    const templateName = 'orchestrator-state-base.yml';
-
-    test('successful verification: valid instance matching orchestrator-state-base', async () => {
-      const result = await verify_template.execute({ filePath: templateName, templateName }, { directory: templatesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
-
-    test("faulty verification: missing top-level section 'task'", async () => {
-      const result = await verify_template.execute({ filePath: 'base-missing-task.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: task');
-    });
-
-    test("faulty verification: missing nested key 'orchestrator.created'", async () => {
-      const result = await verify_template.execute({ filePath: 'base-missing-nested.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: orchestrator.created');
-    });
+  test('should return error if template not found', async () => {
+    const output = await executeFixtureTool('target.yml', 'nonexistent-template.yml');
+    expect(output).toContain("Template 'nonexistent-template.yml' not found");
   });
 
-  describe('template: orchestrator-state-development.yml', () => {
-    const templateName = 'orchestrator-state-development.yml';
-
-    test('successful verification: valid instance matching orchestrator-state-development', async () => {
-      const result = await verify_template.execute({ filePath: templateName, templateName }, { directory: templatesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
-
-    test("faulty verification: missing top-level section 'task_context'", async () => {
-      const result = await verify_template.execute({ filePath: 'dev-missing-context.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: task_context');
-    });
-
-    test("faulty verification: missing nested section 'task_context.data_lifecycle'", async () => {
-      const result = await verify_template.execute({ filePath: 'dev-missing-nested.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: task_context.data_lifecycle');
-    });
+  test('should return error if target file has invalid YAML syntax', async () => {
+    const output = await executeFixtureTool('templates/invalid-template.yml', testTemplateName);
+    expect(output).toContain('YAML Syntax Error in templates/invalid-template.yml');
   });
 
-  describe('template: orchestrator-state-migration.yml', () => {
-    const templateName = 'orchestrator-state-migration.yml';
-
-    test('successful verification: valid instance matching orchestrator-state-migration', async () => {
-      const result = await verify_template.execute({ filePath: templateName, templateName }, { directory: templatesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
-
-    test("faulty verification: missing top-level section 'migration_context'", async () => {
-      const result = await verify_template.execute({ filePath: 'migration-missing-context.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: migration_context');
-    });
-
-    test("faulty verification: missing nested key 'migration_context.target_system'", async () => {
-      const result = await verify_template.execute({ filePath: 'migration-missing-nested.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: migration_context.target_system');
-    });
-
-    test('binding proof: re-keyed migration state instance with completed_phases [state-analysed] validates against co-landed template', async () => {
-      const result = await verify_template.execute({ filePath: 'migration-binding-proof.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
+  test('should return error if reference template file has invalid YAML syntax', async () => {
+    const output = await executeFixtureTool('target.yml', 'invalid-template.yml');
+    expect(output).toContain("Internal Error: Failed to parse reference template YAML 'invalid-template.yml'");
   });
 
-  describe('template: orchestrator-state-performance.yml', () => {
-    const templateName = 'orchestrator-state-performance.yml';
-
-    test('successful verification: valid instance matching orchestrator-state-performance', async () => {
-      const result = await verify_template.execute({ filePath: templateName, templateName }, { directory: templatesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
-
-    test("faulty verification: missing top-level section 'performance_context'", async () => {
-      const result = await verify_template.execute({ filePath: 'performance-missing-context.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: performance_context');
-    });
-
-    test("faulty verification: missing nested key 'performance_context.bottleneck_priorities'", async () => {
-      const result = await verify_template.execute({ filePath: 'performance-missing-nested.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: performance_context.bottleneck_priorities');
-    });
+  test('should return error if target file is missing keys from template', async () => {
+    const output = await executeFixtureTool('missing-keys.yml', testTemplateName);
+    expect(output).toContain('YAML Structure Validation Failed');
+    expect(output).toContain('- Missing key: key2');
   });
 
-  describe('template: orchestrator-state-research.yml', () => {
-    const templateName = 'orchestrator-state-research.yml';
+  test('should pass if target file matches template structure', async () => {
+    expect(await executeFixtureTool('valid.yml', testTemplateName)).toBe('File exists and follows the correct YAML structure.');
+  });
 
-    test('successful verification: valid instance matching orchestrator-state-research', async () => {
-      const result = await verify_template.execute({ filePath: templateName, templateName }, { directory: templatesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
+  test.each(UNSAFE_TEMPLATE_NAMES)("should reject unsafe template name '%s'", async (templateName) => {
+    expect(await executeFixtureTool('valid.yml', templateName)).toContain(`Template '${templateName}' not found`);
+  });
+});
 
-    test("faulty verification: missing top-level section 'research_outputs'", async () => {
-      const result = await verify_template.execute({ filePath: 'research-missing-outputs.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: research_outputs');
-    });
+describe('verify_template tool: state templates', () => {
+  test.each(STATE_TEMPLATE_NAMES)('%s validates against itself', async (templateName) => {
+    expect(await executeDefaultTool(templatesDirectory, { filePath: templateName, templateName })).toBe(
+      'File exists and follows the correct YAML structure.',
+    );
+  });
 
-    test("faulty verification: missing nested key 'research_context.gathering_strategy'", async () => {
-      const result = await verify_template.execute({ filePath: 'research-missing-nested.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: research_context.gathering_strategy');
-    });
+  test.each(MISSING_KEY_CASES)('$title', async (row) => {
+    const output = await executeDefaultTool(fixturesDirectory, { filePath: row.fixture, templateName: row.templateName });
+    expect(output).toContain('YAML Structure Validation Failed');
+    expect(output).toContain(`- Missing key: ${row.missingKey}`);
+  });
 
-    test("faulty verification: missing nested key 'orchestrator.entry_point'", async () => {
-      const result = await verify_template.execute({ filePath: 'research-missing-entry-point.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: orchestrator.entry_point');
-    });
-
-    test('binding proof: re-keyed research state instance with completed_phases [brief-written] validates against co-landed template', async () => {
-      const result = await verify_template.execute({ filePath: 'research-binding-proof.yml', templateName }, { directory: fixturesDir } as any);
-      expect((result as any).output).toBe('File exists and follows the correct YAML structure.');
-    });
-
-    test("faulty verification: missing nested key 'research_context.phase_summaries.converge.decision_areas'", async () => {
-      const result = await verify_template.execute({ filePath: 'research-missing-decision-areas.yml', templateName }, {
-        directory: fixturesDir,
-      } as any);
-      expect((result as any).output).toContain('YAML Structure Validation Failed');
-      expect((result as any).output).toContain('- Missing key: research_context.phase_summaries.converge.decision_areas');
-    });
+  test.each(BINDING_PROOF_CASES)('$title', async (row) => {
+    expect(await executeDefaultTool(fixturesDirectory, { filePath: row.fixture, templateName: row.templateName })).toBe(
+      'File exists and follows the correct YAML structure.',
+    );
   });
 });
