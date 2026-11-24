@@ -11,10 +11,15 @@ const CRLF = '\r\n';
 // Mirrors gray-matter's `GrayMatterFile<string>["data"]` shape, which `extends`
 // cannot express as an indexed-access type. The declared fields are the command
 // contract; the registration loop enforces it at runtime before using them.
-interface SkillFrontmatter extends Record<string, unknown> {
+export interface SkillFrontmatter extends Record<string, unknown> {
   name: string;
   description: string;
   'user-invocable': boolean | string | unknown;
+}
+
+export interface SkillFrontmatterEntry {
+  readonly slug: string;
+  readonly data: SkillFrontmatter;
 }
 
 const REQUIRED_COMMAND_KEYS = ['name', 'description'] as const;
@@ -38,13 +43,10 @@ I/O and parsing only — the invocable gate and the key contract live in the
 registration loop. Failures are never swallowed: our own source data must not
 register silently incomplete.
 */
-export const readSkillFrontmatter = (): readonly {
-  slug: string;
-  data: SkillFrontmatter;
-}[] => {
+export const readSkillFrontmatter = (): readonly SkillFrontmatterEntry[] => {
   const skillsDirectory = path.join(PLUGIN_ROOT, 'skills');
   const directoryEntries = fs.readdirSync(skillsDirectory, { withFileTypes: true });
-  const skills: { slug: string; data: SkillFrontmatter }[] = [];
+  const skills: SkillFrontmatterEntry[] = [];
   for (const entry of directoryEntries) {
     if (!entry.isDirectory()) {
       continue;
